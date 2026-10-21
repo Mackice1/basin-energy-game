@@ -103,6 +103,14 @@ var source_label: Label
 var run_button: Button
 var mode_label: Label
 var slot: OptionButton
+var scene_name := "未命名场景"
+var scene_saved_signature := ""
+var scene_saved_elapsed := -1.0
+var scene_saved_path := ""
+var scene_is_dirty := true
+var scene_status_checked_ms := -1000
+var scene_identity_label: Label
+var scene_save_feedback: Label
 var confirmation := ConfirmationDialog.new()
 var confirm_action: Callable
 var import_dialog
@@ -334,7 +342,7 @@ func make_ui():
 	var brand_icon:=TextureRect.new();brand_icon.texture=icon_texture("station");brand_icon.custom_minimum_size=Vector2(30,36);brand_icon.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;brand_icon.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;header_brand.add_child(brand_icon)
 	var brand:=VBoxContainer.new();brand.add_theme_constant_override("separation",2);header_brand.add_child(brand)
 	brand.add_child(label("能源基地",21))
-	hud_brand_subtitle=label("荒原 · BASIN 02",12);hud_brand_subtitle.add_theme_color_override("font_color",Color("b3c1cd"));brand.add_child(hud_brand_subtitle)
+	hud_brand_subtitle=label("荒原 · BASIN 02",12);hud_brand_subtitle.add_theme_color_override("font_color",Color("b3c1cd"));hud_brand_subtitle.custom_minimum_size.x=110;hud_brand_subtitle.clip_text=true;hud_brand_subtitle.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS;brand.add_child(hud_brand_subtitle)
 	for pair in [["generated","实际发电"],["served","负荷实供"],["unserved","缺供"]]:
 		var tile:=VBoxContainer.new();tile.custom_minimum_size.x=102;tile.add_theme_constant_override("separation",2);hr.add_child(tile);header_metric_tiles.append(tile)
 		var caption:=label(pair[1],12);caption.add_theme_color_override("font_color",Color("b3c1cd"));tile.add_child(caption)
@@ -471,14 +479,24 @@ func make_ui():
 	var rules:=sidebar_card(weather_notes,"输入优先级与模型边界","weather_notes")
 	sidebar_note(rules,"未绑定出力字段使用所选教学情景。位置和日历计算太阳位置，不能生成真实当地天气。地图资源图层仍是空间示意。\n\n输入优先级：设备直接功率 → 设备专属气象 → 全局气象 → 未绑定字段的内置天气。")
 	sidebar_note(rules,"非聚光太阳能集热仅使用全局POA与环境温度，不支持设备绑定或直接热功率。POA为声明的固定倾斜面教学等效辐照，非DNI，不重复转置。槽式聚光使用独立全局DNI；缺DNI CSV时仍为太阳高度与云量合成教学DNI，POA不能替代。\n\nCSV 可输入风速、等效面上POA、直接法向DNI、温度、云量、雨强或设备可用功率；空值拒绝，不外推。导入气象未含云雨则对应状态未知。当前未读取 wind_height_m，不能自动将10米风速转到轮毂；PV冷却复用相应风速是教学假设。\n\n地图水源、交通与燃料边界标记仍是场地示意。天然气热水锅炉使用右侧独立燃料资源设置，有限共享供给并计量辅机电；没有气网压力、煤炭物流或完整水力网络仿真。制氢、储氢、醇氨链使用显式有限物料库存与电热消耗；蒸汽闭环使用独立热力模型。\n\n外部电网仅接收全场最多 4 MW，不进口电力。")
-	var storage_page:VBoxContainer = dock.create_panel("templates", "模板与场景")
+	var storage_page:VBoxContainer = dock.create_panel("templates", "场景与存档")
 	storage_page.add_theme_constant_override("separation",12)
-	var storage:=sidebar_card(storage_page,"新建设备默认值","template_settings")
+	var saves:=sidebar_card(storage_page,"当前场景与存档","scene_saves")
+	scene_identity_label=sidebar_note(saves,"")
+	scene_identity_label.add_theme_font_size_override("font_size",16)
+	var sav:=HBoxContainer.new();sav.add_theme_constant_override("separation",6);saves.add_child(sav)
+	slot=OptionButton.new();slot.size_flags_horizontal=Control.SIZE_EXPAND_FILL;slot.fit_to_longest_item=false;sav.add_child(slot)
+	for i in range(3):slot.add_item("存档 %d"%(i+1))
+	button("保存…",request_save_slot,sav).tooltip_text="保存当前场景；确认前不会覆盖文件。"
+	button("读取…",request_load_slot,sav).tooltip_text="读取所选存档；当前场景可撤销恢复。"
+	scene_save_feedback=sidebar_note(saves,"选择存档后保存或读取；不会自动覆盖。")
+	var empty_scene=sidebar_card(storage_page,"新场景","new_scene")
+	button("新建空白真实规格场景",func():ask("新建4×4 km空白真实规格场景？当前场景可撤销恢复；不会覆盖任何已保存文件。",new_reference_scene),empty_scene)
+	var library:=fold(storage_page,"模板与教学示例")
+	var storage:=sidebar_card(library,"新建设备默认值","template_settings")
 	button("新建设备模板",func():open_parameters(true),storage)
 	var template_info:=label("参数模板只影响之后新建的设备，不会批量改动已有设备。",14);template_info.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;template_info.add_theme_font_size_override("font_size",12);template_info.add_theme_color_override("font_color",UITheme.MUTED);storage.add_child(template_info)
-	storage=sidebar_card(storage_page,"新场景","new_scene")
-	button("新建空白真实规格场景",func():ask("新建4×4 km空白真实规格场景？当前场景可撤销恢复；不会覆盖任何已保存文件。",new_reference_scene),storage)
-	storage=sidebar_card(storage_page,"教学示例","scene_examples")
+	storage=sidebar_card(library,"教学示例","scene_examples")
 	button("塔式熔盐昼夜发电示例 · 1600 m²",func():ask("替换为100镜塔站、0.5MWh熔盐储热及闭式蒸汽循环？自动教学昼夜天气，风机与电池供辅机，可撤销。",tower_example),storage)
 	button("槽式蒸汽发电示例 · 闭式循环",func():ask("替换为槽式导热油、储热、蒸汽发生器、汽轮发电机、冷凝器和给水泵闭环？外部风光提供预热后运行辅电，可撤销。",rankine_example),storage)
 	button("槽式聚光示例 · 69.24 m²",func():ask("替换为300/200°C导热油、储热和两级换热链？25 kW需求；可撤销。",trough_example),storage)
@@ -489,10 +507,6 @@ func make_ui():
 	button("源网荷储示例",func():ask("替换为风光、负荷和电池示例？可撤销。",storage_example),storage)
 	button("4 MW 外送示例",func():ask("替换当前场景为风光 + 变电站示例？可撤销。",example),storage)
 	var scene_info:=label("示例会替换当前场景，确认后执行，可撤销。资源与气象模板库尚未实现。",14);scene_info.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;scene_info.add_theme_font_size_override("font_size",12);scene_info.add_theme_color_override("font_color",UITheme.MUTED);storage.add_child(scene_info)
-	storage=sidebar_card(storage_page,"本地存档","scene_saves")
-	var sav:=HBoxContainer.new();storage.add_child(sav);slot=OptionButton.new();sav.add_child(slot)
-	for i in range(3):slot.add_item("存档 %d"%(i+1))
-	button("保存",func():ask("保存到槽 %d？已有存档会被覆盖。"%(slot.selected+1),save_slot),sav);button("读取",func():ask("读取槽 %d并替换当前场景？可撤销。"%(slot.selected+1),load_slot),sav)
 	var optimize_page:VBoxContainer = dock.create_panel("optimization", "调度优化")
 	optimize_page.add_theme_constant_override("separation",12)
 	var optimize:=sidebar_card(optimize_page,"独立预测任务","optimization")
@@ -642,7 +656,12 @@ func _layout_workspace():
 		rail.size.y=minf(rail.size.y,maxf(80.0,context_y-rail.position.y-8.0))
 		hud_layers.size.y=minf(328,maxf(80,context_y-hud_layers.position.y-8))
 		# Keep an opened side panel above the compact construction controls.
-		for panel in hud_dock.panels.values():panel.size.y=maxf(120.0,context_y-panel.position.y-8.0)
+		for key in hud_dock.panels:
+			var panel:Control=hud_dock.panels[key]
+			# On short screens the scene controls take priority over the view toolbar.
+			# This is an overlay, not an extra permanent HUD row.
+			if key=="templates" and h<600.0:panel.position.y=90.0
+			panel.size.y=maxf(120.0,context_y-panel.position.y-8.0)
 
 
 func ask(message:String,action:Callable):
@@ -943,7 +962,7 @@ func state()->Dictionary:
 	var saved_energy:Dictionary=ENERGY_ZERO.duplicate(true);saved_energy.merge(energy,true)
 	for kind in KINDS:
 		if not saved_templates.has(kind):saved_templates[kind]=model.defaults(kind).duplicate(true)
-	return {"schema":CURRENT_SAVE_SCHEMA,"model_version":CURRENT_MODEL_VERSION,"material_energy":material_energy.duplicate(true),"tower_energy":tower_energy.duplicate(true),"rankine_energy":rankine_energy.duplicate(true),"high_temp_energy":high_temp_energy.duplicate(true),"solar_energy":solar_energy.duplicate(true),"fuel_supply":fuel_supply.duplicate(true),"fuel_energy":fuel_energy.duplicate(true),"dimension_profile":dimension_profile,"stations":stations.duplicate(true),"next_station_id":next_station_id,"rebuild":true,"devices":devices.duplicate(true),"links":links.duplicate(true),"templates":saved_templates,"imports":imports.duplicate(true),"next_id":next_id,"elapsed_s":elapsed_s,"energy":saved_energy,"thermal_energy":thermal_energy.duplicate(true),"physical_lines":physical_lines,"climate_config":climate_config.duplicate(true),"weather_effects_enabled":weather_effects_enabled}
+	return {"scene_name":scene_name,"schema":CURRENT_SAVE_SCHEMA,"model_version":CURRENT_MODEL_VERSION,"material_energy":material_energy.duplicate(true),"tower_energy":tower_energy.duplicate(true),"rankine_energy":rankine_energy.duplicate(true),"high_temp_energy":high_temp_energy.duplicate(true),"solar_energy":solar_energy.duplicate(true),"fuel_supply":fuel_supply.duplicate(true),"fuel_energy":fuel_energy.duplicate(true),"dimension_profile":dimension_profile,"stations":stations.duplicate(true),"next_station_id":next_station_id,"rebuild":true,"devices":devices.duplicate(true),"links":links.duplicate(true),"templates":saved_templates,"imports":imports.duplicate(true),"next_id":next_id,"elapsed_s":elapsed_s,"energy":saved_energy,"thermal_energy":thermal_energy.duplicate(true),"physical_lines":physical_lines,"climate_config":climate_config.duplicate(true),"weather_effects_enabled":weather_effects_enabled}
 
 func checkpoint():
 	if is_instance_valid(runtime_chart):runtime_chart.reset_history()
@@ -961,6 +980,7 @@ func restore(s:Dictionary):
 		if not upgraded.get("valid",false):tell("物料参考账升级失败；场景未加载。");return
 		loaded_material=upgraded.ledger
 	material_energy=loaded_material
+	scene_name=str(s.get("scene_name","旧存档场景"))
 	if is_instance_valid(runtime_chart):runtime_chart.reset_history()
 	dimension_profile=str(s.get("dimension_profile","legacy_illustrative"))
 	fuel_supply=s.get("fuel_supply",FuelSupply.defaults()).duplicate(true)
@@ -993,6 +1013,7 @@ func undo():
 	restore(undo_states.pop_back());tell("已撤销；模拟暂停，避免意外继续累计。")
 
 func validate_state(s:Variant)->String:
+	if s is Dictionary and s.has("scene_name") and (not s.scene_name is String or s.scene_name.length()>80 or s.scene_name.strip_edges().is_empty()):return "场景名称无效。"
 	var error:=SaveValidator.validate(s)
 	if error!="":return error
 	var origin_error:=iso_origin_error(s.imports)
@@ -1021,18 +1042,68 @@ func write_save(path:String)->bool:
 	var f:=FileAccess.open(path+".tmp",FileAccess.WRITE)
 	if f==null:return false
 	f.store_string(JSON.stringify(state(),"  "));f.close()
-	return DirAccess.rename_absolute(path+".tmp",path)==OK
+	var saved:bool=DirAccess.rename_absolute(path+".tmp",path)==OK
+	return saved
 
 func read_save(path:String)->bool:
 	if not FileAccess.file_exists(path):tell("这个存档槽还没有文件。");return false
 	var parsed=JSON.parse_string(FileAccess.get_file_as_string(path));var error:=validate_state(parsed)
 	if error!="":tell("未读取："+error);return false
-	checkpoint();restore(parsed);tell("读取完成；"+layout_mode_error() if layout_mode_error()!="" else "读取完成，真实规格尺寸与库存已恢复。" if is_reference_layout() else "读取完成：旧比例兼容模式，待显式迁移；原坐标/额定值/库存保持，仅原教学运行，不宣称真实比例。");return true
+	checkpoint();restore(parsed);mark_scene_saved(path);tell("读取完成；"+layout_mode_error() if layout_mode_error()!="" else "读取完成，真实规格尺寸与库存已恢复。" if is_reference_layout() else "读取完成：旧比例兼容模式，待显式迁移；原坐标/额定值/库存保持，仅原教学运行，不宣称真实比例。");return true
 
-func save_slot():
-	tell("已保存槽 %d（含数据与参数）"%(slot.selected+1) if write_save(save_root+"/slot%d.json"%slot.selected) else "保存失败，原存档未改动。")
+func scene_content_signature()->String:
+	return JSON.stringify(state()).sha256_text()
 
-func load_slot():read_save(save_root+"/slot%d.json"%slot.selected)
+func mark_scene_saved(path:String)->void:
+	scene_saved_path=path;scene_saved_elapsed=elapsed_s;scene_saved_signature=scene_content_signature()
+	update_scene_identity(true)
+
+func update_scene_identity(force:bool=false)->void:
+	var now:int=Time.get_ticks_msec()
+	if not force and now-scene_status_checked_ms<1000:return
+	scene_status_checked_ms=now
+	scene_is_dirty=scene_saved_signature.is_empty() or elapsed_s!=scene_saved_elapsed or scene_content_signature()!=scene_saved_signature
+	if is_instance_valid(hud_brand_subtitle):
+		hud_brand_subtitle.text=("● " if scene_is_dirty else "✓ ")+scene_name
+		hud_brand_subtitle.tooltip_text=scene_name+(" · 有未保存更改" if scene_is_dirty else " · 已保存")+"；右侧场景中保存/读取。"
+	if is_instance_valid(scene_identity_label):
+		scene_identity_label.text=scene_name+"\n"+("● 有未保存更改" if scene_is_dirty else "✓ 已保存")
+		scene_identity_label.add_theme_color_override("font_color",Color("eac982") if scene_is_dirty else UITheme.INK)
+		scene_identity_label.tooltip_text="包含设备、连接、参数、气象与运行库存；相机和选择不计为更改。"+("\n来源："+scene_saved_path.get_file() if not scene_saved_path.is_empty() else "")
+
+func scene_file_feedback(message:String)->void:
+	if is_instance_valid(scene_save_feedback):scene_save_feedback.text=message
+	tell(message);update_scene_identity(true)
+
+func request_save_slot()->void:
+	var index:int=slot.selected
+	var path:String=save_root+"/slot%d.json"%index
+	update_scene_identity(true)
+	ask("将“%s”保存到存档 %d？%s"%[scene_name,index+1,"已有存档会被覆盖。" if FileAccess.file_exists(path) else "将创建新存档。"],func():save_scene_to_slot(index))
+
+func request_load_slot()->void:
+	var index:int=slot.selected
+	var path:String=save_root+"/slot%d.json"%index
+	if not FileAccess.file_exists(path):scene_file_feedback("存档 %d 为空，当前场景未改变。"%(index+1));return
+	update_scene_identity(true)
+	ask("读取存档 %d并替换“%s”？%s当前场景可撤销恢复。"%[index+1,scene_name,"有未保存更改，请先保存。\n" if scene_is_dirty else ""],func():load_scene_from_slot(index))
+
+func save_scene_to_slot(index:int)->bool:
+	if index<0 or index>=3:return false
+	var ok:bool=write_save(save_root+"/slot%d.json"%index)
+	if ok:mark_scene_saved(save_root+"/slot%d.json"%index)
+	scene_file_feedback("已保存“%s”到存档 %d。"%[scene_name,index+1] if ok else "保存失败，原存档未改动；更改仍未保存。")
+	return ok
+
+func load_scene_from_slot(index:int)->bool:
+	if index<0 or index>=3:return false
+	var ok:bool=read_save(save_root+"/slot%d.json"%index)
+	if ok:scene_file_feedback("已读取“%s” · 存档 %d；模拟暂停。%s"%[scene_name,index+1,"旧比例兼容，待显式迁移。" if not is_reference_layout() else ""])
+	else:scene_file_feedback("读取失败，当前场景未改变。"+(notice.text if is_instance_valid(notice) else "请检查存档。"))
+	return ok
+
+func save_slot():save_scene_to_slot(slot.selected)
+func load_slot():load_scene_from_slot(slot.selected)
 
 func weather_at(t:float)->Dictionary:
 	var fraction:=0.0
@@ -1235,6 +1306,7 @@ func toggle_run():
 	update_status()
 
 func update_status():
+	update_scene_identity()
 	if not is_instance_valid(status_label):return
 	run_button.text=("▶ 运行  ×%s" if paused else "Ⅱ 暂停  ×%s")%speed_text()
 	if is_instance_valid(speed_control):speed_control.set_speed(speed)
@@ -1648,6 +1720,7 @@ func update_interaction_visuals():
 
 func _process(delta):
 	if not booted:return
+	update_scene_identity()
 	if drag_active and not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
 		set_mode("select");tell("移动已取消：未在地面确认松开；设备保留原位。")
 	if is_instance_valid(modal_shade):modal_shade.visible=modal_visible()
@@ -1926,7 +1999,7 @@ func open_line_settings():
 	tell("选中设备尚无关联线路。")
 
 func storage_example():
-	checkpoint();dimension_profile="metric_v1";devices=[];stations=[];next_station_id=1000000;links=[];imports=[];next_id=0;elapsed_s=0;energy=ENERGY_ZERO.duplicate(true);thermal_energy=THERMAL_ENERGY_ZERO.duplicate(true);fuel_energy=FuelSupply.initial_energy();solar_energy=SOLAR_ENERGY_ZERO.duplicate(true);high_temp_energy=HighTemp.initial_energy();rankine_energy=Rankine.initial_energy();tower_energy=Tower.initial_energy();material_energy=Materials.initial_energy(devices);paused=true
+	checkpoint();scene_name="源网荷储示例";dimension_profile="metric_v1";devices=[];stations=[];next_station_id=1000000;links=[];imports=[];next_id=0;elapsed_s=0;energy=ENERGY_ZERO.duplicate(true);thermal_energy=THERMAL_ENERGY_ZERO.duplicate(true);fuel_energy=FuelSupply.initial_energy();solar_energy=SOLAR_ENERGY_ZERO.duplicate(true);high_temp_energy=HighTemp.initial_energy();rankine_energy=Rankine.initial_energy();tower_energy=Tower.initial_energy();material_energy=Materials.initial_energy(devices);paused=true
 	# Placement follows exactly the normal terrain/spacing guard; no hidden devices.
 	for spec in [["wind",Vector2(-15,0)],["pv",Vector2(7,14)],["station",Vector2(24,14)],["load",Vector2(40,14)],["battery",Vector2(24,-2)]]:
 		if not add_equipment(spec[0],spec[1],false):
@@ -1955,7 +2028,7 @@ func export_optimization_snapshot():
 
 func new_reference_scene()->void:
 	# Explicit replacement, reached from a confirmation dialog; never writes a save.
-	checkpoint();dimension_profile="metric_v1"
+	checkpoint();scene_name="空白基地";dimension_profile="metric_v1"
 	devices=[];stations=[];links=[];imports=[];next_id=0;next_station_id=1000000
 	elapsed_s=0.0;paused=true;selected_id=-2
 	energy=ENERGY_ZERO.duplicate(true);thermal_energy=THERMAL_ENERGY_ZERO.duplicate(true)
@@ -1966,7 +2039,7 @@ func new_reference_scene()->void:
 	tell("已新建4×4 km空白真实规格场景；原场景可撤销恢复，已保存文件未覆盖。")
 
 func example():
-	checkpoint();dimension_profile="metric_v1";devices=[];stations=[];next_station_id=1000000;links=[];imports=[];next_id=0;elapsed_s=0;energy=ENERGY_ZERO.duplicate(true);thermal_energy=THERMAL_ENERGY_ZERO.duplicate(true);fuel_energy=FuelSupply.initial_energy();solar_energy=SOLAR_ENERGY_ZERO.duplicate(true);high_temp_energy=HighTemp.initial_energy();rankine_energy=Rankine.initial_energy();tower_energy=Tower.initial_energy();material_energy=Materials.initial_energy(devices);paused=true
+	checkpoint();scene_name="风光外送示例";dimension_profile="metric_v1";devices=[];stations=[];next_station_id=1000000;links=[];imports=[];next_id=0;elapsed_s=0;energy=ENERGY_ZERO.duplicate(true);thermal_energy=THERMAL_ENERGY_ZERO.duplicate(true);fuel_energy=FuelSupply.initial_energy();solar_energy=SOLAR_ENERGY_ZERO.duplicate(true);high_temp_energy=HighTemp.initial_energy();rankine_energy=Rankine.initial_energy();tower_energy=Tower.initial_energy();material_energy=Materials.initial_energy(devices);paused=true
 	# Known flat central parcel; validated with the same terrain constraints as placement.
 	for spec in [["wind",Vector2(-15,0)],["pv",Vector2(7,14)],["station",Vector2(24,14)]]:add_equipment(spec[0],spec[1],false)
 	if devices.size()==3:links=[{"from":0,"to":2,"capacity_mw":6.0,"loss_fraction":0.02},{"from":1,"to":2,"capacity_mw":2.0,"loss_fraction":0.02},{"from":2,"to":-1,"capacity_mw":4.0,"loss_fraction":0.02}]
@@ -2161,7 +2234,7 @@ func thermal_connection_status(id:int)->String:
 	return "孤岛：仅库存自损" if not incoming and not outgoing else "热端已连接"
 
 func thermal_example():
-	checkpoint();dimension_profile="metric_v1";devices=[];stations=[];next_station_id=1000000;links=[];imports=[];next_id=0;elapsed_s=0;energy=ENERGY_ZERO.duplicate(true);thermal_energy=THERMAL_ENERGY_ZERO.duplicate(true);fuel_energy=FuelSupply.initial_energy();solar_energy=SOLAR_ENERGY_ZERO.duplicate(true);high_temp_energy=HighTemp.initial_energy();rankine_energy=Rankine.initial_energy();tower_energy=Tower.initial_energy();material_energy=Materials.initial_energy(devices);paused=true
+	checkpoint();scene_name="电热完整链示例";dimension_profile="metric_v1";devices=[];stations=[];next_station_id=1000000;links=[];imports=[];next_id=0;elapsed_s=0;energy=ENERGY_ZERO.duplicate(true);thermal_energy=THERMAL_ENERGY_ZERO.duplicate(true);fuel_energy=FuelSupply.initial_energy();solar_energy=SOLAR_ENERGY_ZERO.duplicate(true);high_temp_energy=HighTemp.initial_energy();rankine_energy=Rankine.initial_energy();tower_energy=Tower.initial_energy();material_energy=Materials.initial_energy(devices);paused=true
 	for spec in [["wind",Vector2(-35,0)],["pv",Vector2(-15,14)],["station",Vector2(3,14)],["electric_boiler",Vector2(21,14)],["thermal_store",Vector2(21,-3)],["heat_exchanger",Vector2(39,14)],["heat_demand",Vector2(56,14)],["load",Vector2(3,31)]]:
 		if not add_equipment(spec[0],spec[1],false):
 			for x in range(-60,71,15):
@@ -2528,6 +2601,7 @@ func fuel_example()->void:
 	# thermal_example checkpoints once; this fixture extension is the same edit.
 	thermal_example()
 	if stations.is_empty():tell("未建立厂站，燃气示例未添加。");return
+	scene_name="燃气电热联合示例"
 	var sid:=int(stations[0].id)
 	var position:=Vector2.INF
 	var layout_scale:=1.0 if dimension_profile=="metric_v1" else 10.0
@@ -2556,6 +2630,7 @@ func solar_example()->void:
 	if dimension_profile!="metric_v1":tell("太阳能示例需要米制尺寸；请先在尺寸说明中显式迁移米制。");return
 	thermal_example()
 	if stations.is_empty():return
+	scene_name="太阳能集热示例"
 	var collector:=device(3)
 	collector.kind="solar_thermal"
 	collector.params=templates.solar_thermal.duplicate(true)
@@ -2581,6 +2656,7 @@ func trough_example()->void:
 	if dimension_profile!="metric_v1":tell("槽式聚光示例需要米制尺寸；请先显式迁移米制。");return
 	thermal_example()
 	if stations.is_empty():return
+	scene_name="槽式聚光示例"
 	var sid:int=int(stations[0].id)
 	var collector:=device(3);collector.kind="parabolic_trough";collector.params=templates.parabolic_trough.duplicate(true);collector.state={};collector.model_profile=Catalog.model_profile(collector.kind)
 	collector.interior_x=-1.1;collector.interior_z=-0.65
@@ -2610,6 +2686,7 @@ func rankine_example()->void:
 	if dimension_profile!="metric_v1":tell("蒸汽循环示例需要米制尺寸；请先显式迁移米制。");return
 	trough_example()
 	if stations.is_empty():return
+	scene_name="槽式蒸汽发电示例"
 	var sid:int=int(stations[0].id)
 	devices=devices.filter(func(d):return not int(d.id) in [5,6,8])
 	device(4).params.charge_mwth=0.01
@@ -2635,7 +2712,7 @@ func tower_report_text(r:Dictionary)->String:
 
 func tower_example()->void:
 	if dimension_profile!="metric_v1":tell("塔式运行示例需要米制尺寸；请先显式迁移米制。");return
-	checkpoint();dimension_profile="metric_v1";devices=[];stations=[];next_station_id=1000000;links=[];imports=[];next_id=0;elapsed_s=0
+	checkpoint();scene_name="塔式熔盐发电示例";dimension_profile="metric_v1";devices=[];stations=[];next_station_id=1000000;links=[];imports=[];next_id=0;elapsed_s=0
 	energy=ENERGY_ZERO.duplicate(true);thermal_energy=THERMAL_ENERGY_ZERO.duplicate(true);fuel_energy=FuelSupply.initial_energy();solar_energy=SOLAR_ENERGY_ZERO.duplicate(true);high_temp_energy=HighTemp.initial_energy();rankine_energy=Rankine.initial_energy();tower_energy=Tower.initial_energy();material_energy=Materials.initial_energy(devices);paused=true;accumulator=0
 	climate_config=Climate.defaults();climate_config.start_local="2026-06-21T12:00:00";climate_config.scenario="clear"
 	if is_instance_valid(climate_panel):climate_panel.set_config(climate_config)
@@ -2785,7 +2862,7 @@ func update_material_sidebar():
 	for key in legacy:sidebar_value("material_history_"+key,float(legacy[key]))
 
 func chemical_example()->void:
-	checkpoint();dimension_profile="metric_v1";devices=[];stations=[];links=[];imports=[];next_id=0;next_station_id=1000000;elapsed_s=0.0
+	checkpoint();scene_name="制氢与醇氨示例";dimension_profile="metric_v1";devices=[];stations=[];links=[];imports=[];next_id=0;next_station_id=1000000;elapsed_s=0.0
 	dimension_profile="metric_v1";energy=ENERGY_ZERO.duplicate(true);thermal_energy=THERMAL_ENERGY_ZERO.duplicate(true)
 	fuel_energy=FuelSupply.initial_energy();solar_energy=SOLAR_ENERGY_ZERO.duplicate(true);high_temp_energy=HighTemp.initial_energy();rankine_energy=Rankine.initial_energy();tower_energy=Tower.initial_energy();material_energy=Materials.initial_energy(devices)
 	paused=true;selected_id=-2;var ids:Dictionary={}

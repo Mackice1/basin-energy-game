@@ -89,7 +89,7 @@ func _run() -> void:
 	dock.toggle_panel("location")
 	var read_only_text := _all_text(dock.panels.location)
 	check(read_only_text.contains("位置用于太阳位置计算") and read_only_text.contains("不会下载当地天气"), "location limitations are explicit")
-	check(_all_text(dock.panels.weather).contains("没有气网压力、水量、煤炭、蒸汽或氢调度") and _all_text(dock.panels.weather).contains("独立燃料资源设置"), "resource display distinguishes bounded gas resource from unimplemented pressure/water/other carriers")
+	check(_all_text(dock.panels.weather).contains("没有气网压力、煤炭物流或完整水力网络仿真") and _all_text(dock.panels.weather).contains("独立燃料资源设置"), "resource display distinguishes bounded gas resource from unimplemented pressure/water/coal network")
 	check(_all_text(dock.panels.templates).contains("资源与气象模板库尚未实现"), "template scope is explicit")
 	check(game.detail.is_ancestor_of(dock.panels.location) == false and dock.panels.location.is_ancestor_of(game.detail), "selected site detail lives in location section")
 	dock.close_panels()

@@ -68,7 +68,13 @@ static func build_surround(map:Node3D) -> Node3D:
    c=c.lightened(.035*sin(i*1.73)+.015*cos(i*.77))
    _tri(st,rings[ring][i],rings[ring+1][i],rings[ring][j],c)
    _tri(st,rings[ring][j],rings[ring+1][i],rings[ring+1][j],c)
- _finish(st,root,"BasinApronAndDistantRidges")
+ var surface:=_finish(st,root,"BasinApronAndDistantRidges")
+ # The low-poly apron already has shared smooth normals. Its old per-sector
+ # vertex tint made the overview a patchwork of radial wedges. Reuse the exact
+ # accepted world-space ground material instead: continuous texture/macro colour
+ # across the build boundary, with no change to vertices, shading normals or LOD.
+ surface.mesh.surface_set_material(0,_extension_ground_material(map))
+ root.set_meta("surface_contract","continuous_world_ground_surround_v1")
  root.set_meta("triangles",(SURROUND_RADII.size()-1)*SECTORS*2)
  return root
 

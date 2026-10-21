@@ -30,6 +30,12 @@ var yaw := -0.22
 var pitch := 0.78
 var distance := 235.0
 var target := Vector3(0, 0, 0)
+# An overview can need a larger projection span than the 650-unit orbit limit
+# on a short window. Keep that display-only correction out of local focus.
+var _overview_span_scale := 1.0
+var _overview_offset_ratio := Vector2.ZERO
+var _overview_fit_pose: Array = []
+var _overview_refit_pending := false
 var layer := 0
 var show_labels := true
 var selected := Vector2(-14, 13)
@@ -420,6 +426,7 @@ func select_site(p: Vector2):
 	detail.text = "坐标  %.1f, %.1f km\n地貌  %s\n相对高程  %.0f m\n坡度  %.1f°\n\n%s\n%s\n\n平均风速  %.1f m/s*\n太阳资源  佳*\n距送出点  %.1f km\n\n网格10m / 主格100m · 全域4×4km\n* 合成资源，非实测" % [p.x*Domain.METERS_PER_UNIT/1000,p.y*Domain.METERS_PER_UNIT/1000,biome(p.x,p.y),height_at(p.x,p.y)*Domain.METERS_PER_UNIT,s,condition,reason,wind,p.distance_to(Vector2(87,3))*Domain.METERS_PER_UNIT/1000]
 
 func set_view(mode: int):
+	_clear_overview_projection()
 	target = Vector3.ZERO
 	distance = 235
 	camera.projection = Camera3D.PROJECTION_PERSPECTIVE if mode == 2 else Camera3D.PROJECTION_ORTHOGONAL
@@ -430,7 +437,101 @@ func set_view(mode: int):
 	update_camera()
 
 func reset_camera():
-	yaw = -0.22; pitch = 0.78; distance = 235; target = Vector3.ZERO; camera.projection = Camera3D.PROJECTION_ORTHOGONAL; update_camera()
+	_clear_overview_projection()
+	yaw = -0.22; pitch = 0.78; distance = MAX_CAMERA_DISTANCE; target = Vector3.ZERO
+	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
+	camera.keep_aspect = Camera3D.KEEP_HEIGHT
+	update_camera()
+	var viewport_size := get_viewport().get_visible_rect().size
+	var usable := overview_usable_rect()
+	# Sample the real domain, including every corner and the non-flat core.
+	# This is framing only: no transforms, dimensions or physical data change.
+	var lower := Vector2(INF, INF)
+	var upper := Vector2(-INF, -INF)
+	for ix in range(21):
+		for iz in range(21):
+			var x := lerpf(-Domain.HALF_EXTENTS.x, Domain.HALF_EXTENTS.x, ix / 20.0)
+			var z := lerpf(-Domain.HALF_EXTENTS.y, Domain.HALF_EXTENTS.y, iz / 20.0)
+			var point := camera.to_local(Vector3(x, height_at(x, z), z))
+			lower = lower.min(Vector2(point.x, point.y))
+			upper = upper.max(Vector2(point.x, point.y))
+	var bounds := upper - lower
+	var span := maxf(bounds.x / usable.size.x, bounds.y / usable.size.y) * viewport_size.y * 1.06
+	distance = clampf(span, MIN_CAMERA_DISTANCE, MAX_CAMERA_DISTANCE)
+	_overview_span_scale = span / distance
+	var screen_shift := usable.get_center() - viewport_size * 0.5
+	_overview_offset_ratio = (lower + upper) * 0.5 / span + Vector2(-screen_shift.x, screen_shift.y) / viewport_size.y
+	update_camera()
+	_overview_fit_pose = _camera_pose()
+	if not get_viewport().size_changed.is_connected(_overview_viewport_changed):
+		get_viewport().size_changed.connect(_overview_viewport_changed)
+	_watch_overview_layout()
+
+func _clear_overview_projection() -> void:
+	_overview_span_scale = 1.0
+	_overview_offset_ratio = Vector2.ZERO
+	_overview_fit_pose.clear()
+	camera.h_offset = 0.0; camera.v_offset = 0.0
+
+func _camera_pose() -> Array:
+	return [target, yaw, pitch, distance, camera.projection]
+
+func _overview_viewport_changed() -> void:
+	# Let the responsive HUD finish its deferred layout before measuring it.
+	if _overview_fit_pose.is_empty() or _overview_refit_pending:
+		return
+	_overview_refit_pending = true
+	call_deferred("_refit_unchanged_overview")
+
+func _refit_unchanged_overview() -> void:
+	_overview_refit_pending = false
+	if not _overview_fit_pose.is_empty() and _overview_fit_pose == _camera_pose():
+		reset_camera()
+
+func _watch_overview_layout() -> void:
+	var workspace := find_child("GameWorkspace", true, false)
+	if not is_instance_valid(workspace): return
+	var panels: Array[Node] = []
+	for node_name in ["WorkspaceHeader", "ViewToolbar", "ContextToolbar", "ConstructionShelf", "WorkspaceStatus", "ConstructionFlyout", "MapLayers", "SelectedRuntimeChart"]:
+		var panel := workspace.find_child(node_name, true, false)
+		if is_instance_valid(panel): panels.append(panel)
+	var dock := workspace.find_child("RightDock", true, false)
+	if is_instance_valid(dock): panels.append_array(dock.get_children())
+	for panel in panels:
+		if panel is Control:
+			if not panel.visibility_changed.is_connected(_overview_viewport_changed):
+				panel.visibility_changed.connect(_overview_viewport_changed)
+			if not panel.item_rect_changed.is_connected(_overview_viewport_changed):
+				panel.item_rect_changed.connect(_overview_viewport_changed)
+
+func overview_usable_rect() -> Rect2:
+	var extent := get_viewport().get_visible_rect().size
+	var start := Vector2(16.0, 16.0)
+	var end := extent - Vector2(16.0, 16.0)
+	var workspace := find_child("GameWorkspace", true, false)
+	if is_instance_valid(workspace):
+		for node_name in ["WorkspaceHeader", "ViewToolbar"]:
+			var panel := workspace.find_child(node_name, true, false) as Control
+			if is_instance_valid(panel) and panel.is_visible_in_tree():
+				start.y = maxf(start.y, panel.get_global_rect().end.y + 10.0)
+		for node_name in ["ContextToolbar", "ConstructionShelf", "WorkspaceStatus", "ConstructionFlyout"]:
+			var panel := workspace.find_child(node_name, true, false) as Control
+			if is_instance_valid(panel) and panel.is_visible_in_tree():
+				end.y = minf(end.y, panel.get_global_rect().position.y - 10.0)
+		for node_name in ["MapLayers", "SelectedRuntimeChart"]:
+			var panel := workspace.find_child(node_name, true, false) as Control
+			if is_instance_valid(panel) and panel.is_visible_in_tree():
+				start.x = maxf(start.x, panel.get_global_rect().end.x + 10.0)
+		var dock := workspace.find_child("RightDock", true, false)
+		if is_instance_valid(dock):
+			for child in dock.get_children():
+				if child is Control and child.is_visible_in_tree():
+					end.x = minf(end.x, child.get_global_rect().position.x - 10.0)
+	# An overlay may leave no free rectangle on an undersized window. Keep the
+	# math finite; supported 640x480 and larger layouts retain a usable region.
+	start = start.clamp(Vector2.ZERO, extent - Vector2.ONE)
+	end = end.clamp(start + Vector2.ONE, extent)
+	return Rect2(start, end - start)
 
 func update_camera():
 	# Camera constraints are display-only. Close inspection uses the real metric
@@ -443,7 +544,13 @@ func update_camera():
 	target.x=bounded.x;target.z=bounded.y
 	var ground := height_at(target.x, target.z)
 	target.y = clampf(target.y, ground + 0.05, ground + 32.0)
-	camera.size = distance
+	if camera.projection != Camera3D.PROJECTION_ORTHOGONAL:
+		_clear_overview_projection()
+	if not _overview_fit_pose.is_empty() and _overview_fit_pose != _camera_pose():
+		_overview_fit_pose.clear()
+	camera.size = distance * _overview_span_scale
+	camera.h_offset = _overview_offset_ratio.x * camera.size
+	camera.v_offset = _overview_offset_ratio.y * camera.size
 	camera.position = target + Vector3(sin(yaw)*cos(pitch),sin(pitch),cos(yaw)*cos(pitch))*(distance*1.25 if camera.projection == Camera3D.PROJECTION_PERSPECTIVE else maxf(250.0,distance*.85))
 	if Domain.contains(Vector2(camera.position.x,camera.position.z)):
 		camera.position.y = maxf(camera.position.y, height_at(camera.position.x, camera.position.z) + CAMERA_GROUND_CLEARANCE)
