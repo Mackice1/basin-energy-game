@@ -16,6 +16,8 @@ var base_color_image: Image
 var terrain_initialized := false
 var labels := Node3D.new()
 var infrastructure := Node3D.new()
+var road_detail: Node3D
+var export_corridor: Node3D
 var selection := Node3D.new()
 var overlay := Node3D.new()
 var layer_buttons: Array[Button] = []
@@ -41,7 +43,7 @@ func _ready():
 	print("V2_INIT_START")
 	height_image = Image.create_from_data(1024,1024,false,Image.FORMAT_RF,FileAccess.get_file_as_bytes("res://generated/height.raw"))
 	control_image = Image.create_from_data(1024,1024,false,Image.FORMAT_RF,FileAccess.get_file_as_bytes("res://generated/control.raw"))
-	base_color_image = Image.load_from_file("res://generated/colormap.png")
+	base_color_image = load("res://generated/landscape_detail_colormap.png").get_image()
 	cfg = JSON.parse_string(FileAccess.get_file_as_string("res://config/map.json"))
 	noise.seed = int(cfg.seed)
 	noise.frequency = 0.045
@@ -83,6 +85,7 @@ func _ready():
 	print("V2_BUILD_DETAILS")
 	make_base()
 	make_routes()
+	update_camera()
 	make_details()
 	make_ui()
 	select_site(selected)
@@ -236,6 +239,10 @@ func make_base():
 
 
 func line(parent: Node3D,points: Array,width: float,c: Color,offset: float=0.25):
+	# Preserve every original sampled segment and transform, but submit one mesh.
+	# Route overlays and survey outlines remain non-colliding, display-only geometry.
+	var surface := SurfaceTool.new(); surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var count := 0
 	for i in range(points.size()-1):
 		var a: Vector2 = points[i]
 		var b: Vector2 = points[i+1]
@@ -245,8 +252,14 @@ func line(parent: Node3D,points: Array,width: float,c: Color,offset: float=0.25)
 			var v := a.lerp(b,float(k+1)/steps)
 			var pa := Vector3(u.x,height_at(u.x,u.y)+offset,u.y)
 			var pb := Vector3(v.x,height_at(v.x,v.y)+offset,v.y)
-			var seg := box(parent,(pa+pb)*0.5,Vector3(width,0.14,pa.distance_to(pb)),c)
-			seg.look_at_from_position((pa+pb)*0.5,pb,Vector3.UP)
+			if pa.distance_squared_to(pb) < 0.000001: continue
+			var mesh := BoxMesh.new(); mesh.size = Vector3(width,0.14,pa.distance_to(pb))
+			surface.append_from(mesh,0,Transform3D(Basis.looking_at(pb-pa,Vector3.UP),(pa+pb)*0.5))
+			count += 1
+	if count == 0: return
+	var mi := MeshInstance3D.new(); mi.name = "BatchedRoute"
+	mi.mesh = surface.commit(); mi.material_override = material(c)
+	mi.set_meta("segment_count",count); parent.add_child(mi)
 
 func marker(p: Vector2,title: String,c: Color):
 	var h := height_at(p.x,p.y)
@@ -272,7 +285,7 @@ func marker(p: Vector2,title: String,c: Color):
 	labels.add_child(lbl)
 
 func make_routes():
-	line(infrastructure,[Vector2(-100,13),Vector2(-78,13),Vector2(-48,5),Vector2(16,5),Vector2(66,3),Vector2(100,3)],1.5,Color("676c64"))
+	road_detail = preload("res://scripts/road_visual.gd").build(self,infrastructure)
 	line(infrastructure,[Vector2(-100,18),Vector2(-76,18),Vector2(-59,9)],0.75,Color("424e49"))
 	for i in range(40):
 		box(infrastructure,Vector3(-99+i,height_at(-99+i,18)+0.25,18),Vector3(0.25,0.2,1.5),Color("585b52"))
@@ -282,11 +295,7 @@ func make_routes():
 	marker(Vector2(-80,-5),"天然气接口",Color("b59c73"))
 	marker(Vector2(-76,42),"外引水 / 限额",Color("7b9ba5"))
 	marker(Vector2(87,3),"电网送出 · %s MW" % int(cfg.grid_export_mw),Color("9d8070"))
-	for x in [68,80,94]:
-		var h := height_at(x,3)
-		box(infrastructure,Vector3(x,h+4,3),Vector3(0.6,8,0.6),Color("5d6862"))
-		box(infrastructure,Vector3(x,h+7,3),Vector3(4,0.3,0.4),Color("5d6862"))
-	line(infrastructure,[Vector2(68,3),Vector2(100,3)],0.13,Color("53625c"),7)
+	export_corridor = preload("res://scripts/export_corridor_visual.gd").build(self,infrastructure)
 	marker(Vector2(-68,-43),"北西低山",Color("8f8978"))
 	marker(Vector2(61,48),"局部沙丘",Color("bca883"))
 	marker(Vector2(31,39),"盐碱洼地",Color("d0c9b6"))
@@ -407,7 +416,7 @@ func change_layer(i: int):
 	if i == 4:
 		line(overlay,[Vector2(-100,42),Vector2(-76,42),Vector2(-65,22)],1.4,Color("93c6df"),0.7)
 	if i == 5:
-		line(overlay,[Vector2(-100,13),Vector2(-78,13),Vector2(-48,5),Vector2(16,5),Vector2(66,3),Vector2(100,3)],2,Color("dfbd86"),0.7)
+		line(overlay,preload("res://scripts/road_visual.gd").DISPLAY_CENTERLINE,2,Color("dfbd86"),0.7)
 		line(overlay,[Vector2(-100,-5),Vector2(-82,-5),Vector2(-68,1)],1.2,Color("e1a778"),0.7)
 	if i == 6:
 		line(overlay,[Vector2(68,3),Vector2(100,3)],1,Color("e7d7a2"),7.3)
@@ -461,6 +470,10 @@ func update_camera():
 		camera.position.y = maxf(camera.position.y, height_at(camera.position.x, camera.position.z) + CAMERA_GROUND_CLEARANCE)
 	camera.look_at(target)
 	lod_camera.position = target + Vector3(0,20,0)
+	# Orthographic cameras remain 250 units away: use visible world span for LOD.
+	preload("res://scripts/road_visual.gd").set_detail(road_detail,distance < 115.0)
+	if is_instance_valid(export_corridor):
+		preload("res://scripts/export_corridor_visual.gd").set_detail(export_corridor,distance < 65.0)
 
 func pick_ground(pos: Vector2) -> Vector2:
 	var origin := camera.project_ray_origin(pos)

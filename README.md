@@ -1,5 +1,29 @@
 # BASIN 02 / 荒原 · 能源大基地 — 1.0.0.2
 
+## 同版本增量：大地图基础设施视觉细化
+
+在 [此前 1.0.0.2 详情场景提交](https://github.com/Mackice1/basin-energy-game/tree/6200bba0437bd6b582b1677ca35a63c3b5c81acc)上增加大地图显示层改进，继续使用 **1.0.0.2**，不新增版本标签、发布页或改写历史。下方公开 README 原内容保留为此前同版本与历史阶段说明。
+
+- 三座既有外送支撑细化为钢格构塔、横担、绝缘子、银铝色示意导线束、弧垂与地线，并使用近/远两级预生成网格。塔中心、地图边界外送锚点、原送出上限与玩家连接端点/路径计算不变，不新增电压、回路或电气能力。
+- 公路保留原进出端、通达关系与路面宽度；东段可见道路平缓绕开塔基，补充路肩和近景标线。绕行是显示层修正，不扩大碰撞、建设区域或修改原逻辑路线。
+- 新增 1024×1024 预烘焙地表颜色图。原高度场、控制权重、四类地表材质与地形着色器不变；已有水气路线和勘察框仅合并绘制，不新增每帧几何重建。
+
+详见 [大地图增量说明](docs/WORLD_INFRASTRUCTURE_1002_ZH.md)和 [外送走廊参考与边界](docs/EXPORT_CORRIDOR_VISUAL_1002_ZH.md)。本轮不改容量、物理求解、存档、控制器或既有 GLB 模型，不把显示细节等同于工程精度。
+
+## 本增量验证范围
+
+最终绕塔及导线对比度修订后，**10 个针对性套件与现有 `tests/run_all.sh` 均通过**。19 项电调度和 26 项热调度真实 GLPK 测试共 45 项在本轮较早验收时通过、无跳过，**不是最终视觉修订后重跑的结果**。这些是已验收源码记录，公开整理只做文件/哈希/隐私检查，没有重跑游戏测试，也不宣称全部历史测试通过；此前已披露的历史站内响应式失败不因此消失。
+
+同场景 CPU 软件渲染的最终帧时变化为 **−5.3% 至 +4.8%**，有快有慢且存在短时波动，不能据此宣称加速、流畅或真实 GPU 性能达标。原生图形验收检查四档视图与图层切换前后模拟状态一致；完整实鼠标连线/建造流程和跨平台打包不在本轮已验证范围。
+
+运行所需的新颜色图及其生成器、显示脚本和测试已包含。运行日志、性能/状态快照与截图不发布；公开说明保留可读结果、来源范围和复现入口。不新增项目许可证。
+
+This same-version **1.0.0.2** increment refines the world road, export-corridor visuals and baked landscape color. Tower positions, export anchors, player-connection calculations, capacities and physical models remain unchanged. Ten final targeted suites and the existing bounded aggregate runner passed; 45 real-GLPK tests passed earlier in the iteration, not after its last visual revision. Software-rendered frame times varied from −5.3% to +4.8%, not evidence of a speed improvement. Runtime evidence is omitted and publication preparation did not rerun tests.
+
+## 保留的此前 1.0.0.2 及历史公开说明
+
+# BASIN 02 / 荒原 · 能源大基地 — 1.0.0.2
+
 当前版本 **1.0.0.2**，在 [1.0.0.1 公开基线](https://github.com/Mackice1/basin-energy-game/tree/f97065c04d383717188ff729d5734915f9625755)上增量更新设备详情与塔站外观。版本唯一源仍是 `project.godot` 的 `application/config/version`，项目名称和存档目录规则不变。不创建标签、发布页或重写历史。下方 1.0.0.1、V23、V22 说明保留为历史记录；[版本规则](docs/VERSIONING.md)同步标明 1.0.0.2，当前版本以项目配置及本节为准。
 
 ## 本轮变化与边界
