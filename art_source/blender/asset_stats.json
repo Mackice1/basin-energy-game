@@ -1,0 +1,29 @@
+{
+  "wind": {
+    "triangles": 2796,
+    "mesh_objects": 5,
+    "materials": 6,
+    "bytes": 148148,
+    "nodes": [
+      "ElectricityPort",
+      "Blade_1",
+      "Blade_2",
+      "Blade_3",
+      "Spinner",
+      "Rotor",
+      "Structure",
+      "WindTurbine"
+    ]
+  },
+  "solar": {
+    "triangles": 9528,
+    "mesh_objects": 1,
+    "materials": 6,
+    "bytes": 665348,
+    "nodes": [
+      "ArrayAssembly",
+      "ElectricityPort",
+      "SolarArray"
+    ]
+  }
+}

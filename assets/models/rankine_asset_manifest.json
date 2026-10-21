@@ -1,0 +1,273 @@
+{
+  "generator": "tools/build_rankine_assets.py",
+  "assets": {
+    "steam_generator": {
+      "glb": "assets/models/steam_generator.glb",
+      "source": "art_source/blender/rankine_assets.blend",
+      "world_units_per_meter": 0.1,
+      "bounds_m": [
+        [
+          -2.0,
+          0.0,
+          -1.25
+        ],
+        [
+          2.0,
+          3.0,
+          1.25
+        ]
+      ],
+      "ports": {
+        "oil_in": [
+          -0.17500000000000002,
+          0.05500000000000001,
+          -0.11000000000000001
+        ],
+        "ac_in": [
+          -0.07500000000000001,
+          0.05,
+          -0.11000000000000001
+        ],
+        "feed_in": [
+          0.05,
+          0.05,
+          -0.11000000000000001
+        ],
+        "steam_out": [
+          0.17500000000000002,
+          0.265,
+          -0.11000000000000001
+        ]
+      },
+      "bytes": 46672,
+      "profile_anchor": [
+        0,
+        0.33,
+        0
+      ],
+      "rating_parameter": "capacity_mwth",
+      "reference_rating": 0.1,
+      "unit_dimensions_m": [
+        4,
+        3,
+        2.5
+      ],
+      "geometry_assumption": "Original fixed-size teaching process skid; no vendor capacity or engineering sizing claim."
+    },
+    "steam_turbine": {
+      "glb": "assets/models/steam_turbine.glb",
+      "source": "art_source/blender/rankine_assets.blend",
+      "world_units_per_meter": 0.1,
+      "bounds_m": [
+        [
+          -2.0,
+          0.0,
+          -1.25
+        ],
+        [
+          2.0,
+          2.1649649143218994,
+          1.25
+        ]
+      ],
+      "ports": {
+        "steam_in": [
+          -0.17500000000000002,
+          0.16000000000000003,
+          -0.11000000000000001
+        ],
+        "exhaust_out": [
+          -0.06,
+          0.05,
+          -0.11000000000000001
+        ],
+        "ac_out": [
+          0.17500000000000002,
+          0.05,
+          -0.11000000000000001
+        ]
+      },
+      "bytes": 69060,
+      "profile_anchor": [
+        0,
+        0.24649649143218993,
+        0
+      ],
+      "rating_parameter": "mass_flow_capacity_kg_s",
+      "reference_rating": 0.05,
+      "unit_dimensions_m": [
+        4,
+        2.2,
+        2.5
+      ],
+      "geometry_assumption": "Original fixed-size teaching process skid; no vendor capacity or engineering sizing claim."
+    },
+    "steam_condenser": {
+      "glb": "assets/models/steam_condenser.glb",
+      "source": "art_source/blender/rankine_assets.blend",
+      "world_units_per_meter": 0.1,
+      "bounds_m": [
+        [
+          -3.0,
+          0.0,
+          -2.0
+        ],
+        [
+          3.0,
+          4.199999809265137,
+          2.0
+        ]
+      ],
+      "ports": {
+        "exhaust_in": [
+          -0.27,
+          0.1,
+          -0.18000000000000002
+        ],
+        "condensate_out": [
+          0.27,
+          0.04000000000000001,
+          -0.18000000000000002
+        ],
+        "ac_in": [
+          0.0,
+          0.05,
+          -0.18000000000000002
+        ]
+      },
+      "bytes": 115848,
+      "profile_anchor": [
+        0,
+        0.44999998092651367,
+        0
+      ],
+      "rating_parameter": "capacity_mwth",
+      "reference_rating": 0.08,
+      "unit_dimensions_m": [
+        6,
+        4.2,
+        4
+      ],
+      "geometry_assumption": "Original fixed-size teaching process skid; no vendor capacity or engineering sizing claim."
+    },
+    "feedwater_pump": {
+      "glb": "assets/models/feedwater_pump.glb",
+      "source": "art_source/blender/rankine_assets.blend",
+      "world_units_per_meter": 0.1,
+      "bounds_m": [
+        [
+          -1.0,
+          0.0,
+          -0.6000000238418579
+        ],
+        [
+          1.0,
+          1.5,
+          0.6000000238418579
+        ]
+      ],
+      "ports": {
+        "condensate_in": [
+          -0.08000000000000002,
+          0.05,
+          -0.048
+        ],
+        "feed_out": [
+          0.08000000000000002,
+          0.085,
+          -0.048
+        ],
+        "ac_in": [
+          0.0,
+          0.125,
+          -0.048
+        ]
+      },
+      "bytes": 43776,
+      "profile_anchor": [
+        0,
+        0.18000000000000002,
+        0
+      ],
+      "rating_parameter": "mass_flow_capacity_kg_s",
+      "reference_rating": 0.05,
+      "unit_dimensions_m": [
+        2,
+        1.5,
+        1.2
+      ],
+      "geometry_assumption": "Original fixed-size teaching process skid; no vendor capacity or engineering sizing claim."
+    },
+    "tower_station_preview": {
+      "glb": "assets/models/tower_station_preview.glb",
+      "source": "art_source/blender/rankine_assets.blend",
+      "world_units_per_meter": 0.1,
+      "bounds_m": [
+        [
+          -80.0,
+          0.0,
+          -80.0
+        ],
+        [
+          80.0,
+          25.0,
+          80.0
+        ]
+      ],
+      "ports": {},
+      "bytes": 1071284,
+      "profile_anchor": [
+        0,
+        2.5300000000000002,
+        0
+      ],
+      "commissioned": false,
+      "preview_only": true,
+      "energy_ports": [],
+      "site_dimensions_m": [
+        160,
+        0,
+        160
+      ],
+      "interior_dimensions_m": [
+        120,
+        0,
+        120
+      ],
+      "tower_height_m": 25,
+      "heliostat_count": 100,
+      "mirror_dimensions_m": [
+        4,
+        0.12,
+        4
+      ],
+      "mirror_aperture_area_m2": 1600,
+      "layout_version": "V20.1",
+      "ring_radii_m": [
+        18.0,
+        30.0,
+        42.0,
+        54.0
+      ],
+      "ring_counts": [
+        14,
+        20,
+        30,
+        36
+      ],
+      "sun_direction": [
+        -0.423999160528183,
+        0.847998321056366,
+        -0.31799939274787903
+      ],
+      "receiver_target_m": [
+        0.0,
+        24.0,
+        0.0
+      ],
+      "tracking_mode": "fixed_teaching_snapshot_not_realtime",
+      "geometry_assumption": "Original concentric-ring teaching layout, not an engineered or commissioned CSP plant; no performance claim."
+    }
+  },
+  "geometry_basis": "Original teaching process equipment, no vendor CAD; full-size modules, never scaled to fit"
+}

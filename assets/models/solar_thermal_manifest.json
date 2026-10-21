@@ -1,0 +1,110 @@
+{
+  "generator": "tools/build_solar_assets.py",
+  "blender": "4.3.2",
+  "world_units_per_meter": 0.1,
+  "visual_dimension_profile": "metric_v1",
+  "assets": {
+    "solar_thermal": {
+      "glb": "assets/models/solar_thermal.glb",
+      "source": "art_source/blender/solar_thermal.blend",
+      "source_scene": "solar_thermal",
+      "triangles": 2960,
+      "mesh_objects": 1,
+      "materials": 5,
+      "material_surfaces": 5,
+      "bytes": 136012,
+      "bounds_godot": [
+        [
+          -0.10305,
+          0.0,
+          -0.097563
+        ],
+        [
+          0.10305,
+          0.16004,
+          0.100788
+        ]
+      ],
+      "bounds_m": [
+        [
+          -1.0305,
+          0.0,
+          -0.97563
+        ],
+        [
+          1.0305,
+          1.6004,
+          1.00788
+        ]
+      ],
+      "horizontal_radius": 0.1441442,
+      "footprint_radius": 0.30000000000000004,
+      "ports_godot": {
+        "Port_ac_in": [
+          -0.07,
+          0.018,
+          -0.075
+        ],
+        "Port_heat_out": [
+          0.09,
+          0.022,
+          -0.075
+        ]
+      },
+      "ports": {
+        "ac_in": [
+          -0.07,
+          0.018,
+          -0.075
+        ],
+        "heat_out": [
+          0.09,
+          0.022,
+          -0.075
+        ]
+      },
+      "anchors_godot": {
+        "ProfileLabelAnchor": [
+          0.0,
+          0.1850404,
+          -0.0
+        ]
+      },
+      "profile_anchor": [
+        0.0,
+        0.1850404,
+        -0.0
+      ],
+      "dimensions_m": [
+        2.061,
+        1.98351,
+        1.6004
+      ],
+      "body_dimensions_m": [
+        2.061,
+        1.98351,
+        1.6004
+      ],
+      "world_units_per_meter": 0.1,
+      "visual_dimension_profile": "metric_v1",
+      "root": "SolarThermal",
+      "root_transform": "identity",
+      "coordinate_system": "Godot Y-up",
+      "textures": 0,
+      "visual_only": true,
+      "capacity_added": 0.0,
+      "collector_dimensions_m": [
+        2.061,
+        2.241,
+        0.15
+      ],
+      "tilt_deg": 30,
+      "tube_count": 24,
+      "absorber_area_m2": 3.03,
+      "aperture_area_m2": 3.19,
+      "gross_area_m2": 4.62,
+      "installation_assumptions": "0.35 m bottom; 2.4 m column pitch; 3.6 m row pitch; 2 m perimeter access"
+    }
+  },
+  "source_bytes": 1131068
+}

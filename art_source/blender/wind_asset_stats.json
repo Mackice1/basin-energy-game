@@ -1,0 +1,27 @@
+{
+  "triangles": 5692,
+  "mesh_objects": 5,
+  "materials": 7,
+  "bounds_blender": [
+    [
+      -5.366960048675537,
+      -1.2000000476837158,
+      -3.725290298461914e-09
+    ],
+    [
+      5.556960105895996,
+      1.5,
+      15.300000190734863
+    ]
+  ],
+  "nodes": [
+    "WindTurbine",
+    "Structure",
+    "Rotor",
+    "Blade_1",
+    "Blade_2",
+    "Blade_3",
+    "Spinner",
+    "ElectricityPort"
+  ]
+}

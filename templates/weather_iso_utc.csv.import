@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://wicdgnepabjc"
+
+[deps]
+
+files=["res://templates/weather_iso_utc.wind.translation", "res://templates/weather_iso_utc.irradiance.translation", "res://templates/weather_iso_utc.temperature.translation"]
+
+source_file="res://templates/weather_iso_utc.csv"
+dest_files=["res://templates/weather_iso_utc.wind.translation", "res://templates/weather_iso_utc.irradiance.translation", "res://templates/weather_iso_utc.temperature.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

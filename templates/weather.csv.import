@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://by6btxg7caep0"
+
+[deps]
+
+files=["res://templates/weather.wind.translation", "res://templates/weather.irradiance.translation", "res://templates/weather.temp.translation"]
+
+source_file="res://templates/weather.csv"
+dest_files=["res://templates/weather.wind.translation", "res://templates/weather.irradiance.translation", "res://templates/weather.temp.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

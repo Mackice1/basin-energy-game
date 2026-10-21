@@ -1,0 +1,13 @@
+# Synthetic desert basin generation
+
+All height and material assets are original procedural works dedicated to the public domain under CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/). No satellite imagery, DEM, stock textures, or image-generation model output is used.
+
+Run `python scripts/generate_landscape.py` from any working directory. Requires Python 3, NumPy, SciPy and Pillow. Seeds are fixed.
+
+The raster contains 1024 x 1024 little-endian 32-bit float samples at 0.25 world-unit spacing. The first sample is (-128,-128), last (127.75,127.75). World scale is 25 meters per unit. North is negative Z. Read rows as Z and columns as X. Height values are already world-unit elevations; do not normalize to 0..1. Mask terrain beyond the playable rectangle separately.
+
+Compact northwestern uplands are constructed from anisotropic overlapping mountain groups, coherent low-amplitude rock structure, and explicit branching drainage incision. Their broad alluvial aprons fade onto nearly level construction ground. A meandering dry channel follows the requested alignment with an approximately 0.84-unit inset, sparse shallow tributaries and subtly darker gravel sediment. Sand and salt controls have broad irregular domain-warped feathered margins; the salt palette is reduced 20 percent and sand is muted. A shallow salt depression lies at (32,38). A localized southeastern erg has curved ridges whose ends and overall patch taper continuously.
+
+Textures are 512 px, seamless procedural RGBA albedo (height in alpha) plus grayscale height and RGBA tangent normals (roughness 230/255 in alpha). IDs are 0 gravel, 1 bedrock, 2 sand, 3 salt; filenames are {name}_albedo.png, {name}_height.png, {name}_normal.png. control.raw is uint32 little-endian with overlay ID at bit 22, blend at bit 14, base gravel ID 0, and outside-playable-area hole flag 4. colormap.png is subtly varied near-white RGBA, with neutral roughness alpha 128. Tile with repeat enabled. Albedo is sRGB. Normal textures must be imported as normal maps/linear data. Derivatives use periodic finite differences; all noise uses periodic filtering. Colors and contrast are restrained for landscape-scale use.
+
+This is deliberately designed synthetic scenery, not a geological reconstruction or accurate real-world elevation map.
