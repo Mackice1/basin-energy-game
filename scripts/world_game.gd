@@ -159,6 +159,8 @@ var hud_brand_subtitle: Label
 var save_root := "user://rebuild_slots"
 
 func _ready():
+	# Keep config/name stable: it owns the existing user:// save directory.
+	get_window().title = "%s · %s" % [ProjectSettings.get_setting("application/config/name"), ProjectSettings.get_setting("application/config/version", "")]
 	dimension_profile="metric_v1"
 	for kind in KINDS: templates[kind] = model.defaults(kind).duplicate(true)
 	add_child(equipment); add_child(cables)

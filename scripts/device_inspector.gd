@@ -47,6 +47,13 @@ var camera_yaw := 35.0
 var camera_pitch := 22.0
 var camera_distance := 10.0
 var model_radius := 1.0
+# View constraints only; never part of the energy/saved state.
+const MAX_ZOOM_OUT_FACTOR := 1.6
+const PAN_SCREEN_FRACTION := 0.60
+var model_bounds := AABB(Vector3(-1, 0, -1), Vector3(2, 2, 2))
+var model_center := Vector3.ZERO
+var fit_distance := 10.0
+var max_zoom_out_distance := 16.0
 var _built := false
 var _signature := ""
 var _orbit := false
@@ -131,7 +138,7 @@ func _build_ui() -> void:
  view_container.gui_input.connect(_view_input)
  viewport = SubViewport.new()
  viewport.own_world_3d = true
- viewport.size_changed.connect(reset_camera)
+ viewport.size_changed.connect(func(): _update_camera.call_deferred())
  viewport.handle_input_locally = false
  viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
  view_container.add_child(viewport)
@@ -157,7 +164,7 @@ func _build_ui() -> void:
  model_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
  left.add_child(model_label)
  var help := Label.new()
- help.text = "按住左键 / 中键平移 · 右键旋转\n滚轮缩放 · 适配模型重置 · Esc返回"
+ help.text = "按住左键 / 中键平移 · 右键旋转\n滚轮缩放（缩小有界）· 拖动限于可见区域\n放大仅保留数值安全距离 · 适配模型重置 · Esc返回"
  help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
  left.add_child(help)
  tabs = TabContainer.new()
@@ -290,39 +297,66 @@ func _bounds(node: Node3D, transform: Transform3D = Transform3D.IDENTITY) -> Arr
 func reset_camera() -> void:
  if not is_instance_valid(model_node): return
  var parts := _bounds(model_node)
- var bounds := AABB(Vector3(-1, 0, -1), Vector3(2, 2, 2))
+ model_bounds = AABB(Vector3(-1, 0, -1), Vector3(2, 2, 2))
  if not parts.is_empty():
-  bounds = parts[0]
-  for part in parts: bounds = bounds.merge(part)
- camera_target = bounds.get_center()
- model_radius = maxf(bounds.size.length() * 0.5, 0.1)
+  model_bounds = parts[0]
+  for part in parts: model_bounds = model_bounds.merge(part)
+ model_center = model_bounds.get_center()
+ model_radius = maxf(model_bounds.size.length() * 0.5, 0.1)
+ camera_target = model_center
  camera_yaw = 35.0
  camera_pitch = 22.0
- var aspect := maxf(float(viewport.size.x) / maxf(float(viewport.size.y), 1.0), 0.1)
- # Fit projected AABB corners rather than a circumscribed sphere. Long, flat
- # arrays and tall turbines should fill the view without wasting vertical space.
- var tan_vertical := tan(deg_to_rad(camera.fov * 0.5))
- var tan_horizontal := tan_vertical * aspect
+ fit_distance = _fitted_distance()
+ camera_distance = fit_distance
+ _update_camera()
+
+func _camera_axes() -> Array[Vector3]:
  var yaw := deg_to_rad(camera_yaw)
  var pitch := deg_to_rad(camera_pitch)
  var outward := Vector3(sin(yaw) * cos(pitch), sin(pitch), cos(yaw) * cos(pitch))
  var right := Vector3(cos(yaw), 0, -sin(yaw))
- var up := outward.cross(right)
- camera_distance = 0.0
+ return [right, outward.cross(right), outward]
+
+func _fitted_distance() -> float:
+ # Model-relative limit recalculated for the actual rotation and viewport shape.
+ var aspect := maxf(float(viewport.size.x) / maxf(float(viewport.size.y), 1.0), 0.1)
+ var tan_vertical := tan(deg_to_rad(camera.fov * 0.5))
+ var tan_horizontal := tan_vertical * aspect
+ var axes := _camera_axes()
+ var distance := 0.0
  for i in 8:
-  var point := bounds.get_endpoint(i) - camera_target
-  var depth := point.dot(outward)
-  camera_distance = maxf(camera_distance, depth + absf(point.dot(right)) / tan_horizontal * 1.12)
-  camera_distance = maxf(camera_distance, depth + absf(point.dot(up)) / tan_vertical * 1.12)
- _update_camera()
+  var point := model_bounds.get_endpoint(i) - model_center
+  var depth := point.dot(axes[2])
+  distance = maxf(distance, depth + absf(point.dot(axes[0])) / tan_horizontal * 1.12)
+  distance = maxf(distance, depth + absf(point.dot(axes[1])) / tan_vertical * 1.12)
+ return maxf(distance, model_radius * 0.01)
 
 func _update_camera() -> void:
- camera_distance = clampf(camera_distance, model_radius * 0.25, model_radius * 30.0)
+ if not is_instance_valid(camera) or not is_instance_valid(model_node): return
+ if not is_finite(camera_yaw): camera_yaw = 35.0
+ if not is_finite(camera_pitch): camera_pitch = 22.0
+ camera_yaw = wrapf(camera_yaw, -180.0, 180.0)
  camera_pitch = clampf(camera_pitch, -80.0, 80.0)
- var yaw := deg_to_rad(camera_yaw)
- var pitch := deg_to_rad(camera_pitch)
- camera.position = camera_target + Vector3(sin(yaw) * cos(pitch), sin(pitch), cos(yaw) * cos(pitch)) * camera_distance
- camera.near = maxf(0.001, model_radius * 0.001)
+ fit_distance = _fitted_distance()
+ max_zoom_out_distance = fit_distance * MAX_ZOOM_OUT_FACTOR
+ # No product zoom-in cap. This tiny scale-relative floor only prevents the
+ # eye crossing its look-at target / near plane and degenerate transforms.
+ var numerical_min := maxf(model_radius * 0.0001, 0.00001)
+ if not is_finite(camera_distance): camera_distance = fit_distance
+ camera_distance = clampf(camera_distance, numerical_min, max_zoom_out_distance)
+ var axes := _camera_axes()
+ if not camera_target.is_finite(): camera_target = model_center
+ var offset := camera_target - model_center
+ var half_height := camera_distance * tan(deg_to_rad(camera.fov * 0.5))
+ var aspect := maxf(float(viewport.size.x) / maxf(float(viewport.size.y), 1.0), 0.1)
+ # Project the target back onto the model-center plane, then bound its screen
+ # offset. The model center always remains in the central 60% of the viewport,
+ # including after orbit, resize and zoom; drag cannot send the whole model away.
+ var dx := clampf(offset.dot(axes[0]), -half_height * aspect * PAN_SCREEN_FRACTION, half_height * aspect * PAN_SCREEN_FRACTION)
+ var dy := clampf(offset.dot(axes[1]), -half_height * PAN_SCREEN_FRACTION, half_height * PAN_SCREEN_FRACTION)
+ camera_target = model_center + axes[0] * dx + axes[1] * dy
+ camera.position = camera_target + axes[2] * camera_distance
+ camera.near = maxf(0.000001, minf(model_radius * 0.00001, camera_distance * 0.1))
  camera.far = maxf(100.0, camera_distance + model_radius * 60.0)
  camera.look_at(camera_target, Vector3.UP)
 

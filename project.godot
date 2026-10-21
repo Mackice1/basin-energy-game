@@ -11,6 +11,7 @@ config_version=5
 [application]
 
 config/name="荒原 · 能源大基地地图原型"
+config/version="1.0.0.1"
 run/main_scene="res://main.tscn"
 config/features=PackedStringArray("4.6")
 

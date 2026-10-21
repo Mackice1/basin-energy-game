@@ -1,3 +1,24 @@
+# BASIN 02 / 荒原 · 能源大基地 — 1.0.0.1
+
+当前正式版本号为 **1.0.0.1**，采用“主版本.功能版本.修订版本.构建号”四段格式，集中读取 `project.godot` 的 `application/config/version`。日常小改通过同一仓库的 Git 提交累积，批次验收后才统一更新版本；本次不创建标签或发布页。规则见 [版本命名](docs/VERSIONING.md)。
+
+## 本轮：设备详情相机边界
+
+- 缩小上限按当前模型包围盒、旋转与视窗宽高比计算，为适配距离的 1.6 倍；不同设备不共用固定世界距离。
+- 连续拖动、缩放、旋转及窗口变化后，模型包围盒中心保持在视窗中央 60% 区域，避免拖出视野。放大仅保留很小的数值安全距离，近距离允许看局部，不保证完整模型始终可见。
+- “适配模型”恢复完整取景；窗口变化不再强制重置旋转。约束仅用于设备详情相机，不写入参数、库存、连接、时钟或存档。基地/厂站相机与能源求解未改。
+- 运行窗口显示集中版本号；`application/config/name` 保持原值，避免已有 `user://` 存档目录迁移。
+
+详见 [详情相机边界与验证](docs/CAMERA_LIMITS_1001_ZH.md)。原已验收源码记录了 **23,522 项新增相机断言 + 1,021 项详情回归 + 107 项入口回归 = 24,650 项，0 失败**，另有真实原生桌面 GUI 的缩小、连续拖动和版本标题验证。这是该次针对性验收，不是全部历史测试重跑；公开整理没有重新运行测试。运行日志、截图及实时遥测不随公开源码发布。
+
+## 版本沿革与公开基线
+
+下方 V23、V22 是保留的**历史内部阶段快照**，不是当前四段版本号。V23 公开基线可在 [此提交](https://github.com/Mackice1/basin-energy-game/tree/97e684249986f42305b17974059e1bc83b502654)追溯；V22 链接和原运行、验证、许可说明继续保留。V23 冻结源码包不覆盖、不追溯改名；不另建 V23.1。本次没有新增项目许可证。
+
+Version **1.0.0.1** uses a single version setting in `project.godot`. This commit refines only the device-detail camera limits and displays that version in the window title, while preserving the save-directory name and physical models. The accepted source recorded 24,650 targeted assertions with zero failures plus native GUI checks, not a complete historical rerun. V23/V22 below are historical internal snapshots; routine changes accumulate as commits without creating a tag or release for every edit.
+
+## 保留的历史 V23 / V22 公开说明
+
 # BASIN 02 / 荒原 · 能源大基地 — V23
 
 2026-10-21：在已公开的 [V22 基线](https://github.com/Mackice1/basin-energy-game/tree/b06d64f85271a3a568205c89b146bc1e2cd35e71)上加入左键平移与全设备二级详情。下方原 V22 公开 README 保留，运行依赖、许可说明和历史验证限制继续适用；V23 使用与验证以本节和 [V23 操作说明](docs/NAVIGATION_DEVICE_DETAILS_V23_ZH.md)为准。
