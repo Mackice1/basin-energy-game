@@ -121,6 +121,11 @@ var drag_origin := Vector2.ZERO
 var drag_active := false
 var drag_offset := Vector2.ZERO
 var camera_drag_blocked := false
+const CAMERA_DRAG_THRESHOLD_PX := 6.0
+var left_pan_pending := false
+var left_pan_active := false
+var left_pan_origin := Vector2.ZERO
+var left_pan_double_click := false
 var link_preview: Node3D
 var link_preview_key := ""
 var interaction_caption: Label
@@ -133,6 +138,7 @@ var dimension_summary:Label
 var stations:Array=[]
 var next_station_id:int=1000000
 var station_nodes:Dictionary={}
+var device_inspector:Window
 var station_interior:Window
 var station_port_dialog:ConfirmationDialog
 var station_port_picker:OptionButton
@@ -241,8 +247,8 @@ func make_ui():
 	layer_hint=label(descriptions[0],13);layer_hint.custom_minimum_size.x=216;layer_hint.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;layer_hint.max_lines_visible=4;layer_hint.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS;left.add_child(layer_hint)
 	var selection_strip:=make_panel(root,Vector2.ZERO,Vector2(1000,46));hud_context=selection_strip.get_parent();hud_context.name="ContextToolbar"
 	var selection_row:=HBoxContainer.new();selection_strip.add_child(selection_row)
-	interaction_caption=label("单击选择 · 拖动移动 · 双击厂站进入",13);interaction_caption.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;interaction_caption.max_lines_visible=2;interaction_caption.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS;interaction_caption.size_flags_horizontal=Control.SIZE_EXPAND_FILL;selection_row.add_child(interaction_caption)
-	quick_station_enter=button("进入厂站 →",func():self.open_station(self.selected_id),selection_row);quick_station_enter.action_mode=BaseButton.ACTION_MODE_BUTTON_PRESS;quick_station_enter.visible=false
+	interaction_caption=label("单击选择 · 左键拖动视角 · 双击厂站进入",13);interaction_caption.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;interaction_caption.max_lines_visible=2;interaction_caption.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS;interaction_caption.size_flags_horizontal=Control.SIZE_EXPAND_FILL;selection_row.add_child(interaction_caption)
+	quick_station_enter=button("进入设备详情 →",func():self.open_device_details(self.selected_id),selection_row);quick_station_enter.action_mode=BaseButton.ACTION_MODE_BUTTON_PRESS;quick_station_enter.visible=false
 	for command in [["select","选择 / Esc"],["move","移动"],["link","连线"]]:
 		var b:=button(command[1],set_mode.bind(command[0]),selection_row);b.name="Tool_"+command[0];b.toggle_mode=true;hud_actions[command[0]]=b
 	hud_actions.parameters=button("参数",func():open_parameters(false),selection_row)
@@ -261,7 +267,7 @@ func make_ui():
 	speed_control.set_speed(speed)
 	var action:=HBoxContainer.new();right.add_child(action);button("连接",set_mode.bind("link"),action);button("出线",open_line_settings,action);button("取消",set_mode.bind("select"),action);line_toggle=button("实体线",func():physical_lines=not physical_lines;rebuild_cables();update_status(),action)
 	selection_label=label("未选择设备",20);right.add_child(selection_label)
-	station_enter_button=button("进入电热站内部",func():self.open_station(self.selected_id),right);station_enter_button.action_mode=BaseButton.ACTION_MODE_BUTTON_PRESS;station_enter_button.visible=false
+	station_enter_button=button("进入设备详情",func():self.open_device_details(self.selected_id),right);station_enter_button.action_mode=BaseButton.ACTION_MODE_BUTTON_PRESS;station_enter_button.visible=false
 	device_picker=OptionButton.new();device_picker.fit_to_longest_item=false;right.add_child(device_picker);device_picker.item_selected.connect(func(i):select_device(int(device_picker.get_item_metadata(i))))
 	device_summary=label("点击地图设备或从清单选择",15);device_summary.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;right.add_child(device_summary)
 	metric(right,"device_available","可用出力","MW");metric(right,"device_sent","实际送出","MW")
@@ -345,6 +351,7 @@ func make_ui():
 	import_dialog=ImportUI.new();add_child(import_dialog);import_dialog.theme=theme;import_dialog.applied.connect(apply_import)
 	make_parameter_dialog(theme);make_data_dialog(theme);make_line_dialog(theme)
 	station_interior=load("res://scripts/station_interior.gd").new();add_child(station_interior);station_interior.setup(self)
+	device_inspector=load("res://scripts/device_inspector.gd").new();add_child(device_inspector);device_inspector.setup(self)
 	station_port_dialog=ConfirmationDialog.new();add_child(station_port_dialog);station_port_dialog.theme=theme;station_port_dialog.title="选择厂站边界端口";station_port_dialog.min_size=Vector2i(500,160)
 	station_port_picker=OptionButton.new();station_port_dialog.add_child(station_port_picker);station_port_picker.position=Vector2(20,45);station_port_picker.size=Vector2(460,45)
 	station_port_dialog.confirmed.connect(func():
@@ -382,6 +389,7 @@ func tell(t:String):
 	if is_instance_valid(notice):notice.text=t;notice.tooltip_text=t
 
 func set_mode(value:String):
+	cancel_camera_drag()
 	if value=="move" and device(selected_id).has("parent_station_id"):selected_id=int(device(selected_id).parent_station_id)
 	drag_candidate=-2;drag_active=false
 	mode=value;pending_link=-2;clear_link_preview();clear_ghost();update_status()
@@ -599,6 +607,7 @@ func restore(s:Dictionary):
 	solar_energy=s.get("solar_energy",SOLAR_ENERGY_ZERO).duplicate(true)
 	sync_fuel_resource_form()
 	stations=s.get("stations",[]).duplicate(true);next_station_id=int(s.get("next_station_id",1000000))
+	if is_instance_valid(device_inspector):device_inspector.close_device()
 	if is_instance_valid(station_interior):station_interior.hide()
 	devices=s.devices.duplicate(true);links=s.links.duplicate(true);templates=s.templates.duplicate(true);imports=s.imports.duplicate(true);next_id=int(s.next_id);elapsed_s=float(s.elapsed_s);energy=s.energy.duplicate(true);thermal_energy=s.get("thermal_energy",THERMAL_ENERGY_ZERO).duplicate(true);physical_lines=bool(s.physical_lines)
 	while not device(next_station_id).is_empty() or (next_station_id==next_id and next_station_id<=SaveValidator.MAX_ID):next_station_id+=1
@@ -928,7 +937,7 @@ func update_status():
 	update_thermal_display(d,report)
 	update_station_display()
 	update_dimension_display()
-	mode_label.text="%s  ·  右键旋转 / 中键平移 / 滚轮缩放 / F1–F3视角"%{"select":"选择设备","build":"放置 "+DEVICE_NAMES.get(build_kind,build_kind),"move":"移动选中设备","link":"选择起点与终点端口"}.get(mode,mode)
+	mode_label.text="%s  ·  左键/中键平移 / 右键旋转 / 滚轮缩放 / F1–F3视角"%{"select":"选择设备","build":"放置 "+DEVICE_NAMES.get(build_kind,build_kind),"move":"移动选中设备","link":"选择起点与终点端口"}.get(mode,mode)
 
 func pointer_over_ui(pos:Vector2,padding:Vector2=Vector2.ZERO)->bool:
 	for control in ui_regions:
@@ -936,28 +945,54 @@ func pointer_over_ui(pos:Vector2,padding:Vector2=Vector2.ZERO)->bool:
 	return false
 
 func cancel_interaction():
+	cancel_camera_drag()
 	if mode!="select" or pending_link!=-2 or drag_active:
 		set_mode("select");tell("已取消操作；设备仍在原位，未修改布局。")
 	elif selected_id!=-2:
 		select_device(-2);tell("已取消选择。")
 
+func cancel_camera_drag():
+	left_pan_pending=false;left_pan_active=false;left_pan_double_click=false
+	camera_drag_blocked=false
+
 func _notification(what):
-	if what==NOTIFICATION_WM_WINDOW_FOCUS_OUT and booted and drag_active:
-		set_mode("select");tell("移动已取消：窗口失去焦点；设备保留原位。")
+	if what==NOTIFICATION_WM_WINDOW_FOCUS_OUT:
+		cancel_camera_drag();drag_candidate=-2
+		if booted and drag_active:
+			set_mode("select");tell("移动已取消：窗口失去焦点；设备保留原位。")
 
 func _input(event):
+	if modal_visible():cancel_camera_drag()
+	if event is InputEventMouseMotion and left_pan_pending and not (event.button_mask & MOUSE_BUTTON_MASK_LEFT):
+		cancel_camera_drag()
 	if event is InputEventMouseButton:
+		if event.button_index==MOUSE_BUTTON_LEFT and event.pressed:cancel_camera_drag()
 		if event.button_index in [MOUSE_BUTTON_RIGHT,MOUSE_BUTTON_MIDDLE]:
 			if event.pressed:
+				cancel_camera_drag()
 				if drag_active:set_mode("select");tell("移动已取消；设备保留原位。")
 				camera_drag_blocked=pointer_over_ui(event.position) or modal_visible()
 			else:camera_drag_blocked=false
 		if event.button_index==MOUSE_BUTTON_LEFT and not event.pressed:
-			if drag_active:
+			if left_pan_pending:
+				var click:bool=not left_pan_active and mode=="select" and not modal_visible() and not pointer_over_ui(event.position) and event.position.distance_to(left_pan_origin)<CAMERA_DRAG_THRESHOLD_PX
+				var double_click:=left_pan_double_click
+				cancel_camera_drag()
+				if click:select_map_at(event.position,double_click)
+				get_viewport().set_input_as_handled()
+			elif drag_active:
 				finish_drag(event.position);get_viewport().set_input_as_handled()
 			drag_candidate=-2
 	if event is InputEventKey and event.pressed and not event.echo and not modal_visible():
 		if event.keycode==KEY_ESCAPE:cancel_interaction();get_viewport().set_input_as_handled()
+
+func select_map_at(screen_point:Vector2,double_click:bool=false):
+	var picked:=nearest(screen_point)
+	select_device(picked)
+	if picked>=0 and double_click:open_device_details(picked)
+	if picked==-2:
+		var point:=pick_ground(screen_point)
+		if is_finite(point.x):select_site(point)
 
 func begin_drag():
 	if drag_candidate<0:return
@@ -980,30 +1015,38 @@ func finish_drag(screen_point:Vector2):
 	drag_candidate=-2;drag_active=false
 
 func _unhandled_input(event):
-	if modal_visible():return
+	if modal_visible():cancel_camera_drag();return
 	if event is InputEventMouse and pointer_over_ui(event.position):return
 	if event is InputEventKey and event.pressed:
 		if event.keycode==KEY_ESCAPE:cancel_interaction();return
 		if event.ctrl_pressed and event.keycode==KEY_Z:undo();return
 		if event.keycode==KEY_F:focus_selected();return
 	if event is InputEventMouseMotion:
-		if drag_candidate>=0 and event.button_mask&MOUSE_BUTTON_MASK_LEFT and not drag_active and event.position.distance_to(drag_origin)>6:begin_drag()
+		if left_pan_pending:
+			if mode!="select" or not (event.button_mask & MOUSE_BUTTON_MASK_LEFT):cancel_camera_drag()
+			else:
+				if not left_pan_active and event.position.distance_to(left_pan_origin)>=CAMERA_DRAG_THRESHOLD_PX:
+					left_pan_active=true
+					pan_camera(event.position-left_pan_origin)
+				elif left_pan_active:pan_camera(event.relative)
+				return
+		if mode=="move" and drag_candidate>=0 and event.button_mask&MOUSE_BUTTON_MASK_LEFT and not drag_active and event.position.distance_to(drag_origin)>=CAMERA_DRAG_THRESHOLD_PX:begin_drag()
 		if drag_active:return
 		if camera_drag_blocked:return
 	if event is InputEventMouseButton and event.pressed and event.button_index==MOUSE_BUTTON_LEFT:
 		var p:=pick_ground(event.position)
 		if mode=="build" and is_finite(p.x):
 			if add_equipment(build_kind,p):start_build(build_kind);tell("需求接入点已添加；可继续设置，Esc退出。" if build_kind in ["load","heat_demand"] else "设备已建；可继续放置，Esc 退出。")
-		elif mode=="move" and is_finite(p.x):move_selected(p)
+		elif mode=="move" and is_finite(p.x):
+			if nearest(event.position)==selected_id and selected_id>=0:drag_candidate=selected_id;drag_origin=event.position
+			else:move_selected(p)
 		elif mode=="link":
 			var id:=nearest(event.position)
 			if id!=-2:link_to(id)
-		else:
-			var picked:=nearest(event.position)
-			select_device(picked)
-			if not station(picked).is_empty() and event.double_click:open_station(picked)
-			elif picked>=0:drag_candidate=picked;drag_origin=event.position
-			if picked==-2 and is_finite(p.x):select_site(p)
+		elif mode=="select":
+			# Selection is deferred until release, so dragging never selects or moves equipment.
+			left_pan_pending=true;left_pan_active=false
+			left_pan_origin=event.position;left_pan_double_click=event.double_click
 		return
 	super._unhandled_input(event)
 
@@ -1118,13 +1161,14 @@ func update_interaction_visuals():
 					if not str(tag.name).contains("Port"):annotations.append({"tag":tag,"priority":(100 if id==selection_owner else 50 if id==hovered_id else 0)+(10 if tag.name in ["DeviceTitle","StationTitle"] else 0),"height":22.0 if tag.name in ["DeviceTitle","StationTitle"] else 18.0})
 	suppress_annotation_collisions(annotations)
 	var caption:=endpoint_description(hovered_id if hovered_id!=-2 else selected_id)
-	if caption=="":caption="单击选中 · 拖动移动 · F 聚焦 · 双击厂站进入"
+	if caption=="":caption="单击选中 · 左键拖动视角 · 移动工具改位置 · F 聚焦"
 	if mode=="link":caption=connection_caption(hovered_id)
 	if is_instance_valid(interaction_caption):
 		interaction_caption.text=caption
 		interaction_caption.tooltip_text=caption+"\n"+endpoint_description(hovered_id if hovered_id!=-2 else selected_id)
 	if is_instance_valid(quick_station_enter):
-		var enter_visible:=not station(selected_id).is_empty() and mode=="select"
+		var enter_visible:=(not station(selected_id).is_empty() or not device(selected_id).is_empty()) and mode=="select"
+		quick_station_enter.text="进入厂站 →" if not station(selected_id).is_empty() else "进入设备详情 →"
 		if quick_station_enter.visible!=enter_visible:quick_station_enter.visible=enter_visible
 	var preview_key:="%s/%s/%s"%[mode,pending_link,hovered_id]
 	if preview_key!=link_preview_key:
@@ -1138,8 +1182,9 @@ func _process(delta):
 		set_mode("select");tell("移动已取消：未在地面确认松开；设备保留原位。")
 	if is_instance_valid(modal_shade):modal_shade.visible=modal_visible()
 	if modal_visible():
+		cancel_camera_drag()
 		# Interior is navigation, not a second simulator; keep the single world clock.
-		if is_instance_valid(station_interior) and station_interior.visible and not (is_instance_valid(station_interior.remove_confirmation) and station_interior.remove_confirmation.visible) and not param_dialog.visible and not confirmation.visible and not line_dialog.visible and not (is_instance_valid(optimization_controller) and is_instance_valid(optimization_controller.panel) and optimization_controller.panel.visible):
+		if ((is_instance_valid(device_inspector) and device_inspector.visible) or (is_instance_valid(station_interior) and station_interior.visible)) and not (is_instance_valid(station_interior.remove_confirmation) and station_interior.remove_confirmation.visible) and not param_dialog.visible and not confirmation.visible and not line_dialog.visible and not (is_instance_valid(optimization_controller) and is_instance_valid(optimization_controller.panel) and optimization_controller.panel.visible):
 			if not paused:advance(delta*speed)
 			update_status()
 		return
@@ -1207,7 +1252,7 @@ func update_placement_outline(p:Vector2,radius:float,valid:bool,land_dimensions:
 	mesh.surface_end();placement_outline.mesh=mesh
 
 func modal_visible()->bool:
-	return (is_instance_valid(station_interior) and station_interior.visible) or (is_instance_valid(station_port_dialog) and station_port_dialog.visible) or (is_instance_valid(optimization_controller) and is_instance_valid(optimization_controller.panel) and optimization_controller.panel.visible) or confirmation.visible or param_dialog.visible or data_dialog.visible or line_dialog.visible or (is_instance_valid(import_dialog) and import_dialog.visible)
+	return (is_instance_valid(device_inspector) and device_inspector.visible) or (is_instance_valid(station_interior) and station_interior.visible) or (is_instance_valid(station_port_dialog) and station_port_dialog.visible) or (is_instance_valid(optimization_controller) and is_instance_valid(optimization_controller.panel) and optimization_controller.panel.visible) or confirmation.visible or param_dialog.visible or data_dialog.visible or line_dialog.visible or (is_instance_valid(import_dialog) and import_dialog.visible)
 
 func window_background(w:Window):
 	w.hide();w.transient=true;w.exclusive=true
@@ -1630,6 +1675,7 @@ func remove_station(id:int)->bool:
 	links=links.filter(func(l):return not int(l.from) in ids and not int(l.to) in ids)
 	imports=imports.filter(func(series):return not str(series.target_device).to_int() in ids if str(series.target_device).is_valid_int() else true)
 	stations=stations.filter(func(item):return int(item.id)!=id)
+	if is_instance_valid(device_inspector):device_inspector.close_device()
 	if is_instance_valid(station_interior):station_interior.hide()
 	selected_id=-2;set_mode("select");rebuild_equipment();refresh();return true
 
@@ -1687,6 +1733,14 @@ func connect_internal_devices(a:int,b:int)->bool:
 	if error!="":tell(error);return false
 	checkpoint();links.append(candidate);rebuild_cables();refresh();return true
 
+func open_device_details(id:int):
+	if not station(id).is_empty():
+		open_station(id)
+		return
+	if device(id).is_empty():return
+	set_mode("select")
+	if is_instance_valid(device_inspector):device_inspector.open_device(id)
+
 func open_station(id:int):
 	if station(id).is_empty():return
 	set_mode("select")
@@ -1734,8 +1788,8 @@ func update_station_display():
 			if devices.any(func(d):return int(d.get("parent_station_id",-1))==int(facility.id) and d.kind=="steam_turbine"):device_summary.text+="\n内部汽轮机毛发电 %.4f kW（独立AC输出）"%(gross*1000)
 		if int(facility.id)==selected_id and facility.get("kind","")=="tower_station":device_summary.text="塔式运行站 · 100镜/1600m²/25m塔\n毛发电 %.3f / 全辅机 %.3f kW\n设备净 %.3f kW（未计线损）\n盐热库存 %.4f MWhth\n镜场仅驱动中心接收器一次，不重复计能。"%[gross*1000,pin*1000,(gross-pin)*1000,stock]
 	if is_instance_valid(station_enter_button):
-		station_enter_button.visible=not station(selected_id).is_empty()
-		station_enter_button.text="进入塔式未投运预览" if station_is_preview(selected_id) else "进入塔式熔盐发电站" if station(selected_id).get("kind","")=="tower_station" else "进入电热站内部"
+		station_enter_button.visible=not station(selected_id).is_empty() or not device(selected_id).is_empty()
+		station_enter_button.text="进入塔式未投运预览" if station_is_preview(selected_id) else "进入塔式熔盐发电站" if station(selected_id).get("kind","")=="tower_station" else "进入电热站内部" if not station(selected_id).is_empty() else "进入设备详情"
 	if is_instance_valid(station_interior) and station_interior.visible:station_interior.refresh()
 
 func normalize_id_cursors():

@@ -90,6 +90,11 @@ var placement_grid: MeshInstance3D
 var _orbit_drag := false
 var _pan_drag := false
 var _drag_distance := 0.0
+var _left_pan_pending := false
+var _left_pan_active := false
+var _left_pan_start := Vector2.ZERO
+var _left_pan_pick := -1
+var _left_pan_double := false
 # Transient input state only. The host remains untouched until a valid release.
 var _move_drag_candidate := -1
 var _move_drag_active := false
@@ -166,7 +171,7 @@ func open_station(id: int) -> bool:
 	_suspend_base_rendering()
 	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	refresh_timer.start()
-	_set_status("未投运预览：右拖环视 · 中拖平移 · 滚轮缩放；无能量端口、禁止建设运行设备。" if preview_only else "拖动设备移动 · 右拖环视 · 中拖平移 · 滚轮缩放。Esc：取消操作 → 清除选择 → 返回。")
+	_set_status("未投运预览：左拖平移 · 右拖环视 · 中拖平移 · 滚轮缩放；无能量端口、禁止建设运行设备。" if preview_only else "左拖平移 · 移动工具调整设备 · 右拖环视 · 中拖平移 · 滚轮缩放。Esc：取消操作 → 清除选择 → 返回。")
 	return true
 
 func close_station() -> void:
@@ -337,6 +342,8 @@ func _build_ui() -> void:
 	selected_label.name = "SelectedInternalDeviceState"
 	selected_label.add_theme_constant_override("line_spacing", 4)
 	side.add_child(selected_label)
+	tools.details = _button("查看设备详情 →", _open_device_details, side, "OpenInternalDeviceDetails")
+	tools.details.tooltip_text = "打开所选设备的二级详情；也可在选择模式双击设备。"
 	hover_label = _label("", 12)
 	hover_label.name = "InteriorHoverHelp"
 	hover_label.add_theme_color_override("font_color", Color("a5b7c4"))
@@ -811,6 +818,7 @@ func refresh() -> void:
 	build_category_row.visible = not preview_only and not tower_site
 	build_toolbar.visible = not preview_only
 	edit_toolbar.visible = not preview_only
+	tools.details.visible = not preview_only
 	sidebar_tabs.set_tab_hidden(1, preview_only)
 	if preview_only:
 		_sync_preview_runtime()
@@ -841,7 +849,7 @@ func refresh() -> void:
 	_sync_connections(members)
 	_sync_runtime(members)
 	_sync_annotations()
-	for key in ["move", "parameters", "remove", "lines", "focus"]: tools[key].disabled = selected_id < 0
+	for key in ["move", "parameters", "remove", "lines", "focus", "details"]: tools[key].disabled = selected_id < 0
 	for key in INTERNAL_KINDS + ["select", "move", "connect"]:
 		tools[key].set_pressed_no_signal(interaction_mode == key or (interaction_mode == "build" and build_kind == key))
 	tools.cancel.disabled = interaction_mode == "select" and selected_id < 0 and not _move_drag_active
@@ -1227,7 +1235,7 @@ func _sync_preview_runtime() -> void:
 	_add_choice(device_picker, "未投运预览 · 无运行设备", -1)
 	device_picker.disabled = true
 	selected_label.text = "未投运预览\n25 m塔体 · 100面定日镜\n4圈径向错列 · 东西向道路缺口\n每面4 × 4 m，总镜面1600 m²\n固定教学太阳姿态，非实时天气追踪\n镜场内区120 × 120 m\n基地站场160 × 160 m，计地一次。"
-	hover_label.text = "右拖环视 · 中拖平移 · 滚轮缩放"
+	hover_label.text = "左拖平移 · 右拖环视 · 中拖平移 · 滚轮缩放"
 	hover_label.visible = true
 	input_ports_label.text = "无输入端口"
 	output_ports_label.text = "无输出端口"
@@ -1313,7 +1321,7 @@ func _sync_runtime(members: Array) -> void:
 	elif not host.result.get("valid", false): summary_label.text += "\n当前调度不可用；请检查设备与连接。"
 	var item := _member(selected_id)
 	if item.is_empty():
-		selected_label.text = "点击模型或从清单选择。\n右拖环视 · 中拖平移 · 滚轮缩放\n建设 / 移动时显示定位网格。"
+		selected_label.text = "点击模型或从清单选择。\n左拖平移 · 双击查看详情\n建设 / 移动时显示定位网格。"
 		return
 	var report: Dictionary = reports.get(str(selected_id), {})
 	selected_label.text = "#%d %s\n位置 %.1f, %.1f 米\n" % [selected_id, NAMES[item.kind], float(item.get("interior_x", 0)) / 0.1, float(item.get("interior_z", 0)) / 0.1]
@@ -1365,7 +1373,7 @@ func set_interaction_mode(value: String) -> void:
 	pending_link = -1
 	_clear_preview()
 	match interaction_mode:
-		"select": _set_status("选择模式：点击设备查看状态，或从右侧清单选择。")
+		"select": _set_status("选择模式：单击选中 · 左拖平移 · 双击查看设备详情；移动设备请使用移动工具。")
 		"move": _set_status("移动 #%d：拖动设备后松开，或点击目标网格；右键 / Esc 取消。" % selected_id)
 		"connect": _set_status("连接模式：先选设备，再点绿色兼容端点；悬停查看方向 / 温区 / 容量。Esc 取消。")
 	refresh()
@@ -1398,9 +1406,14 @@ func _select(id: int) -> void:
 			_clear_preview()
 		_reset_move_drag()
 	selected_id = id
-	if interaction_mode == "select":_set_status("已选择 #%d %s；可编辑参数、拖动位置或连接端口。"%[id,NAMES[_member(id).kind]])
+	if interaction_mode == "select":_set_status("已选择 #%d %s；可查看详情、编辑参数，或使用移动工具调整位置。"%[id,NAMES[_member(id).kind]])
 	host.select_device(id)
 	refresh()
+
+func _open_device_details() -> void:
+	if _member(selected_id).is_empty() or not host.has_method("open_device_details"): return
+	set_interaction_mode("select")
+	host.open_device_details(selected_id)
 
 func _open_parameters() -> void:
 	if _member(selected_id).is_empty(): return
@@ -1525,6 +1538,10 @@ func _view_mouse_exited() -> void:
 	if is_instance_valid(preview): preview.hide()
 
 func _reset_move_drag() -> void:
+	_left_pan_pending = false
+	_left_pan_active = false
+	_left_pan_pick = -1
+	_left_pan_double = false
 	_move_drag_candidate = -1
 	_move_drag_active = false
 
@@ -1585,6 +1602,18 @@ func _view_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
 		_last_cursor = event.position
 		_has_cursor = true
+		if _left_pan_pending:
+			if not (event.button_mask & MOUSE_BUTTON_MASK_LEFT):
+				_reset_move_drag()
+			else:
+				var displacement: Vector2 = event.position - _left_pan_start
+				if _left_pan_active:
+					_pan_camera(event.relative)
+				elif displacement.length() >= DRAG_THRESHOLD_PX:
+					_left_pan_active = true
+					_pan_camera(displacement)
+				view_container.accept_event()
+				return
 		if _move_drag_candidate >= 0:
 			if not (event.button_mask & MOUSE_BUTTON_MASK_LEFT):
 				if _move_drag_active: _cancel_move_drag("移动已取消：未在视图中确认松开，设备保留原位。")
@@ -1625,11 +1654,27 @@ func _view_input(event: InputEvent) -> void:
 		elif event.button_index == MOUSE_BUTTON_MIDDLE:
 			if not _move_drag_active: _pan_drag = event.pressed
 		elif event.button_index == MOUSE_BUTTON_LEFT:
-			if not event.pressed: _finish_move_drag(event.position)
+			if not event.pressed:
+				if _left_pan_pending:
+					var should_click: bool = not _left_pan_active and event.position.distance_to(_left_pan_start) < DRAG_THRESHOLD_PX and Rect2(Vector2.ZERO, view_container.size).has_point(event.position)
+					var pick: int = _left_pan_pick
+					var open_details: bool = _left_pan_double
+					_reset_move_drag()
+					if should_click and interaction_mode == "select":
+						if pick >= 0 and device_at_view(event.position) == pick:
+							_click_device(pick)
+							if open_details: _open_device_details()
+						elif pick < 0: _clear_selection()
+				else: _finish_move_drag(event.position)
 			else:
 				_reset_move_drag()
 				var id := device_at_view(event.position)
-				if interaction_mode == "build":
+				if interaction_mode == "select":
+					_left_pan_pending = true
+					_left_pan_start = event.position
+					_left_pan_pick = id
+					_left_pan_double = event.double_click
+				elif interaction_mode == "build":
 					var point = floor_at(event.position)
 					if point != null: _click_floor(point)
 				elif interaction_mode == "move":
@@ -1639,10 +1684,6 @@ func _view_input(event: InputEvent) -> void:
 						if point != null: _click_floor(point)
 				elif id >= 0:
 					_click_device(id)
-					if interaction_mode == "select":
-						if event.double_click: focus_selection()
-						else: _begin_move_drag(id, event.position)
-				elif interaction_mode == "select": _clear_selection()
 		elif event.pressed and not _move_drag_active and event.button_index == MOUSE_BUTTON_WHEEL_UP:
 			set_camera_view(camera_yaw, camera_pitch, camera_distance - 3.0 * visual_scale)
 		elif event.pressed and not _move_drag_active and event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
@@ -1783,6 +1824,7 @@ func _window_input(event: InputEvent) -> void:
 		set_input_as_handled()
 		return
 	if event is InputEventMouseButton and not event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		if _left_pan_pending and not view_container.get_global_rect().has_point(event.position): _reset_move_drag()
 		if _move_drag_active and not view_container.get_global_rect().has_point(event.position):
 			_cancel_move_drag("移动已取消：请在站内视图中松开；设备保留原位。")
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:

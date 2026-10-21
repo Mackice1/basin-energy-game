@@ -98,6 +98,8 @@ func click_world(point: Vector2) -> void:
 	event.pressed = true
 	event.position = interior.camera.unproject_position(Vector3(point.x, 0, point.y)) * interior.view_container.size / Vector2(interior.viewport.size)
 	interior.view_container.gui_input.emit(event)
+	event.pressed = false
+	interior.view_container.gui_input.emit(event)
 
 func motion_world(point: Vector2) -> void:
 	var event := InputEventMouseMotion.new()

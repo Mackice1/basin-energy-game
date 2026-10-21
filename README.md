@@ -1,3 +1,25 @@
+# BASIN 02 / 荒原 · 能源大基地 — V23
+
+2026-10-21：在已公开的 [V22 基线](https://github.com/Mackice1/basin-energy-game/tree/b06d64f85271a3a568205c89b146bc1e2cd35e71)上加入左键平移与全设备二级详情。下方原 V22 公开 README 保留，运行依赖、许可说明和历史验证限制继续适用；V23 使用与验证以本节和 [V23 操作说明](docs/NAVIGATION_DEVICE_DETAILS_V23_ZH.md)为准。
+
+## V23 新增与操作变化
+
+- 选择/浏览模式下，左键拖动平移视角，小幅抖动仍按单击处理并在松开时选中。主场景/厂站/详情的阈值分别为 6/5/4 px；拖动后不选中、不放置、不移动设备。从 UI 区域起拖不会穿透。
+- 要移动设备，先显式选择“移动”。中键平移、右键旋转、滚轮缩放及既有键盘导航保留。
+- 完整目录 21 类设备均可通过单击后的“进入设备详情”按钮或双击打开独立二级页，展示已有真实 3D 资产及运行、参数、连接、边界四个分区。返回或 Escape 保留上一级状态、选择与相机。
+- 原电热站、运行塔站和未投运塔站继续使用各自已有场景；未投运塔站仍不发电。详情直接读取主模拟，不复制库存、不改主时钟，也不虚构设备内部可操作结构。
+- V22 的运行资产、设备目录与核心能源/热/蒸汽/熔盐求解保持不变。本次只是导航与只读详情改动，不代表新增能源技术或工业级精度。
+
+## V23 验证范围
+
+原 V23 验收记录为 **20 个针对性回归套件、37,700 项断言、0 失败**，另通过原生桌面 GUI 输入验证：拖动/单击区分、UI 起拖隔离、设备详情真实入口、返回保留状态，以及详情随主模拟实时更新。**不是全部历史测试重跑，也不是跨平台导出认证。** 这些是原 V23 实测记录；此次公开整理仅进行文件、哈希与隐私检查，没有重新运行游戏测试。
+
+逐套计数、原始记录来源和复现边界见 [V23 验证说明](docs/VALIDATION_V23.md)。完整运行日志、状态快照、遥测和截图不随公开仓库发布；已有 V22 合成回归夹具保留。V22 验证基线仍可在 [V22 验证说明](docs/VALIDATION_V22.md)及上述基线提交查阅。
+
+V23 adds thresholded left-button camera panning and read-only secondary detail pages for all 21 device types. Existing station interiors, runtime assets, device catalog and physical solvers are retained. The original V23 acceptance recorded 20 targeted suites / 37,700 assertions / zero failures plus native GUI checks, not a rerun of every historical test. See the [V23 guide](docs/NAVIGATION_DEVICE_DETAILS_V23_ZH.md) and [validation provenance](docs/VALIDATION_V23.md). No new license is introduced.
+
+## 保留的 V22 公开 README / Preserved V22 public baseline
+
 # BASIN 02 / 荒原 · 能源大基地 — V22
 
 中文优先；English overview follows below.

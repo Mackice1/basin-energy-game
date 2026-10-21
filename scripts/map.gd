@@ -477,6 +477,17 @@ func pick_ground(pos: Vector2) -> Vector2:
 		prev = p
 	return Vector2(INF,INF)
 
+func pan_camera(screen_delta: Vector2) -> void:
+	# Use the same screen-space pan for left and middle drags at every zoom.
+	var view_height := maxf(get_viewport().get_visible_rect().size.y, 1.0)
+	var span := camera.size
+	if camera.projection == Camera3D.PROJECTION_PERSPECTIVE:
+		span = 2.0 * camera.position.distance_to(target) * tan(deg_to_rad(camera.fov * 0.5))
+	var right := Vector3(cos(yaw), 0, -sin(yaw))
+	var forward := Vector3(sin(yaw), 0, cos(yaw))
+	target += (-right * screen_delta.x - forward * screen_delta.y) * span / view_height
+	update_camera()
+
 func _unhandled_input(event):
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP: distance = maxf(MIN_CAMERA_DISTANCE,distance*0.91); update_camera()
@@ -488,7 +499,7 @@ func _unhandled_input(event):
 		if event.button_mask & MOUSE_BUTTON_MASK_RIGHT:
 			yaw -= event.relative.x*0.006; pitch = clampf(pitch+event.relative.y*0.004,MIN_CAMERA_PITCH,MAX_CAMERA_PITCH); update_camera()
 		if event.button_mask & MOUSE_BUTTON_MASK_MIDDLE:
-			target += camera.global_basis.x*(-event.relative.x*distance/1600) + Vector3(sin(yaw),0,cos(yaw))*event.relative.y*distance/1000; update_camera()
+			pan_camera(event.relative)
 	if event is InputEventKey and event.pressed:
 		if event.keycode == KEY_R: reset_camera()
 		if event.keycode == KEY_F1: set_view(0)

@@ -75,7 +75,7 @@ func escape() -> void:
 	var event := InputEventKey.new(); event.pressed = true; event.keycode = KEY_ESCAPE
 	game._input(event)
 func start_drag(id: int) -> void:
-	game.set_mode("select"); game.picked_id = id
+	game.select_device(id); game.set_mode("move"); game.picked_id = id
 	var item: Dictionary = game.station(id) if id == SITE else game.device(id)
 	game.press_ground = Vector2(float(item.x),float(item.z))
 	game._unhandled_input(button(true))
@@ -112,11 +112,11 @@ func run() -> void:
 func test_selection_camera_and_entry() -> void:
 	var before := frozen(); var revision := game.scene_revision; var undos := game.undo_states.size()
 	var probe := InteriorProbe.new(); game.station_interior = probe
-	game.picked_id = SITE; game._unhandled_input(button(true))
+	game.picked_id = SITE; game._unhandled_input(button(true)); game._input(button(false,false,Vector2(400,400)))
 	check(game.selected_id == SITE and probe.entries == 0, "single click selects facility without entering")
 	game._input(button(false))
 	check(game.drag_candidate == -2 and not game.drag_active, "simple release clears drag candidate")
-	game._unhandled_input(button(true,true))
+	game._unhandled_input(button(true,true)); game._input(button(false,false,Vector2(400,400)))
 	check(probe.entered == SITE and probe.entries == 1 and game.mode == "select", "double click enters selected facility once")
 	game._input(button(false)); game.select_device(BATTERY); game.focus_selected()
 	check(Vector2(game.target.x,game.target.z).is_equal_approx(Vector2(-20,25)) and game.target.y >= 0.0 and game.camera.projection == Camera3D.PROJECTION_PERSPECTIVE, "focus frames selected equipment")
@@ -129,14 +129,16 @@ func test_selection_camera_and_entry() -> void:
 	right.pressed = false; game._input(right)
 	game._unhandled_input(motion(Vector2(450,450),MOUSE_BUTTON_MASK_RIGHT))
 	check(not game.camera.transform.is_equal_approx(camera_before), "camera orbit resumes after blocked button is released")
+	game._unhandled_input(button(true)); game._unhandled_input(motion(Vector2(440,420))); game._input(button(false))
+	check(not game.left_pan_pending and game.mode == "select", "left camera drag ends without entering Move tool")
 	escape(); check(game.selected_id == -2, "Escape in select mode clears selection")
 	snapshot_unchanged(before,revision,undos,"selection, focus, camera, entry and Escape")
 
 func test_drag_transactions() -> void:
 	var before := frozen(); var revision := game.scene_revision; var undos := game.undo_states.size()
-	game.picked_id = BATTERY; game.press_ground = Vector2(-20,25); game._unhandled_input(button(true))
+	game.select_device(BATTERY); game.set_mode("move"); game.picked_id = BATTERY; game.press_ground = Vector2(-20,25); game._unhandled_input(button(true))
 	game._unhandled_input(motion(Vector2(403,400)))
-	check(not game.drag_active and game.mode == "select", "small pointer movement stays a click")
+	check(not game.drag_active and game.mode == "move", "explicit Move tool small pointer movement stays pending")
 	game.cursor = Vector2(0,25); game._unhandled_input(motion(Vector2(410,400)))
 	check(game.drag_active and game.mode == "move" and is_instance_valid(game.ghost), "crossing drag threshold begins transient move preview")
 	set_input_left(true); game._process(0.0); set_input_left(false)
@@ -171,7 +173,7 @@ func test_drag_transactions() -> void:
 	var committed := frozen(); game._input(button(false))
 	check(frozen() == committed and game.undo_states.size() == undos + 1, "duplicate release cannot commit twice")
 	game.undo(); check(frozen() == before and game.undo_states.size() == undos, "one undo restores exact pre-drag save")
-	game.picked_id = BATTERY; game.press_ground = Vector2(-18,28)
+	game.select_device(BATTERY); game.set_mode("move"); game.picked_id = BATTERY; game.press_ground = Vector2(-18,28)
 	game._unhandled_input(button(true)); game._unhandled_input(motion(Vector2(410,400)))
 	check(game.drag_offset.is_equal_approx(Vector2(2,3)), "off-center body grab records its terrain offset")
 	game.cursor = Vector2(2,28); game._input(button(false))
@@ -249,14 +251,14 @@ func test_station_navigation() -> void:
 	var destination := Vector2(-1.4,1.2)
 	check(game.can_place_internal(SITE,"thermal_store",destination,STORE).is_empty(), "interior drag fixture destination passes real layout guard")
 	var destination_pixel := interior_pixel(interior,grab + destination - origin)
-	interior_button(interior,source,true); interior_motion(interior,destination_pixel)
+	interior.set_interaction_mode("move"); interior_button(interior,source,true); interior_motion(interior,destination_pixel)
 	check(interior._move_drag_active and is_instance_valid(interior.preview) and interior.preview.preview_valid, "interior drag shows valid transient preview")
 	snapshot_unchanged(before,revision,undos,"interior live drag")
 	var esc := InputEventKey.new(); esc.keycode = KEY_ESCAPE; esc.pressed = true
 	interior.window_input.emit(esc)
 	check(interior.visible and interior.interaction_mode == "select" and interior.preview == null and not interior._move_drag_active, "interior Escape cancels drag without exiting")
 	snapshot_unchanged(before,revision,undos,"interior cancelled drag")
-	interior_button(interior,source,true)
+	interior.set_interaction_mode("move"); interior_button(interior,source,true)
 	var occupied := Vector2(float(game.device(BOILER).interior_x),float(game.device(BOILER).interior_z))
 	var occupied_pixel := interior_pixel(interior,grab + occupied - origin)
 	interior_motion(interior,occupied_pixel)
@@ -264,7 +266,7 @@ func test_station_navigation() -> void:
 	interior_button(interior,occupied_pixel,false)
 	check(not interior._move_drag_active and interior.preview == null, "interior illegal release clears transient preview")
 	snapshot_unchanged(before,revision,undos,"interior illegal release")
-	interior_button(interior,source,true); interior_motion(interior,destination_pixel); interior_button(interior,destination_pixel,false)
+	interior.set_interaction_mode("move"); interior_button(interior,source,true); interior_motion(interior,destination_pixel); interior_button(interior,destination_pixel,false)
 	check(Vector2(game.device(STORE).interior_x,game.device(STORE).interior_z).is_equal_approx(destination), "interior drag commits correct grab-offset destination")
 	check(game.scene_revision == revision + 1 and game.undo_states.size() == undos + 1, "interior drag adds exactly one real host undo")
 	check(game.elapsed_s == 123.5 and game.device(STORE).state.energy_mwhth == 0.625 and game.device(BATTERY).state.energy_mwh == 0.25, "interior layout commit preserves both inventories and simulation time")

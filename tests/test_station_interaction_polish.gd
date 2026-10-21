@@ -59,6 +59,9 @@ func floor_pixel(point: Vector2) -> Vector2:
 	return interior.camera.unproject_position(Vector3(point.x, 0, point.y)) * interior.view_container.size / Vector2(interior.viewport.size)
 
 func begin_drag(id: int, target: Vector2) -> Vector2:
+	# V23 reserves select-mode dragging for camera pan.
+	interior._select(id)
+	interior._start_move()
 	var start := body_pixel(id)
 	press(start)
 	var item: Dictionary = host.device(id)
