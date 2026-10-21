@@ -154,9 +154,7 @@ func run() -> void:
 	press(finish, MOUSE_BUTTON_LEFT, false)
 	invariant_state(original, "release after Escape never commits stale preview")
 	escape()
-	check(interior.visible and interior.selected_id == -1, "second Escape clears selection and keeps station open")
-	escape()
-	check(not interior.visible and not root.disable_3d, "third Escape closes station and restores base rendering")
+	check(not interior.visible and not root.disable_3d, "second Escape closes station despite selection and restores base rendering")
 	interior.open_station(SITE)
 	await process_frame
 	finish = begin_drag(0, Vector2(-1.2, 0.4))

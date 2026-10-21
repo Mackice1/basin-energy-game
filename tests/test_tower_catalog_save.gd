@@ -18,7 +18,8 @@ func blank() -> Dictionary:
 	var s: Dictionary = old.blank()
 	old.free()
 	s.schema = 12; s.model_version = 21; s.rankine_energy = R.initial_energy(); s.tower_energy = T.initial_energy()
-	for kind in C.implemented_kinds(): s.templates[kind] = C.defaults(kind)
+	for kind in C.implemented_kinds():
+		if not kind in C.NEW_STORAGE_KINDS: s.templates[kind] = C.defaults(kind)
 	s.stations = [{"id":1000000,"name":"塔式热链","kind":"tower_station","x":0.0,"z":0.0}]
 	s.next_station_id = 1000001
 	return s
@@ -47,6 +48,9 @@ func _initialize() -> void:
 		check(C.validate_link(ds,[],{"from":5,"to":id,"from_port":"out","to_port":"ac_in","carrier":C.CARRIER,"unit":"MW","capacity_mw":1.0,"loss_fraction":0.0}).is_empty(),"explicit aux AC " + str(id))
 	var s := blank()
 	check(V.validate(s).is_empty(),"empty tower site valid: " + V.validate(s))
+	var expanded_legacy := s.duplicate(true)
+	expanded_legacy.templates.battery_sodium = C.defaults("battery_sodium")
+	check(not V.validate(expanded_legacy).is_empty(),"schema12 rejects expanded storage templates; requires schema13")
 	s.devices = [device(0,"solar_tower_receiver")]; s.next_id = 1
 	check(V.validate(s).is_empty(),"centered receiver valid: " + V.validate(s))
 	var cycle: Array = [device(10,"salt_steam_generator"),device(11,"steam_turbine"),device(12,"steam_condenser"),device(13,"feedwater_pump")]

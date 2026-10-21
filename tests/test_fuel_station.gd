@@ -288,7 +288,7 @@ func test_save() -> void:
 	host.fuel_supply = {"enabled": true, "max_input_mw": 2.5, "lower_heating_value_kwh_per_nm3": 10.0, "price_per_mwh": 300.0}
 	host.refresh()
 	var saved := host.state()
-	check(saved.schema == 12 and host.validate_state(saved).is_empty(), "fuel station saves valid schema 12")
+	check(saved.schema == 13 and host.validate_state(saved).is_empty(), "fuel station saves valid schema 13")
 	var path := "user://fuel_station_test/%d.json" % OS.get_process_id()
 	check(host.write_save(path), "fuel station save written")
 	var restored := fixture()

@@ -29,7 +29,7 @@ func _initialize():call_deferred("run")
 func run():
 	var game=fixture();root.add_child(game)
 	var service=load("res://scripts/optimization_controller.gd").new();root.add_child(service);service.setup(game)
-	service.solver_executable="/workspace/shared/glpk/bin/glpsol"
+	service.solver_executable=(OS.get_environment("BASIN_GLPK") if not OS.get_environment("BASIN_GLPK").is_empty() else "glpsol")
 	var options={"horizon_hours":6.0,"step_minutes":60.0,"load_multiplier":1.0,"strict_supply":false,"terminal_soc_fraction":0.5,"timeout_s":20}
 	var before:String=JSON.stringify(game.state())
 	service.request_id="test"

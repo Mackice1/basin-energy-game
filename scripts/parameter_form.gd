@@ -10,6 +10,7 @@ extends PanelContainer
 signal parameters_changed
 signal validation_changed(errors: Array[String])
 
+const Catalog = preload("res://scripts/device_catalog.gd")
 const EnergyModel = preload("res://scripts/energy_model.gd")
 const INK := Color("edf3f6")
 const MUTED := Color("a5b7c4")
@@ -21,6 +22,12 @@ const ACCENT := Color("69d1bd")
 # Schema describes the existing model only; bounds and default values are shown,
 # not silently clamped. In particular, Cp's exact upper limit is 16/27.
 const GROUPS := {
+	"battery_sodium": [{"title": "钠离子电池储能 · 容量与功率", "source": "钠离子电池箱 + 双向PCS。聚合电能库存；不计算电芯化学、温度、老化或循环寿命。充放效率为可编辑教学假设，包含PCS，不重复扣逆变损耗。 同一步充放互斥；新建设备默认为空，当前库存独立保存。", "fields": [["capacity_mwh", "等效库存容量", "MWh", "0 < 值 ≤ 100000"], ["charge_mw", "AC最大充电功率", "MW", "0 ≤ 值 ≤ 10000"], ["discharge_mw", "AC最大放电功率", "MW", "0 ≤ 值 ≤ 10000"]]}, {"title": "净效率与静置损耗", "source": "充×放为不含静置自损的往返效率；辅机是否已合并按本技术边界。连续自损按库存×exp(−λ×小时)衰减，断线仍自损，暂停冻结。", "fields": [["charge_efficiency", "净充电效率", "比例", "0 < 值 ≤ 1"], ["discharge_efficiency", "净放电效率", "比例", "0 < 值 ≤ 1"], ["self_discharge_per_h", "连续自损率常数", "1/h", "0 ≤ 值 ≤ 1"]]}, {"title": "仅新建设备的初始状态", "source": "默认空库存；只用于新建初始化。已有设备的运行库存独立保存，编辑参数不能补充电量/热量，缩小容量不得抹除库存。", "fields": [["initial_soc", "新建初始库存比例", "比例", "0 ≤ 值 ≤ 1"]]}],
+	"battery_flow": [{"title": "液流电池储能 · 容量与功率", "source": "正/负电解液罐 + 电堆 + 泵组 + 双向PCS。容量与功率分别约束；泵耗与PCS损耗已并入净充放效率，不额外生成电或热。未计算浓度、液位或膜传质。 同一步充放互斥；新建设备默认为空，当前库存独立保存。", "fields": [["capacity_mwh", "等效库存容量", "MWh", "0 < 值 ≤ 100000"], ["charge_mw", "AC最大充电功率", "MW", "0 ≤ 值 ≤ 10000"], ["discharge_mw", "AC最大放电功率", "MW", "0 ≤ 值 ≤ 10000"]]}, {"title": "净效率与静置损耗", "source": "充×放为不含静置自损的往返效率；辅机是否已合并按本技术边界。连续自损按库存×exp(−λ×小时)衰减，断线仍自损，暂停冻结。", "fields": [["charge_efficiency", "净充电效率", "比例", "0 < 值 ≤ 1"], ["discharge_efficiency", "净放电效率", "比例", "0 < 值 ≤ 1"], ["self_discharge_per_h", "连续自损率常数", "1/h", "0 ≤ 值 ≤ 1"]]}, {"title": "仅新建设备的初始状态", "source": "默认空库存；只用于新建初始化。已有设备的运行库存独立保存，编辑参数不能补充电量/热量，缩小容量不得抹除库存。", "fields": [["initial_soc", "新建初始库存比例", "比例", "0 ≤ 值 ≤ 1"]]}],
+	"caes_aboveground": [{"title": "地上压缩空气储能 · 容量与功率", "source": "地上承压容器组 + 电驱压缩机 + 膨胀发电机。不是地下洞穴。净效率覆盖压缩、储气热管理及发电的教学损失；没有免费外部燃料或热源。聚合库存不是压力/气体质量，未计算压力、温度、流量或动态热力循环。 同一步充放互斥；新建设备默认为空，当前库存独立保存。", "fields": [["capacity_mwh", "等效库存容量", "MWh", "0 < 值 ≤ 10"], ["charge_mw", "AC最大充电功率", "MW", "0 ≤ 值 ≤ 2"], ["discharge_mw", "AC最大放电功率", "MW", "0 ≤ 值 ≤ 2"]]}, {"title": "净效率与静置损耗", "source": "充×放为不含静置自损的往返效率；辅机是否已合并按本技术边界。连续自损按库存×exp(−λ×小时)衰减，断线仍自损，暂停冻结。", "fields": [["charge_efficiency", "净充电效率", "比例", "0 < 值 ≤ 1"], ["discharge_efficiency", "净放电效率", "比例", "0 < 值 ≤ 1"], ["self_discharge_per_h", "连续自损率常数", "1/h", "0 ≤ 值 ≤ 1"]]}, {"title": "仅新建设备的初始状态", "source": "默认空库存；只用于新建初始化。已有设备的运行库存独立保存，编辑参数不能补充电量/热量，缩小容量不得抹除库存。", "fields": [["initial_soc", "新建初始库存比例", "比例", "0 ≤ 值 ≤ 1"]]}],
+	"liquid_air_store": [{"title": "液态空气储能 · 容量与功率", "source": "电驱液化机/冷箱 + 低温绝热液罐 + 泵/膨胀发电机。净效率合并液化、冷/热回收与发电假设；自损代表等效待机损失，不声称计算实际蒸发量。未计算低温相变、压力或冷启动。 同一步充放互斥；新建设备默认为空，当前库存独立保存。", "fields": [["capacity_mwh", "等效库存容量", "MWh", "0 < 值 ≤ 100000"], ["charge_mw", "AC最大充电功率", "MW", "0 ≤ 值 ≤ 10000"], ["discharge_mw", "AC最大放电功率", "MW", "0 ≤ 值 ≤ 10000"]]}, {"title": "净效率与静置损耗", "source": "充×放为不含静置自损的往返效率；辅机是否已合并按本技术边界。连续自损按库存×exp(−λ×小时)衰减，断线仍自损，暂停冻结。", "fields": [["charge_efficiency", "净充电效率", "比例", "0 < 值 ≤ 1"], ["discharge_efficiency", "净放电效率", "比例", "0 < 值 ≤ 1"], ["self_discharge_per_h", "连续自损率常数", "1/h", "0 ≤ 值 ≤ 1"]]}, {"title": "仅新建设备的初始状态", "source": "默认空库存；只用于新建初始化。已有设备的运行库存独立保存，编辑参数不能补充电量/热量，缩小容量不得抹除库存。", "fields": [["initial_soc", "新建初始库存比例", "比例", "0 ≤ 值 ≤ 1"]]}],
+	"hydrogen_storage_system": [{"title": "氢储能完整系统 · 容量与功率", "source": "电解制氢及压缩 → 储氢容器 → 燃料电池/逆变回发。库存MWh为氢低位热值LHV等效能量，不是可直接送出的AC电量。充电效率是电解+压缩净LHV效率；放电效率是燃料电池+逆变效率。不单设可接线氢端口，氢质量仅按33.33 kWh/kg LHV换算，不动态求解水耗、氢流体/压力或副产热。 同一步充放互斥；新建设备默认为空，当前库存独立保存。", "fields": [["capacity_mwh", "氢LHV库存容量", "MWh(LHV)", "0 < 值 ≤ 100000"], ["charge_mw", "AC最大充电功率", "MW", "0 ≤ 值 ≤ 10000"], ["discharge_mw", "AC最大放电功率", "MW", "0 ≤ 值 ≤ 10000"]]}, {"title": "净效率与静置损耗", "source": "充×放为不含静置自损的往返效率；辅机是否已合并按本技术边界。连续自损按库存×exp(−λ×小时)衰减，断线仍自损，暂停冻结。", "fields": [["charge_efficiency", "净充电效率", "比例", "0 < 值 ≤ 1"], ["discharge_efficiency", "净放电效率", "比例", "0 < 值 ≤ 1"], ["self_discharge_per_h", "连续自损率常数", "1/h", "0 ≤ 值 ≤ 1"]]}, {"title": "仅新建设备的初始状态", "source": "默认空库存；只用于新建初始化。已有设备的运行库存独立保存，编辑参数不能补充电量/热量，缩小容量不得抹除库存。", "fields": [["initial_soc", "新建初始库存比例", "比例", "0 ≤ 值 ≤ 1"]]}],
+	"solid_thermal_store": [{"title": "固体介质储热 · 容量与功率", "source": "保温固体蓄热体 + 换热通道。当前仅90/60°C热水服务的等效热库存；容量是MWhth，不是电量。不自带电加热器、汽轮机或发电能力；需显式热源充热，发电需独立适配的转换链。当前90/60°C热端不兼容既有高温蒸汽发电链。未计算内部温度分布、材料热容曲线或冷启动。 同一步充放互斥；新建设备默认为空，当前库存独立保存。", "fields": [["capacity_mwhth", "储热容量", "MWhth", "0 < 值 ≤ 100000"], ["charge_mwth", "最大充热功率", "MWth", "0 ≤ 值 ≤ 10000"], ["discharge_mwth", "最大放热功率", "MWth", "0 ≤ 值 ≤ 10000"]]}, {"title": "净效率与静置损耗", "source": "充×放为不含静置自损的往返效率；辅机是否已合并按本技术边界。连续自损按库存×exp(−λ×小时)衰减，断线仍自损，暂停冻结。", "fields": [["charge_efficiency", "净充热效率", "比例", "0 < 值 ≤ 1"], ["discharge_efficiency", "净放热效率", "比例", "0 < 值 ≤ 1"], ["self_discharge_per_h", "连续自损率常数", "1/h", "0 ≤ 值 ≤ 1"]]}, {"title": "仅新建设备的初始状态", "source": "默认空库存；只用于新建初始化。已有设备的运行库存独立保存，编辑参数不能补充电量/热量，缩小容量不得抹除库存。", "fields": [["initial_soc", "新建初始库存比例", "比例", "0 ≤ 值 ≤ 1"]]}],
 	"solar_tower_receiver": [{"title":"塔式集热 · 固定100镜/25m塔", "source":"100面×16m²=1600m²；镜场光学效率0.6、接收器热效率0.9为教学代理，不表示实测或商业保证。仅DNI输入，565/290°C预热稳态，不模拟冷启动、融盐或防冻能耗。", "fields":[
 		["mirror_area_m2","固定镜面总面积","m²","固定1600"],["optical_efficiency","镜场光学效率","比例","0 < 值 ≤ 1"],["receiver_efficiency","接收器热效率","比例","0 < 值 ≤ 1"],["auxiliary_electric_ratio","辅机电 / 实际送热","MW/MWth","0.001 ≤ 值 ≤ 0.2"],["supply_temp_c","固定热盐温度","°C","固定565"],["return_temp_c","固定冷盐温度","°C","固定290"]]}],
 	"molten_salt_store": [{"title":"双罐熔盐储热 · 固定565/290°C", "source":"0.5 MWhth，充热0.8 MWth、放热0.1 MWth为教学额定值。SOC表示相对290°C预热基线的热库存，不是实际罐温。充放互斥，盐泵必须有外部AC电；断线仍有自损。", "fields":[
@@ -109,7 +116,7 @@ const GROUPS := {
 			["priority", "供电优先级", "整数", "0–1000 的整数"]]}
 	],
 	"battery": [
-		{"title": "储能容量与功率限制", "source": "教学假设：10 MWh / 3 MW 容器式储能；容量是电量，功率是充放电速率。", "fields": [
+		{"title": "储能容量与功率限制", "source": "教学假设：锂离子电池10 MWh / 3 MW容器式储能；容量是电量，功率是充放电速率。", "fields": [
 			["capacity_mwh", "储能额定容量", "MWh", "0 < 值 ≤ 100000"],
 			["charge_mw", "最大充电功率", "MW", "0 ≤ 值 ≤ 10000"],
 			["discharge_mw", "最大放电功率", "MW", "0 ≤ 值 ≤ 10000"]]},
@@ -224,6 +231,12 @@ const THERMAL_FIELD_NOTES := {
 }
 
 func _field_note(key: String) -> String:
+	if _kind == "solid_thermal_store":
+		return str(THERMAL_FIELD_NOTES.thermal_store.get(key, ""))
+	if Catalog.is_electric_storage(_kind):
+		if key == "capacity_mwh": return "储能内部等效库存上限；送出AC电量还须乘放电效率。氢储能以LHV计量，其余采用声明的聚合能量口径，不是压力或温度。"
+		if key == "charge_efficiency": return "AC输入电量转成内部等效库存的净比例，包含当前技术链的转换与辅机损失。氢系统为电解+压缩LHV效率。"
+		if key == "discharge_efficiency": return "内部等效库存转为AC输出电量的净比例；氢系统为燃料电池+逆变效率。充×放为不含静置损失的往返效率。"
 	if _kind == "molten_salt_store":
 		if key == "self_discharge_per_h": return "连续热自损率常数；默认0.005/h。预热565/290°C双罐热库存按exp(−λt)衰减；断线仍自损，暂停冻结。"
 		if key == "auxiliary_electric_ratio": return "盐泵AC电 / 实际充入或放出热量；同一时段充放互斥，无外部AC不可充放。"
@@ -255,12 +268,12 @@ var _curve_displayed_text := ""
 var _curve_original_rows: Dictionary = {}
 
 func _init() -> void:
-	custom_minimum_size = Vector2(660, 350)
+	custom_minimum_size = Vector2(0, 160)
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	size_flags_vertical = Control.SIZE_EXPAND_FILL
 	add_theme_stylebox_override("panel", _style(Color("0c151e"), BORDER, 8, 10))
 	var body := VBoxContainer.new()
-	body.add_theme_constant_override("separation", 8)
+	body.add_theme_constant_override("separation", 12)
 	add_child(body)
 	_summary = _label("", 14, MUTED)
 	_summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -269,16 +282,18 @@ func _init() -> void:
 	_scroll.name = "ParameterScroll"
 	_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	_scroll.custom_minimum_size.y = 60
 	_scroll.follow_focus = true
 	body.add_child(_scroll)
 	_groups = VBoxContainer.new()
 	_groups.name = "ParameterGroups"
 	_groups.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_groups.add_theme_constant_override("separation", 10)
+	_groups.add_theme_constant_override("separation", 14)
 	_scroll.add_child(_groups)
 	_status = _label("", 14, MUTED)
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_status.max_lines_visible = 3
 	_status.add_theme_stylebox_override("normal", _style(FIELD_COLOR, BORDER, 6, 8))
 	body.add_child(_status)
 
@@ -302,9 +317,9 @@ func set_parameters(kind: String, values: Dictionary, construction_context: bool
 		child.queue_free()
 	var defaults: Dictionary = EnergyModel.defaults(kind)
 	_summary.text = "数值为当前草稿；检查并应用后生效。比例按 0–1 填写；悬停查看解释。"
-	if kind == "battery":
+	if Catalog.is_electric_storage(kind):
 		_summary.text += " 初始 SOC 只用于新建设备。" if construction_context else " 当前电量独立保存；初始 SOC 在此只读。"
-	elif kind in ["thermal_store","high_temp_store"]:
+	elif Catalog.is_thermal_storage(kind):
 		_summary.text += " 初始 SOC 只用于新建设备。" if construction_context else " 当前热库存独立保存；初始 SOC 在此只读。"
 	if THERMAL_FIELD_NOTES.has(kind):
 		_summary.text += " MWth 表示热功率，MWhth 表示热量；温区固定。"
@@ -345,14 +360,14 @@ func _add_group(group: Dictionary, defaults: Dictionary) -> void:
 	panel.add_theme_stylebox_override("panel", _style(Color("14212b"), BORDER, 8, 9))
 	_groups.add_child(panel)
 	var body := VBoxContainer.new()
-	body.add_theme_constant_override("separation", 7)
+	body.add_theme_constant_override("separation", 10)
 	panel.add_child(body)
 	var heading := Button.new()
 	heading.text = str(group.title) + "  ▾"
 	heading.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	heading.toggle_mode = true
 	heading.button_pressed = true
-	heading.custom_minimum_size.y = 36
+	heading.custom_minimum_size.y = 40
 	heading.add_theme_font_size_override("font_size", 16)
 	for state in ["normal", "hover", "pressed", "focus"]:
 		heading.add_theme_stylebox_override(state, _style(Color("1c2d3a") if state == "normal" else Color("263e4d"), BORDER, 6, 6))
@@ -361,21 +376,38 @@ func _add_group(group: Dictionary, defaults: Dictionary) -> void:
 	heading.add_theme_stylebox_override("focus", _style(Color(0, 0, 0, 0), ACCENT, 6, 6, 2))
 	body.add_child(heading)
 	var content := VBoxContainer.new()
-	content.add_theme_constant_override("separation", 7)
+	content.add_theme_constant_override("separation", 10)
 	body.add_child(content)
 	heading.toggled.connect(func(open: bool):
 		content.visible = open
 		heading.text = str(group.title) + ("  ▾" if open else "  ▸"))
 	var source := _label(str(group.source), 13, MUTED)
 	source.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	source.add_theme_constant_override("line_spacing", 4)
+	source.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	content.add_child(source)
+	if not group.fields.is_empty():
+		var explanation := Button.new()
+		explanation.name = "ParameterAssumptions"
+		explanation.text = "模型与损耗说明  ▸"
+		explanation.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		explanation.flat = true
+		explanation.toggle_mode = true
+		explanation.add_theme_font_size_override("font_size", 13)
+		explanation.add_theme_color_override("font_color", MUTED)
+		explanation.tooltip_text = str(group.source)
+		content.add_child(explanation)
+		source.visible = false
+		explanation.toggled.connect(func(show: bool):
+			source.visible = show
+			explanation.text = "模型与损耗说明" + ("  ▾" if show else "  ▸"))
 	if group.fields.is_empty():
 		return
 	var grid := GridContainer.new()
 	grid.columns = 4
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	grid.add_theme_constant_override("h_separation", 10)
-	grid.add_theme_constant_override("v_separation", 6)
+	grid.add_theme_constant_override("v_separation", 10)
 	content.add_child(grid)
 	for caption in ["参数", "数值", "单位", "允许范围 / 默认参考"]:
 		grid.add_child(_label(caption, 14, MUTED))
@@ -383,7 +415,9 @@ func _add_group(group: Dictionary, defaults: Dictionary) -> void:
 		var key: String = field[0]
 		_labels[key] = str(field[1])
 		var title := _label(str(field[1]), 16, INK)
-		title.custom_minimum_size.x = 146
+		title.custom_minimum_size.x = 154
+		title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		title.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		title.tooltip_text = key + "\n" + _field_note(key)
 		grid.add_child(title)
 		var editor := LineEdit.new()
@@ -396,7 +430,8 @@ func _add_group(group: Dictionary, defaults: Dictionary) -> void:
 		editor.set_meta("parameter_note", _field_note(key))
 		editor.set_meta("construction_only", key == "initial_soc")
 		editor.editable = (key != "initial_soc" or _construction_context) and not str(field[3]).begins_with("固定")
-		editor.custom_minimum_size = Vector2(125, 36)
+		editor.custom_minimum_size = Vector2(125, 40)
+		editor.alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		editor.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		editor.text = str(_original.get(key, defaults.get(key, "")))
 		_displayed[key] = editor.text
@@ -418,11 +453,16 @@ func _add_group(group: Dictionary, defaults: Dictionary) -> void:
 		grid.add_child(editor)
 		_fields[key] = editor
 		var unit := _label(str(field[2]), 14, MUTED)
-		unit.custom_minimum_size.x = 88
+		unit.custom_minimum_size.x = 75
+		unit.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		unit.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		unit.tooltip_text = _field_note(key)
 		grid.add_child(unit)
 		var reference := _label(str(field[3]) + "\n默认 " + str(defaults.get(key, "—")), 14, MUTED)
-		reference.custom_minimum_size.x = 164
+		reference.custom_minimum_size.x = 145
+		reference.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		reference.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		reference.add_theme_constant_override("line_spacing", 3)
 		reference.tooltip_text = _field_note(key)
 		grid.add_child(reference)
 

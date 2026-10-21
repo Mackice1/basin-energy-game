@@ -186,7 +186,7 @@ func test_controller() -> void:
 	for weight in [0.0, -1.0, INF, true]:
 		invalid.heat_service_weight = weight
 		check(service.snapshot(invalid).has("error"), "invalid thermal service weight rejected")
-	service.solver_executable = "/workspace/shared/glpk/bin/glpsol"
+	service.solver_executable = (OS.get_environment("BASIN_GLPK") if not OS.get_environment("BASIN_GLPK").is_empty() else "glpsol")
 	service.panel.configure(options)
 	service.start(options)
 	check(service.pid > 0, "thermal solve starts asynchronously")

@@ -20,6 +20,7 @@ const GREEN := Color("51c793")
 const RANKINE_KINDS := ["salt_steam_generator", "steam_generator", "steam_turbine", "steam_condenser", "feedwater_pump"]
 const PREVIEW_SITE_KINDS := ["tower_station_preview", "tower_station"]
 const TOWER_DEVICE_KINDS := ["solar_tower_receiver", "molten_salt_store"]
+const NEW_STORAGE_KINDS := ["battery_sodium", "battery_flow", "caes_aboveground", "liquid_air_store", "hydrogen_storage_system", "solid_thermal_store"]
 const HIGH_TEMP_KINDS := ["parabolic_trough", "high_temp_store", "oil_water_exchanger"]
 static var _solar_glass: StandardMaterial3D
 static var _blender_scenes: Dictionary = {}
@@ -249,7 +250,7 @@ static func _canonical(kind: String) -> String:
 	return kind.to_lower()
 
 static func footprint(kind: String, params: Dictionary = {}) -> float:
-	if _canonical(kind) in RANKINE_KINDS or _canonical(kind) in PREVIEW_SITE_KINDS or _canonical(kind) in HIGH_TEMP_KINDS or _canonical(kind) == "solar_thermal" or str(params.get("visual_dimension_profile", "legacy_illustrative")) == "metric_v1":
+	if _canonical(kind) in NEW_STORAGE_KINDS or _canonical(kind) in RANKINE_KINDS or _canonical(kind) in PREVIEW_SITE_KINDS or _canonical(kind) in HIGH_TEMP_KINDS or _canonical(kind) == "solar_thermal" or str(params.get("visual_dimension_profile", "legacy_illustrative")) == "metric_v1":
 		return float(Spatial.profile(_canonical(kind), params, false).clearance_radius_world)
 	match _canonical(kind):
 		"wind": return 7.0
@@ -287,13 +288,16 @@ static func create(kind: String, params: Dictionary = {}, prefer_blender_assets:
 	if params.has("visual_dimension_profile") and not profile.has("visual_dimension_profile"):
 		profile = profile.duplicate(true)
 		profile.visual_dimension_profile = params.visual_dimension_profile
-	if item.device_kind in TOWER_DEVICE_KINDS or item.device_kind in RANKINE_KINDS or item.device_kind in PREVIEW_SITE_KINDS or item.device_kind in HIGH_TEMP_KINDS or item.device_kind == "solar_thermal":
+	if item.device_kind in NEW_STORAGE_KINDS or item.device_kind in TOWER_DEVICE_KINDS or item.device_kind in RANKINE_KINDS or item.device_kind in PREVIEW_SITE_KINDS or item.device_kind in HIGH_TEMP_KINDS or item.device_kind == "solar_thermal":
 		profile = profile.duplicate(true)
 		profile.visual_dimension_profile = "metric_v1"
 	var metric := str(profile.get("visual_dimension_profile", "legacy_illustrative")) == "metric_v1"
 	var dimensions: Dictionary = Spatial.profile(item.device_kind, profile) if metric else {}
 	var imported := false
-	if item.device_kind in TOWER_DEVICE_KINDS:
+	if item.device_kind in NEW_STORAGE_KINDS:
+		_build_storage_facility(item, dimensions, palette)
+		imported = true
+	elif item.device_kind in TOWER_DEVICE_KINDS:
 		_build_tower_device(item, dimensions, palette)
 		imported = true
 	elif item.device_kind in RANKINE_KINDS:
@@ -1821,3 +1825,297 @@ static func _build_tower_device(item: EquipmentNode, d: Dictionary, p: Dictionar
 		if label != null: label.text=spec[4]
 	item.set_meta("visual_backend","metric_procedural_fallback")
 	item.set_meta("geometry_assumption",d.source_note)
+
+
+## Complete first-level facilities: distinct process stages and one authoritative
+## inventory. These meshes never create extra physics devices or hidden ports.
+static func _build_storage_facility(item: EquipmentNode, d: Dictionary, p: Dictionary) -> void:
+	if not d.valid: return
+	var stages := {
+		"battery_sodium": "钠离子电池箱 → 双向PCS",
+		"battery_flow": "正/负电解液罐 ↔ 泵组/电堆 ↔ 双向PCS",
+		"caes_aboveground": "电驱压缩机 → 地上承压容器组 → 膨胀发电机",
+		"liquid_air_store": "液化机/冷箱 → 绝热液罐 → 泵/膨胀发电机",
+		"hydrogen_storage_system": "电解/压缩制氢 → 储氢容器组 → 燃料电池回发",
+		"solid_thermal_store": "热输入 → 保温固体蓄热体/换热通道 → 热输出（不发电）"}
+	item.set_meta("storage_stages", stages[item.device_kind])
+	item.set_meta("representation", "complete_" + item.device_kind)
+	item.set_meta("visual_backend", "metric_batched_storage")
+	item.set_meta("geometry_assumption", d.source_note)
+	item.set_meta("pressure_is_simulated", false)
+	item.set_meta("temperature_is_dynamic", false)
+	item.set_meta("capacity_added", 0.0)
+	var tint := p.duplicate()
+	tint.sodium = _material(Color("d4a34b"), 0.1)
+	tint.flow = _material(Color("6f8fba"), 0.15)
+	tint.hydrogen = _material(Color("6caab3"), 0.15)
+	if item.device_kind == "caes_aboveground":
+		# Local matte finishes preserve shape under the existing detail lighting.
+		# Do not darken the shared palette used by other technologies.
+		var finishes := {"ivory": "7b8584", "caes_receiver": "667f8a", "caes_cladding": "626966", "caes_roof": "4a5c64", "concrete": "353f40"}
+		for finish in finishes:
+			var material := _material(Color(finishes[finish]))
+			material.roughness = 0.94
+			material.metallic_specular = 0.15
+			tint[finish] = material
+	var unit: Vector3 = d.unit_dimensions_m
+	var display_count := mini(int(d.module_count), 48)
+	item.set_meta("display_module_count", display_count)
+	item.set_meta("representative_lod", display_count < int(d.module_count))
+	for display_index in display_count:
+		var index := display_index if display_count == int(d.module_count) else int(round(float(display_index) * float(int(d.module_count) - 1) / float(maxi(display_count - 1, 1))))
+		var module := Node3D.new()
+		module.name = "StorageModule%03d" % (index + 1)
+		module.position = Spatial.module_origin_m(d, index) * WORLD_UNITS_PER_METER
+		item.add_child(module)
+		_metric_box(item, module, "CompleteFacilityFoundation", Vector3(unit.x, .20, unit.z), Vector3(0, .10, 0), tint.concrete)
+		match item.device_kind:
+			"battery_sodium": _storage_sodium(item, module, tint)
+			"battery_flow": _storage_flow(item, module, tint)
+			"caes_aboveground": _storage_caes(item, module, tint)
+			"liquid_air_store": _storage_liquid_air(item, module, tint)
+			"hydrogen_storage_system": _storage_hydrogen(item, module, tint)
+			"solid_thermal_store": _storage_solid(item, module, tint)
+	# Material-batched surfaces keep full-size installations cheap to render.
+	_combine_static_meshes(item, "StorageFacilityGeometry")
+	var front: float = -float(d.body_dimensions_m.z) * .5 - .35
+	if item.device_kind == "solid_thermal_store":
+		for port_id in ["heat_in", "heat_out"]:
+			var x := -.8 if port_id == "heat_in" else .8
+			_named_terminal(item, p, port_id, Vector3(x, .55, front) * .1, "input" if port_id == "heat_in" else "output", "hw_primary_90_60")
+			item.named_ports[port_id].scale = Vector3.ONE * .1
+		item.thermal_soc_label = _thermal_label(item, "StorageSOC", "固体热库存", Vector3(0, unit.y + .5, 0) * .1, 28)
+	else:
+		_named_terminal(item, p, "ac", Vector3(-float(d.body_dimensions_m.x) * .5 + .5, .65, front) * .1, "bidirectional")
+		item.named_ports.ac.scale = Vector3.ONE * .1
+		var port_label: Label3D = item.named_ports.ac.find_child("PortLabel", true, false)
+		if port_label != null: port_label.text = "AC 充 ↔ 放"
+	item.set_process(false)
+
+static func _storage_stage(parent: Node3D, label: String, origin_m: Vector3 = Vector3.ZERO) -> Node3D:
+	var stage := Node3D.new()
+	stage.name = label
+	stage.position = origin_m * .1
+	parent.add_child(stage)
+	return stage
+
+static func _storage_cabinet(item: EquipmentNode, parent: Node3D, label: String, size: Vector3, at: Vector3, tint: Material, p: Dictionary) -> void:
+	_metric_box(item, parent, label, size, at + Vector3(0, size.y * .5 + .2, 0), tint)
+	_metric_box(item, parent, label + "Roof", Vector3(size.x + .08, .12, size.z + .08), at + Vector3(0, size.y + .24, 0), p.metal)
+	for door in 3:
+		var x: float = at.x + (door - 1) * size.x * .30
+		_metric_box(item, parent, label + "Door", Vector3(size.x * .27, size.y * .75, .04), Vector3(x, size.y * .52 + .2, at.z - size.z * .5 - .02), p.ivory)
+		_metric_box(item, parent, label + "Handle", Vector3(.045, .25, .04), Vector3(x + size.x * .10, size.y * .5 + .2, at.z - size.z * .5 - .06), p.dark)
+		_metric_box(item, parent, label + "Vent", Vector3(size.x * .18, .14, .045), Vector3(x, size.y * .8 + .2, at.z - size.z * .5 - .05), p.dark)
+
+static func _storage_vertical_tank(item: EquipmentNode, parent: Node3D, label: String, at: Vector3, radius: float, height: float, tint: Material, p: Dictionary) -> void:
+	_cylinder(item, parent, label, radius * .1, radius * .1, height * .1, (at + Vector3(0, height * .5 + .25, 0)) * .1, tint)
+	_cylinder(item, parent, label + "DishedRoof", radius * .1, radius * .075, .03, (at + Vector3(0, height + .40, 0)) * .1, p.ivory)
+	for level in [.22, .55, .84]:
+		_cylinder(item, parent, label + "JacketBand", (radius + .015) * .1, (radius + .015) * .1, .008, (at + Vector3(0, height * level + .25, 0)) * .1, p.metal)
+	_metric_box(item, parent, label + "Manway", Vector3(.4, .12, .4), at + Vector3(0, height + .59, 0), p.metal)
+	_metric_rod(item, parent, label + "ServicePipe", at + Vector3(radius + .12, .45, 0), at + Vector3(radius + .12, height + .35, 0), .075, p.metal)
+
+static func _storage_pressure_bank(item: EquipmentNode, parent: Node3D, label: String, origin: Vector3, rows: int, length: float, radius: float, p: Dictionary) -> void:
+	var bank := _storage_stage(parent, label, origin)
+	for row in rows:
+		var z: float = (row - (rows - 1) * .5) * (radius * 2.0 + .55)
+		var body := CapsuleMesh.new()
+		body.radius = radius * .1
+		body.height = length * .1
+		body.radial_segments = 16
+		body.rings = 4
+		var vessel := _mesh(item, bank, "AbovegroundPressureVessel", body, Vector3(0, radius + .65, z) * .1, p.ivory)
+		vessel.rotation.z = PI * .5
+		for x in [-length * .30, length * .30]:
+			_metric_box(item, bank, "VesselSaddle", Vector3(.35, .80, radius * 1.8), Vector3(x, .6, z), p.metal)
+		_metric_rod(item, bank, "VesselNeck", Vector3(length * .5, radius + .65, z), Vector3(length * .5 + .3, radius + .65, z), .08, p.metal)
+	_metric_rod(item, bank, "BankManifold", Vector3(length * .5 + .3, radius + .65, -(rows - 1) * (radius + .275)), Vector3(length * .5 + .3, radius + .65, (rows - 1) * (radius + .275)), .12, p.blue)
+
+static func _storage_turbomachine(item: EquipmentNode, parent: Node3D, label: String, at: Vector3, p: Dictionary) -> void:
+	var stage := _storage_stage(parent, label, at)
+	_metric_box(item, stage, "MachineSkid", Vector3(4.3, .25, 2.4), Vector3(0, .325, 0), p.dark)
+	_metric_rod(item, stage, "ElectricMachine", Vector3(-1.8, 1.15, 0), Vector3(-.5, 1.15, 0), .62, p.blue)
+	_metric_rod(item, stage, "ShaftCoupling", Vector3(-.5, 1.15, 0), Vector3(.1, 1.15, 0), .20, p.metal)
+	_metric_rod(item, stage, "TurbomachineCasing", Vector3(.1, 1.15, 0), Vector3(1.5, 1.15, 0), .80, p.ivory)
+	_metric_rod(item, stage, "ServiceInlet", Vector3(1.15, 1.15, -.65), Vector3(1.15, 1.15, -1.1), .22, p.metal)
+	for x in [-1.65, -1.4, -1.15, -.9, -.65]:
+		_metric_rod(item, stage, "MotorCoolingFin", Vector3(x, 1.15, 0), Vector3(x + .05, 1.15, 0), .67, p.metal)
+
+static func _storage_sodium(item: EquipmentNode, module: Node3D, p: Dictionary) -> void:
+	var stage := _storage_stage(module, "SodiumIonContainerAndPCS")
+	_storage_cabinet(item, stage, "SodiumIonCabinet", Vector3(5.7, 2.4, 2.5), Vector3(-.10, 0, .10), p.sodium, p)
+	_metric_box(item, stage, "SodiumTechnologyStripe", Vector3(5.5, .30, .05), Vector3(-.1, 2.62, -1.18), p.sodium)
+	_metric_box(item, stage, "BidirectionalPCS", Vector3(.55, 1.8, 1.8), Vector3(2.95, 1.10, .10), p.blue)
+	for rib in 6:
+		_metric_box(item, stage, "PCSIntakeLouver", Vector3(.035, .08, 1.4), Vector3(3.235, .7 + rib * .20, .10), p.dark)
+
+static func _storage_flow(item: EquipmentNode, module: Node3D, p: Dictionary) -> void:
+	var tanks := _storage_stage(module, "PositiveAndNegativeElectrolyteTanks")
+	_storage_vertical_tank(item, tanks, "PositiveElectrolyteTank", Vector3(-3.5, 0, 1.8), 1.9, 4.4, p.flow, p)
+	_storage_vertical_tank(item, tanks, "NegativeElectrolyteTank", Vector3(3.5, 0, 1.8), 1.9, 4.4, p.hydrogen, p)
+	var stacks := _storage_stage(module, "FlowCellStackAndCirculationPumps")
+	_metric_box(item, stacks, "StackSkid", Vector3(6, .2, 2), Vector3(0, .3, -2.5), p.dark)
+	for layer in 16:
+		_metric_box(item, stacks, "ElectrodeStackPlate", Vector3(.13, 1.45, 1.5), Vector3(-1.25 + layer * .16, 1.15, -2.5), p.metal if layer % 2 == 0 else p.dark)
+	for x in [-3.5, 3.5]:
+		_metric_rod(item, stacks, "ElectrolyteLoopPipe", Vector3(x, .7, 1.8), Vector3(x, .7, -2.5), .12, p.flow if x < 0 else p.hydrogen)
+		_metric_rod(item, stacks, "CirculationPump", Vector3(x - .3, .7, -2.5), Vector3(x + .3, .7, -2.5), .28, p.blue)
+	_storage_cabinet(item, module, "FlowBidirectionalPCS", Vector3(1.7, 2.1, 1.8), Vector3(5.2, 0, -2.3), p.blue, p)
+
+static func _storage_caes(item: EquipmentNode, module: Node3D, p: Dictionary) -> void:
+	# Photo-derived layout, not a miniature of a 100/300 MW cavern project.
+	# Reference mapping and inspected image URLs: docs/storage_1003/CAES_VISUAL_REFERENCES.md.
+	# Keep the existing 24 x 18 x 6 m teaching envelope and sole aggregate AC port.
+	item.set_meta("caes_visual_revision", "photo_referenced_surface_plant_v2")
+	item.set_meta("caes_reference_ids", ["CEEC_JINTAN_PHOTO", "IET_ZHANGJIAKOU_HALL", "IET_ZHANGJIAKOU_EXTERIOR", "PRESSVESS_RECEIVER_3_5"])
+	item.set_meta("caes_storage_location", "aboveground_pressure_vessels_only")
+	item.set_meta("caes_geometry_is_capacity_proof", false)
+	item.set_meta("caes_thermal_vessels_are_air_storage", false)
+	item.set_meta("caes_hall_cutaway", true)
+	item.set_meta("storage_stages", "压缩/膨胀机房 ↔ 换热蓄热区 ↔ 地上储气容器列（无地下储气）")
+	_storage_caes_machine_hall(item, module, p)
+	_storage_caes_heat_recovery(item, module, p)
+	if module.name == "StorageModule001":
+		_thermal_label(module, "CAESMachineHallLabel", "压缩 / 膨胀机房", Vector3(-5.8, 5.9, -4.8)*.1, 24)
+		_thermal_label(module, "CAESHeatRecoveryLabel", "换热 · 蓄热（非储气）", Vector3(6, 4.0, -5.5)*.1, 24)
+		_thermal_label(module, "CAESAbovegroundAirLabel", "地上储气容器", Vector3(0, 3.1, 4.1)*.1, 24)
+	var bank := _storage_stage(module, "AbovegroundAirVesselBank", Vector3(0, 0, 4.1))
+	bank.set_meta("role", "air_inventory_display_only")
+	bank.set_meta("vessel_count", 4)
+	bank.set_meta("reference_id", "PRESSVESS_RECEIVER_3_5")
+	for row in 4:
+		var z: float = (row - 1.5) * 2.2
+		_storage_caes_receiver(item, bank, Vector3(0, 1.6, z), 15.0, .9, p)
+		_metric_rod(item, bank, "AirBranch", Vector3(7.5, 1.6, z), Vector3(9.4, 1.6, z), .10, p.blue)
+		_metric_box(item, bank, "BranchIsolationValve", Vector3(.28, .32, .30), Vector3(8.5, 1.6, z), p.metal)
+		_metric_rod(item, bank, "ValveStem", Vector3(8.5, 1.6, z), Vector3(8.5, 2.0, z), .035, p.metal)
+		_metric_rod(item, bank, "ValveHandwheel", Vector3(8.5, 2.0, z-.17), Vector3(8.5, 2.0, z+.17), .035, p.dark)
+	_metric_rod(item, module, "AirBankManifold", Vector3(9.4, 1.6, .8), Vector3(9.4, 1.6, 7.4), .15, p.blue)
+	var gallery := _storage_stage(module, "ElevatedProcessPipeGallery")
+	gallery.set_meta("reference_id", "CEEC_JINTAN_PHOTO")
+	for x in [-9.8, -5.0, 0.0, 4.8, 9.4]:
+		for z in [-.30, .30]:
+			_metric_box(item, gallery, "PipeRackColumn", Vector3(.12, 3.1, .12), Vector3(x, 1.75, z), p.metal)
+		_metric_box(item, gallery, "PipeRackCrossbeam", Vector3(.18, .16, 1.1), Vector3(x, 3.3, 0), p.metal)
+	for z in [-.26, .26]:
+		_metric_rod(item, gallery, "InsulatedAirHeader", Vector3(-9.8, 3.5, z), Vector3(9.4, 3.5, z), .12, p.ivory)
+	_metric_rod(item, gallery, "StorageManifoldDrop", Vector3(9.4, 3.5, .26), Vector3(9.4, 1.6, .8), .12, p.ivory)
+	for x in [-8.3, -3.3, 3.8, 7.6]:
+		_metric_rod(item, gallery, "ProcessBranchDrop", Vector3(x, 3.5, -.26), Vector3(x, 3.5, -2), .12, p.ivory)
+		_metric_rod(item, gallery, "ProcessBranchRiser", Vector3(x, 3.5, -2), Vector3(x, 1.6, -2), .12, p.ivory)
+
+static func _storage_caes_machine_hall(item: EquipmentNode, module: Node3D, p: Dictionary) -> void:
+	var hall := _storage_stage(module, "CompressorExpanderMachineHall", Vector3(-5.8, 0, -4.8))
+	hall.set_meta("reference_id", "IET_ZHANGJIAKOU_HALL")
+	hall.set_meta("front_wall_cutaway_for_teaching", true)
+	_metric_box(item, hall, "MachineHallPlinth", Vector3(10.8, .3, 7.2), Vector3(0, .35, 0), p.dark)
+	_metric_box(item, hall, "RearCladding", Vector3(10.8, 4.8, .12), Vector3(0, 2.9, 3.5), p.caes_cladding)
+	for x in [-5.3, 5.3]:
+		_metric_box(item, hall, "SideCladding", Vector3(.12, 4.8, 7.0), Vector3(x, 2.9, 0), p.caes_cladding)
+		for z in [-3.4, 0.0, 3.4]:
+			_metric_box(item, hall, "SteelHallColumn", Vector3(.20, 4.8, .20), Vector3(x, 2.9, z), p.metal)
+		_metric_box(item, hall, "CladdingBaseBand", Vector3(.14, .65, 7.0), Vector3(x, .85, 0), p.blue)
+	# Three open front bays expose actual equipment, instead of a misleading opaque box.
+	for x in [-5.3, 0.0, 5.3]:
+		_metric_box(item, hall, "OpenServiceBayColumn", Vector3(.18, 4.8, .18), Vector3(x, 2.9, -3.5), p.metal)
+	_metric_box(item, hall, "OpenServiceBayLintel", Vector3(10.8, .45, .22), Vector3(0, 5.1, -3.5), p.blue)
+	_metric_box(item, hall, "MachineHallRoof", Vector3(11.0, .18, 7.3), Vector3(0, 5.4, 0), p.caes_roof)
+	for x in [-4.8, -2.4, 0.0, 2.4, 4.8]:
+		_metric_box(item, hall, "RoofStandingSeam", Vector3(.035, .055, 7.2), Vector3(x, 5.52, 0), p.metal)
+	for x in [-3.6, 0.0, 3.6]:
+		_metric_box(item, hall, "RoofVentilator", Vector3(.8, .25, 1.1), Vector3(x, 5.6, .8), p.metal)
+	_metric_box(item, hall, "OverheadMaintenanceCraneBeam", Vector3(9.8, .28, .30), Vector3(0, 4.35, -.7), p.flow)
+	_metric_box(item, hall, "MaintenanceHoist", Vector3(.55, .35, .55), Vector3(-1.7, 4.0, -.7), p.dark)
+	_storage_turbomachine(item, hall, "ElectricDrivenAirCompressor", Vector3(-2.6, .3, -.7), p)
+	_storage_turbomachine(item, hall, "AirExpanderGenerator", Vector3(2.5, .3, -.7), p)
+	for x in [-2.6, 2.5]:
+		_metric_rod(item, hall, "MachineInsulatedVerticalPipe", Vector3(x+1.15, 1.45, -1.8), Vector3(x+1.15, 3.3, -1.8), .19, p.ivory)
+		_metric_rod(item, hall, "MachineInsulatedOverheadPipe", Vector3(x+1.15, 3.3, -1.8), Vector3(x+1.15, 3.3, 2.9), .19, p.ivory)
+
+static func _storage_caes_heat_recovery(item: EquipmentNode, module: Node3D, p: Dictionary) -> void:
+	var heat := _storage_stage(module, "ThermalRecoveryAndStorageArea", Vector3(6, 0, -4.9))
+	heat.set_meta("role", "internal_compression_heat_recovery_not_air_inventory")
+	heat.set_meta("reference_id", "IET_ZHANGJIAKOU_EXTERIOR")
+	# Small original teaching equivalents of the clearly separate thermal vessels;
+	# not copies of the project size, heat inventory or pressure specification.
+	for x in [-2.1, 2.1]:
+		var tank := _storage_stage(heat, "InsulatedThermalBuffer", Vector3(x, 0, -1.1))
+		tank.set_meta("contents_role", "thermal_buffer_not_compressed_air")
+		var shell := SphereMesh.new()
+		shell.radius = .135; shell.height = .27
+		shell.radial_segments = 20; shell.rings = 10
+		_mesh(item, tank, "InsulatedThermalSphere", shell, Vector3(0, 2.1, 0)*.1, p.metal)
+		for sx in [-.8, .8]:
+			for sz in [-.8, .8]:
+				_metric_box(item, tank, "ThermalTankLeg", Vector3(.12, 1.8, .12), Vector3(sx, 1.1, sz), p.metal)
+		_metric_box(item, tank, "ThermalTankTopPlatform", Vector3(.8, .08, .8), Vector3(0, 3.5, 0), p.metal)
+		_metric_rod(item, tank, "ThermalReturnPipe", Vector3(0, .75, 0), Vector3(0, .75, 2.3), .10, p.heat_return)
+		_metric_rod(item, tank, "ThermalChargePipe", Vector3(1.1, 1.7, 0), Vector3(1.1, 1.7, 2.3), .10, p.heat_primary)
+	var exchangers := _storage_stage(heat, "InsulatedHeatExchangerTrain", Vector3(0, 0, 1.8))
+	for z in [-.45, .45]:
+		_metric_rod(item, exchangers, "InsulatedExchangerShell", Vector3(-2.8, 1.1, z), Vector3(2.8, 1.1, z), .30, p.ivory)
+		for x in [-2.6, 2.6]:
+			_metric_rod(item, exchangers, "ExchangerEndFlange", Vector3(x-.05, 1.1, z), Vector3(x+.05, 1.1, z), .37, p.metal)
+		for x in [-1.9, 1.9]:
+			_metric_box(item, exchangers, "ExchangerSupport", Vector3(.25, .65, .5), Vector3(x, .53, z), p.metal)
+	_metric_box(item, heat, "ThermalAreaIdentification", Vector3(7.2, .28, .12), Vector3(0, .55, 3.4), p.heat_primary)
+
+static func _storage_caes_receiver(item: EquipmentNode, parent: Node3D, center: Vector3, length: float, radius: float, p: Dictionary) -> void:
+	# Pressvess workshop photographs: cylindrical shell, shallow dished ends,
+	# two saddles, bolted side manway and flanged nozzle. No capacity inferred.
+	var vessel := _storage_stage(parent, "AirReceiver", center)
+	vessel.set_meta("shell_form", "cylinder_with_shallow_dished_heads")
+	var half_shell := length*.5-radius*.45
+	_metric_rod(item, vessel, "AirReceiverShell", Vector3(-half_shell, 0, 0), Vector3(half_shell, 0, 0), radius, p.caes_receiver)
+	for side in [-1.0, 1.0]:
+		var head := SphereMesh.new()
+		head.radius = radius*.1; head.height = radius*.2
+		head.radial_segments = 16; head.rings = 8
+		var cap := _mesh(item, vessel, "ShallowDishedEnd", head, Vector3(side*half_shell, 0, 0)*.1, p.caes_receiver)
+		cap.scale.x = .45
+		_metric_box(item, vessel, "AirReceiverSaddle", Vector3(.38, .72, radius*1.65), Vector3(side*length*.29, -radius-.12, 0), p.metal)
+		_metric_box(item, vessel, "SaddleFootplate", Vector3(.62, .10, radius*2.0), Vector3(side*length*.29, -radius-.40, 0), p.metal)
+		_metric_rod(item, vessel, "ReceiverLiftingLug", Vector3(side*length*.32, radius, -.10), Vector3(side*length*.32, radius+.15, .10), .07, p.metal)
+	_metric_rod(item, vessel, "InspectionManway", Vector3(-3.1, 0, -radius), Vector3(-3.1, 0, -radius-.15), .30, p.metal)
+	for bolt in 8:
+		var angle := TAU * float(bolt)/8.0
+		_metric_box(item, vessel, "ManwayBolt", Vector3(.07, .07, .055), Vector3(-3.1+cos(angle)*.235, sin(angle)*.235, -radius-.18), p.dark)
+	_metric_rod(item, vessel, "AirOutletFlange", Vector3(length*.5-.05, 0, 0), Vector3(length*.5+.08, 0, 0), .23, p.metal)
+
+static func _storage_liquid_air(item: EquipmentNode, module: Node3D, p: Dictionary) -> void:
+	var tanks := _storage_stage(module, "InsulatedCryogenicLiquidAirTanks")
+	for x in [-4.7, .5]:
+		_storage_vertical_tank(item, tanks, "VacuumInsulatedLiquidAirTank", Vector3(x, 0, 3), 2.0, 9.6, p.ivory, p)
+		for z in [-.55, .55]:
+			_metric_rod(item, tanks, "TankServiceLadderRail", Vector3(x + 2.12, .6, 3 + z), Vector3(x + 2.12, 9.7, 3 + z), .035, p.metal)
+	var cold := _storage_stage(module, "LiquefierAndColdBox")
+	_storage_cabinet(item, cold, "InsulatedColdBox", Vector3(3.1, 6.2, 3.1), Vector3(6.4, 0, 2.6), p.flow, p)
+	_storage_turbomachine(item, cold, "LiquefactionCompressor", Vector3(-5, 0, -4.7), p)
+	_storage_turbomachine(item, module, "LiquidAirPumpExpanderGenerator", Vector3(4.5, 0, -4.7), p)
+	_metric_rod(item, module, "InsulatedTransferHeader", Vector3(-5, .9, -2.9), Vector3(6.4, .9, -2.9), .22, p.ivory)
+	for x in [-4.7, .5, 6.4]:
+		_metric_rod(item, module, "CryogenicTransferBranch", Vector3(x, .9, -2.9), Vector3(x, .9, .8), .16, p.ivory)
+
+static func _storage_hydrogen(item: EquipmentNode, module: Node3D, p: Dictionary) -> void:
+	var electrolyzer := _storage_stage(module, "ElectrolyzerAndCompressionStage")
+	_storage_cabinet(item, electrolyzer, "ElectrolyzerEnclosure", Vector3(5.0, 3.0, 4.0), Vector3(-8, 0, 1.5), p.hydrogen, p)
+	_storage_turbomachine(item, electrolyzer, "HydrogenCompressor", Vector3(-8, 0, -4.2), p)
+	_storage_pressure_bank(item, module, "HydrogenStorageVesselBank", Vector3(0, 0, 2), 5, 5.5, .65, p)
+	var fuelcell := _storage_stage(module, "FuelCellAndInverterStage")
+	_storage_cabinet(item, fuelcell, "FuelCellEnclosure", Vector3(4.5, 2.7, 4), Vector3(8, 0, 1.5), p.blue, p)
+	_storage_cabinet(item, fuelcell, "FuelCellACInverter", Vector3(3, 2.0, 2), Vector3(8, 0, -4.1), p.metal, p)
+	for x in [-3.7, 3.7]:
+		_metric_rod(item, module, "InternalHydrogenPipe", Vector3(x, .8, -3.5), Vector3(x, .8, 2), .08, p.hydrogen)
+	_metric_rod(item, module, "InternalHydrogenHeader", Vector3(-8, .8, -3.5), Vector3(8, .8, -3.5), .08, p.hydrogen)
+
+static func _storage_solid(item: EquipmentNode, module: Node3D, p: Dictionary) -> void:
+	var core := _storage_stage(module, "InsulatedSolidStorageBlock")
+	_metric_box(item, core, "SolidThermalBlock", Vector3(6.8, 4.2, 4.8), Vector3(0, 2.3, .2), p.heat_primary)
+	_metric_box(item, core, "InsulatedOuterJacket", Vector3(7.0, 4.35, 4.0), Vector3(0, 2.375, .6), p.ivory)
+	_metric_box(item, core, "InsulatedRoof", Vector3(7.2, .20, 4.9), Vector3(0, 4.65, .2), p.metal)
+	for x in [-2.7, -1.35, 0.0, 1.35, 2.7]:
+		_metric_box(item, core, "JacketPanelSeam", Vector3(.04, 4.1, .06), Vector3(x, 2.3, -1.43), p.metal)
+		_metric_rod(item, core, "HeatExchangeChannelEnd", Vector3(x, 1.3, -2.2), Vector3(x, 1.3, -2.7), .17, p.heat_primary)
+	_metric_rod(item, core, "HotWaterInletHeader", Vector3(-3, 1.3, -2.7), Vector3(3, 1.3, -2.7), .16, p.heat_primary)
+	_metric_rod(item, core, "ReturnWaterHeader", Vector3(-3, .65, -2.7), Vector3(3, .65, -2.7), .14, p.heat_return)

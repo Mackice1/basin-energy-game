@@ -47,6 +47,7 @@ func run():
 	legacy.request_metric_migration()
 	check(var_to_bytes(legacy.state())==before and legacy.last_notice.contains("未执行"),"unsafe migration refuses without scaling coordinates or inventory")
 	var oldsave:=legacy.state();oldsave.schema=6;oldsave.model_version=15;oldsave.erase("dimension_profile")
+	for storage_kind in legacy.Catalog.NEW_STORAGE_KINDS: oldsave.templates.erase(storage_kind)
 	oldsave.erase("tower_energy"); oldsave.templates.erase("solar_tower_receiver"); oldsave.templates.erase("molten_salt_store"); oldsave.templates.erase("salt_steam_generator"); oldsave.erase("rankine_energy"); oldsave.templates.erase("steam_generator"); oldsave.templates.erase("steam_turbine"); oldsave.templates.erase("steam_condenser"); oldsave.templates.erase("feedwater_pump"); oldsave.erase("high_temp_energy"); oldsave.templates.erase("parabolic_trough"); oldsave.templates.erase("high_temp_store"); oldsave.templates.erase("oil_water_exchanger"); oldsave.erase("solar_energy"); oldsave.templates.erase("solar_thermal"); oldsave.erase("fuel_supply");oldsave.erase("fuel_energy");oldsave.templates.erase("fuel_boiler")
 	check(legacy.validate_state(oldsave)=="","actual schema6 still validates")
 	var restored=create();restored.restore(oldsave)

@@ -50,7 +50,7 @@ func setup(station_data: Dictionary, prefer_blender_assets: bool = true) -> void
 	named_ports.clear()
 	annotation_labels.clear()
 	named_port_locals = PORT_LOCALS.duplicate()
-	for key in ["visual_backend", "asset_source", "asset_fallback", "visual_only", "capacity_added", "visual_dimension_profile", "footprint_radius", "world_units_per_meter", "body_dimensions_m", "land_area_m2"]:
+	for key in ["visual_backend", "asset_source", "asset_fallback", "visual_only", "capacity_added", "visual_dimension_profile", "footprint_radius", "world_units_per_meter", "body_dimensions_m", "land_area_m2", "energy_port_count", "preview_only", "commissioned"]:
 		if has_meta(key):
 			remove_meta(key)
 	name = "ThermalStationFacade"
@@ -97,6 +97,10 @@ func setup(station_data: Dictionary, prefer_blender_assets: bool = true) -> void
 		set_meta("land_area_m2", dimensions.land_area_m2)
 		set_meta("visual_only", true)
 		set_meta("capacity_added", 0.0)
+	if metric and station_data.get("has_primary_storage_boundary", false):
+		# Separate primary ports preserve the established secondary heat_out.
+		_add_thermal_boundary("heat_primary_in", Vector3(-1.4, .25, -2.8), "hw_primary_90_60", "input", "热90/60 输入", p)
+		_add_thermal_boundary("heat_primary_out", Vector3(1.4, .25, -2.8), "hw_primary_90_60", "output", "热90/60 输出", p)
 	if station_data.get("has_rankine_output",false):
 		var port:=Node3D.new();port.name="ac_out";port.position=Vector3(0,0.105,-2.8) if metric else Vector3(0,1.05,-4.0);add_child(port)
 		named_ports["ac_out"]=port;named_port_locals["ac_out"]=port.position
@@ -438,13 +442,18 @@ func _build_tower_facade(title: String, palette: Dictionary, prefer_blender_asse
 	set_meta("preview_only", preview_only)
 	set_meta("commissioned", not preview_only)
 	set_meta("capacity_added", 0.0)
-	set_meta("energy_port_count", 0 if preview_only else 2)
+	set_meta("energy_port_count", 0 if preview_only else 4)
 	if not preview_only:
 		for key in ["ac_in","ac_out"]:
 			var port:=Node3D.new();port.name=key;port.position=Vector3(-7.8 if key=="ac_in" else 7.8,0.15,0);add_child(port)
 			named_ports[key]=port;named_port_locals[key]=port.position
+			port.set_meta("port_id", key);port.set_meta("carrier", "electricity_ac");port.set_meta("unit", "MW")
+			port.set_meta("direction", "input" if key == "ac_in" else "output");port.set_meta("voltage_level", "AC_BUS")
+			port.set_meta("mapped_boundary_only", true)
 			_box(port,"ACBoundaryMarker",Vector3.ONE*0.2,Vector3.ZERO,palette.electric)
 			_label(port,"PortLabel","AC 辅机输入" if key=="ac_in" else "AC 毛发电输出",Vector3(0,0.3,0),30,0.01)
+		_add_thermal_boundary("heat_in", Vector3(-1.4, .25, -7.8), "salt_565_290", "input", "盐565/290 输入", palette)
+		_add_thermal_boundary("heat_out", Vector3(1.4, .25, -7.8), "salt_565_290", "output", "盐565/290 输出", palette)
 	var ring := TorusMesh.new()
 	ring.inner_radius = footprint_radius - 0.025
 	ring.outer_radius = footprint_radius + 0.025
@@ -461,3 +470,34 @@ func _build_tower_facade(title: String, palette: Dictionary, prefer_blender_asse
 func set_tower_tracking(altitude:float,azimuth:float)->void:
 	if tower_site and not preview_only and is_instance_valid(tower_geometry) and tower_geometry.has_method("set_tower_tracking"):
 		tower_geometry.set_tower_tracking(altitude,azimuth)
+
+
+## Typed visual boundary only. The host resolves each route to its real child
+## port; no shared capacity, stock, fuel, or hidden conversion is added here.
+func _add_thermal_boundary(port_id: String, local: Vector3, grade: String, direction: String, caption: String, p: Dictionary) -> void:
+	var port := Node3D.new()
+	port.name = port_id
+	port.position = local
+	add_child(port)
+	named_ports[port_id] = port
+	named_port_locals[port_id] = local
+	port.set_meta("port_id", port_id)
+	port.set_meta("direction", direction)
+	port.set_meta("carrier", "heat_salt" if grade == "salt_565_290" else "heat_water")
+	port.set_meta("grade_id", grade)
+	port.set_meta("unit", "MWth")
+	port.set_meta("mapped_boundary_only", true)
+	_box(port, "ThermalBoundaryPad", Vector3(.50, .06, .45), Vector3(0, -.19, .02), p.concrete)
+	for supply in [true, false]:
+		var tint: Material = p.heat if supply else p.return
+		var y := .07 if supply else -.07
+		var pipe := _cylinder(port, "SupplyPipe" if supply else "ReturnPipe", .026, .026, .30, Vector3(0, y, .02), tint)
+		pipe.rotation.x = PI * .5
+		var ring := TorusMesh.new()
+		ring.inner_radius = .028; ring.outer_radius = .068; ring.rings = 12; ring.ring_segments = 6
+		var flange := _mesh(port, "SupplyFlange" if supply else "ReturnFlange", ring, Vector3(0, y, -.13), p.metal)
+		flange.rotation.x = PI * .5
+		_box(port, "PipeSupport", Vector3(.12, .15, .09), Vector3(0, -.10, .12), p.metal)
+	var arrow := _cylinder(port, "HeatDirectionArrow", .045, 0.0, .12, Vector3(.18, .03, -.01), p.heat)
+	arrow.rotation.x = PI * .5 if direction == "input" else -PI * .5
+	_label(port, "PortLabel", caption + " · MWth", Vector3(0, .30, 0), 30, .01)

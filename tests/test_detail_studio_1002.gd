@@ -41,7 +41,7 @@ func run():
  var main_pv = Visual.create("pv",host.visual_params(Catalog.defaults("pv")),true)
  verify(not main_pv.has_meta("representative_only"), "main PV remains complete real field visual")
  main_pv.free()
- verify(ProjectSettings.get_setting("application/config/version") == "1.0.0.2", "single-source version")
+ verify(ProjectSettings.get_setting("application/config/version") == "1.0.0.3", "single-source version")
  host.free()
  print("DETAIL_STUDIO_1002 checks=",checks," failures=0")
  quit()

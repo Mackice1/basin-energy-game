@@ -43,7 +43,7 @@ static func initialize_node(id: String, kind: String, p: Dictionary, state: Dict
 		"heat_demand":
 			d.merge({"demand_mwth": p.demand_mwth, "served_mwth": 0.0, "unserved_mwth": p.demand_mwth, "priority": p.priority})
 			resources["heat_demand:" + id] = p.demand_mwth
-		"thermal_store", "high_temp_store":
+		"thermal_store", "solid_thermal_store", "high_temp_store":
 			var limits: Dictionary = Catalog.thermal_storage_limits(p, state.energy_mwhth, dt_s)
 			d.merge(limits)
 			d.merge({"mode": "idle", "soc": state.energy_mwhth / p.capacity_mwhth,
@@ -76,11 +76,11 @@ static func prepare(prepared: Dictionary) -> void:
 		var source_id: String = str(line.from)
 		var sink_id: String = str(line.to)
 		var source_kind: String = nodes[source_id].kind
-		if not source_kind in ["electric_boiler", "fuel_boiler", "solar_thermal", "thermal_store"]:
+		if not source_kind in ["electric_boiler", "fuel_boiler", "solar_thermal", "thermal_store", "solid_thermal_store"]:
 			continue
-		if nodes[sink_id].kind == "thermal_store":
+		if Catalog.is_primary_thermal_storage(nodes[sink_id].kind):
 			paths.append({"source_id": source_id, "source_kind": source_kind, "sink_id": sink_id,
-				"sink_kind": "thermal_store", "first": line.index, "second": -1, "hx_id": "", "efficiency": 1.0})
+				"sink_kind": nodes[sink_id].kind, "first": line.index, "second": -1, "hx_id": "", "efficiency": 1.0})
 		else:
 			for outgoing in r.lines:
 				if outgoing.valid and outgoing.carrier == Catalog.THERMAL_CARRIER and outgoing.from == line.to:
@@ -109,9 +109,9 @@ static func _heat_coefficients(path: Dictionary) -> Dictionary:
 	var c: Dictionary = {"heat_line:" + str(path.first): 1.0}
 	if path.source_kind == "solar_thermal":
 		c["solar:" + path.source_id] = 1.0
-	if path.source_kind == "thermal_store":
+	if Catalog.is_primary_thermal_storage(path.source_kind):
 		c["heat_discharge:" + path.source_id] = 1.0
-	if path.sink_kind == "thermal_store":
+	if Catalog.is_primary_thermal_storage(path.sink_kind):
 		c["heat_charge:" + path.sink_id] = 1.0
 	else:
 		c["hx:" + path.hx_id] = 1.0
@@ -120,9 +120,9 @@ static func _heat_coefficients(path: Dictionary) -> Dictionary:
 	return c
 
 static func _heat_limit(path: Dictionary, resources: Dictionary, report: Dictionary) -> float:
-	if path.sink_kind in ["thermal_store", "high_temp_store"] and report.devices[path.sink_id].mode == "discharge":
+	if path.sink_kind in ["thermal_store", "solid_thermal_store", "high_temp_store"] and report.devices[path.sink_id].mode == "discharge":
 		return 0.0
-	if path.source_kind in ["thermal_store", "high_temp_store"] and report.devices[path.source_id].mode == "charge":
+	if path.source_kind in ["thermal_store", "solid_thermal_store", "high_temp_store"] and report.devices[path.source_id].mode == "charge":
 		return 0.0
 	var q: float = INF
 	var c: Dictionary = _heat_coefficients(path)
@@ -139,7 +139,7 @@ static func _record_heat(path: Dictionary, q: float, prepared: Dictionary) -> vo
 		prepared.resources[key] = maxf(0.0, float(prepared.resources[key]) - q * float(c[key]))
 	var source: Dictionary = r.devices[path.source_id]
 	source.output_mwth += q
-	if path.source_kind in ["thermal_store", "high_temp_store"]:
+	if path.source_kind in ["thermal_store", "solid_thermal_store", "high_temp_store"]:
 		source.discharge_mwth += q
 		source.mode = "discharge"
 	else:
@@ -151,7 +151,7 @@ static func _record_heat(path: Dictionary, q: float, prepared: Dictionary) -> vo
 	var sink: Dictionary = r.devices[path.sink_id]
 	var delivered: float = q * float(path.efficiency)
 	sink.input_mwth += delivered
-	if path.sink_kind == "thermal_store":
+	if Catalog.is_primary_thermal_storage(path.sink_kind):
 		sink.charge_mwth += delivered
 		sink.mode = "charge"
 	else:
@@ -195,7 +195,7 @@ static func _record_heat_line(line: Dictionary, q: float) -> void:
 
 static func serve_stored_heat(prepared: Dictionary, demand_id: String) -> void:
 	for path in prepared.heat_paths:
-		if path.sink_id == demand_id and path.source_kind == "thermal_store":
+		if path.sink_id == demand_id and Catalog.is_primary_thermal_storage(path.source_kind):
 			_record_heat(path, _heat_limit(path, prepared.resources, prepared.report), prepared)
 
 static func _supply_boiler(path: Dictionary, prepared: Dictionary, electric_allocate: Callable, allow_battery: bool, battery_only: bool = false) -> void:
@@ -205,7 +205,7 @@ static func _supply_boiler(path: Dictionary, prepared: Dictionary, electric_allo
 		if battery and not allow_battery:
 			continue
 		for ep in prepared.paths:
-			if ep.sink_id != path.source_id or (ep.source_kind == "battery") != battery:
+			if ep.sink_id != path.source_id or (Catalog.is_electric_storage(ep.source_kind)) != battery:
 				continue
 			var q: float = _heat_limit(path, prepared.resources, prepared.report)
 			if q <= EPS:
@@ -225,7 +225,7 @@ static func _supply_solar(path: Dictionary, prepared: Dictionary, electric_alloc
 	for battery in [false, true]:
 		if battery and not allow_battery: continue
 		for ep in prepared.paths:
-			if ep.sink_id != path.source_id or (ep.source_kind == "battery") != battery: continue
+			if ep.sink_id != path.source_id or (Catalog.is_electric_storage(ep.source_kind)) != battery: continue
 			var q: float = _heat_limit(path, prepared.resources, prepared.report)
 			if q <= EPS: return
 			var ratio: float = float(prepared.nodes[path.source_id].params.auxiliary_electric_ratio)
@@ -245,12 +245,12 @@ static func charge_solar_storage(prepared: Dictionary, electric_allocate: Callab
 		if path.sink_kind == "high_temp_store":
 			HighTemp.supply(path, prepared, electric_allocate, _record_heat, false)
 	for path in prepared.heat_paths:
-		if path.sink_kind in ["thermal_store", "high_temp_store"] and path.source_kind == "solar_thermal":
+		if path.sink_kind in ["thermal_store", "solid_thermal_store", "high_temp_store"] and path.source_kind == "solar_thermal":
 			_supply_solar(path, prepared, electric_allocate, false)
 
 static func charge_surplus(prepared: Dictionary, electric_allocate: Callable) -> void:
 	for path in prepared.heat_paths:
-		if path.sink_kind in ["thermal_store", "high_temp_store"] and path.source_kind == "electric_boiler":
+		if path.sink_kind in ["thermal_store", "solid_thermal_store", "high_temp_store"] and path.source_kind == "electric_boiler":
 			_supply_boiler(path, prepared, electric_allocate, false)
 
 ## Progressive filling shares *fuel input* equally among feasible boilers for
@@ -267,12 +267,12 @@ static func _fuel_candidates(prepared: Dictionary, sink_id: String, storage: boo
 			continue
 		var selected: bool = false
 		for hp in prepared.heat_paths:
-			if hp.source_id != id or (hp.sink_kind == "thermal_store") != storage or (not storage and hp.sink_id != sink_id):
+			if hp.source_id != id or (Catalog.is_primary_thermal_storage(hp.sink_kind)) != storage or (not storage and hp.sink_id != sink_id):
 				continue
 			if _heat_limit(hp, prepared.resources, prepared.report) <= EPS:
 				continue
 			for ep in prepared.paths:
-				if ep.sink_id != id or (ep.source_kind == "battery") != battery:
+				if ep.sink_id != id or (Catalog.is_electric_storage(ep.source_kind)) != battery:
 					continue
 				var c: Dictionary = {"fuel:supply": 1.0, "fuel_boiler:" + id: 1.0}
 				var heat_c: Dictionary = _heat_coefficients(hp)
@@ -399,7 +399,7 @@ static func finish(prepared: Dictionary) -> void:
 				t.demand_mwth += d.demand_mwth
 				t.served_mwth += d.served_mwth
 				t.unserved_mwth += d.unserved_mwth
-			"thermal_store", "high_temp_store":
+			"thermal_store", "solid_thermal_store", "high_temp_store":
 				var ledger: Dictionary = r.high_temp if n.kind == "high_temp_store" else t
 				var e: float = d.energy_after_self_discharge_mwhth + (p.charge_efficiency * d.charge_mwth - d.discharge_mwth / p.discharge_efficiency) * r.dt_h
 				d.next_energy_mwhth = clampf(e, 0.0, p.capacity_mwhth)
@@ -459,6 +459,8 @@ static func audit(prepared: Dictionary) -> Array[String]:
 		return errors
 	_near(errors, r.dt_h, float(r.dt_s) / 3600.0, "duration units")
 	var outputs: Dictionary = {}
+	var nonstorage_station_input: Dictionary = {}
+	var restricted_station_output: Dictionary = {}
 	for id in nodes:
 		inputs[id] = {"electricity_ac": 0.0, "heat_water": 0.0, "heat_oil": 0.0, "heat_salt": 0.0}
 		outputs[id] = {"electricity_ac": 0.0, "heat_water": 0.0, "heat_oil": 0.0, "heat_salt": 0.0}
@@ -482,6 +484,17 @@ static func audit(prepared: Dictionary) -> Array[String]:
 		_near(errors, received, float(sent) * (1.0 - float(line.loss_fraction)), "line efficiency")
 		var a: String = str(line.flow_from)
 		var b: String = str(line.flow_to)
+		var forward: bool = int(line.flow_from) == int(raw.from) and int(line.flow_to) == int(raw.to)
+		var storage_edge: bool = Catalog.is_electric_storage(nodes[str(int(raw.from))].kind) or (int(raw.to) != -1 and Catalog.is_electric_storage(nodes[str(int(raw.to))].kind))
+		var reverse: bool = not heat and storage_edge and int(line.flow_from) == int(raw.to) and int(line.flow_to) == int(raw.from)
+		if not forward and not reverse:
+			errors.append("Independent audit: changed port flow direction/endpoints")
+			continue
+		if not heat:
+			if nodes.has(b) and nodes[b].kind == "station" and nodes[a].kind in ["wind", "pv", "steam_turbine"]:
+				nonstorage_station_input[b] = float(nonstorage_station_input.get(b,0.0)) + float(received)
+			if nodes[a].kind == "station" and (b == "-1" or Catalog.is_electric_storage(nodes[b].kind)):
+				restricted_station_output[a] = float(restricted_station_output.get(a,0.0)) + float(sent)
 		if outputs.has(a): outputs[a][line.carrier] += float(sent)
 		if inputs.has(b): inputs[b][line.carrier] += float(received)
 		if heat:
@@ -489,6 +502,12 @@ static func audit(prepared: Dictionary) -> Array[String]:
 			var bp: Dictionary = Catalog.port(nodes[str(line.to)].kind, line.to_port)
 			if ap.get("grade_id", "") != line.grade_id or bp.get("grade_id", "") != line.grade_id or float(line.loss_fraction) != 0.0:
 				errors.append("Independent audit: thermal grade/loss contract")
+	# Charging stores/export may only be supplied by generation, not by another
+	# store. Reconstruct a feasible source partition at each original AC bus.
+	for station in restricted_station_output:
+		var allowed: float = float(nonstorage_station_input.get(station,0.0)) * (1.0 - float(nodes[station].params.loss_fraction))
+		if float(restricted_station_output[station]) > allowed + ABS_TOL + REL_TOL * absf(allowed):
+			errors.append("Independent audit: storage cannot supply other storage or grid export")
 	var rankine: Dictionary = Rankine.audit(prepared, errors)
 	var tower: Dictionary = Tower.audit(prepared, errors)
 	var oil: Dictionary = HighTemp.audit(prepared, errors) if r.has("high_temp") else HighTemp.empty()
@@ -513,6 +532,10 @@ static func audit(prepared: Dictionary) -> Array[String]:
 	var electric_charge: float = 0.0
 	var electric_discharge: float = 0.0
 	var electric_network_loss: float = 0.0
+	var electric_before: float = 0.0
+	var electric_after: float = 0.0
+	var electric_self_loss: float = 0.0
+	var electric_conversion_loss: float = 0.0
 	var exported: float = 0.0
 	for line in r.lines:
 		if line.valid and line.carrier == Catalog.CARRIER:
@@ -588,7 +611,7 @@ static func audit(prepared: Dictionary) -> Array[String]:
 				if hi > p.demand_mwth + ABS_TOL: errors.append("Independent audit: excess heat service")
 				heat_served += hi
 				heat_demand += p.demand_mwth
-			"thermal_store":
+			"thermal_store", "solid_thermal_store":
 				var before: float = n.state.energy_mwhth
 				var decayed: float = before * exp(-p.self_discharge_per_h * r.dt_h)
 				var after: float = decayed + (p.charge_efficiency * hi - ho / p.discharge_efficiency) * r.dt_h
@@ -624,23 +647,44 @@ static func audit(prepared: Dictionary) -> Array[String]:
 				if d.mw < -ABS_TOL or d.mw > rating + ABS_TOL: errors.append("Independent audit: generation rating")
 				electric_generated += d.mw
 				electric_curtailed += d.curtailed_mw
-			"battery":
+			"battery", "battery_sodium", "battery_flow", "caes_aboveground", "liquid_air_store", "hydrogen_storage_system":
 				_near(errors, d.charge_mw, ei, id + " battery charge")
 				_near(errors, d.discharge_mw, eo, id + " battery discharge")
 				if ei > EPS and eo > EPS: errors.append("Independent audit: electric battery mode")
 				var expected: float = n.state.energy_mwh * exp(-p.self_discharge_per_h * r.dt_h) + (p.charge_efficiency * ei - eo / p.discharge_efficiency) * r.dt_h
 				_near(errors, d.next_energy_mwh, expected, id + " electric inventory")
+				var stage: Dictionary = Catalog.storage_stage_metrics(n.kind, p, ei, eo, expected)
+				for field in stage:
+					if stage[field] is String:
+						if d.get(field) != stage[field]: errors.append("Independent audit: " + id + " " + field)
+					else:
+						_near(errors, d.get(field), stage[field], id + " " + field)
+				_near(errors, d.storage_conversion_loss_mw, stage.charge_conversion_loss_mw + stage.discharge_conversion_loss_mw, id + " electric storage conversion loss")
+				_near(errors, d.self_discharge_mwh, n.state.energy_mwh * (1.0 - exp(-p.self_discharge_per_h * r.dt_h)), id + " electric self loss")
+				if r.dt_h == 0.0 and (ei > EPS or eo > EPS): errors.append("Independent audit: paused electric storage exchange")
+
 				_near(errors, r.next_states.get(id, {}).get("energy_mwh"), expected, id + " next electric state")
 				if expected < -ABS_TOL or expected > p.capacity_mwh + ABS_TOL or ei > p.charge_mw + ABS_TOL or eo > p.discharge_mw + ABS_TOL:
 					errors.append("Independent audit: electric inventory/limits")
 				electric_charge += ei
 				electric_discharge += eo
+				electric_before += n.state.energy_mwh
+				electric_after += expected
+				electric_self_loss += n.state.energy_mwh * (1.0 - exp(-p.self_discharge_per_h * r.dt_h))
+				electric_conversion_loss += stage.charge_conversion_loss_mw + stage.discharge_conversion_loss_mw
+				_near(errors, d.storage_loss_mw, stage.charge_conversion_loss_mw + stage.discharge_conversion_loss_mw + (d.self_discharge_mwh / r.dt_h if r.dt_h > 0.0 else 0.0), id + " total storage loss")
+				_near(errors, d.soc, expected / p.capacity_mwh, id + " electric SOC")
 	electric_generated += float(rankine.gross_electric_mw)
 	_near(errors, r.generated_mw, electric_generated, "aggregate generated electricity")
 	_near(errors, r.curtailed_mw, electric_curtailed, "aggregate curtailed electricity")
 	_near(errors, r.served_mw, electric_served, "aggregate electric service")
 	_near(errors, r.charge_mw, electric_charge, "aggregate battery charge")
 	_near(errors, r.discharge_mw, electric_discharge, "aggregate battery discharge")
+	_near(errors, r.get("self_discharge_mwh"), electric_self_loss, "aggregate electric self loss")
+	_near(errors, r.get("storage_conversion_loss_mw"), electric_conversion_loss, "aggregate electric storage conversion loss")
+	_near(errors, r.get("storage_loss_mw"), electric_conversion_loss + (electric_self_loss / r.dt_h if r.dt_h > 0.0 else 0.0), "aggregate electric storage loss")
+	_near(errors, electric_before + electric_charge * r.dt_h, electric_after + electric_discharge * r.dt_h + electric_self_loss + electric_conversion_loss * r.dt_h, "electric inventory energy equation")
+
 	_near(errors, r.delivered_mw, exported, "aggregate grid export")
 	_near(errors, r.loss_mw, electric_network_loss, "aggregate electric network loss")
 	_near(errors, r.boiler_conversion_loss_mw, boiler_electric - boiler_heat, "aggregate boiler loss")

@@ -1771,7 +1771,7 @@ func _clear_selection() -> void:
 func _cancel_current_interaction() -> void:
 	if interaction_mode != "select" or pending_link >= 0 or _move_drag_active:
 		set_interaction_mode("select")
-		_set_status("已取消操作；设备和线路未改变。Esc 清除选择，再按返回。")
+		_set_status("已取消操作；设备和线路未改变。再按 Esc 返回基地。")
 	elif selected_id >= 0: _clear_selection()
 	else: _reset_move_drag()
 
@@ -1827,13 +1827,25 @@ func _window_input(event: InputEvent) -> void:
 		if _left_pan_pending and not view_container.get_global_rect().has_point(event.position): _reset_move_drag()
 		if _move_drag_active and not view_container.get_global_rect().has_point(event.position):
 			_cancel_move_drag("移动已取消：请在站内视图中松开；设备保留原位。")
-	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
-		if remove_confirmation.visible:
-			remove_confirmation.hide()
-			_pending_remove = -1
-		elif interaction_mode != "select" or selected_id >= 0 or _move_drag_active: _cancel_current_interaction()
-		else: close_station()
+	if event is InputEventKey and event.pressed and (event.keycode == KEY_ESCAPE or event.physical_keycode == KEY_ESCAPE):
+		# Consume key repeats without stepping through another modal layer.
+		if not event.echo:
+			if is_instance_valid(host) and host.has_method("handle_escape"): host.handle_escape()
+			else: handle_escape()
 		set_input_as_handled()
+
+## One Esc affects exactly one layer. A selected device is not an edit mode.
+func handle_escape() -> bool:
+	if not visible: return false
+	if remove_confirmation.visible:
+		remove_confirmation.hide()
+		_pending_remove = -1
+	elif interaction_mode != "select" or pending_link >= 0 or _move_drag_active or _move_drag_candidate >= 0:
+		_cancel_current_interaction()
+		_reset_move_drag()
+	else:
+		close_station()
+	return true
 
 func _set_status(message: String) -> void:
 	if is_instance_valid(status_label):

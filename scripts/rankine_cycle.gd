@@ -3,6 +3,7 @@ extends RefCounted
 ## The salt SG reuses 1 MPa / 280 C states, not a high-temperature optimized cycle.
 ## No transient startup, inventory,
 ## pressure solve, minimum load or same-interval self-powered auxiliaries.
+const Catalog = preload("res://scripts/device_catalog.gd")
 const KINDS := ["salt_steam_generator", "steam_generator", "steam_turbine", "steam_condenser", "feedwater_pump"]
 const H1: float = 191.81
 const H2: float = 193.238810
@@ -99,7 +100,7 @@ static func prepare(prepared: Dictionary) -> void:
 	prepared.rankine_aux_paths = {}
 	for battery in [false,true]:
 		for ep in prepared.paths:
-			if not ep.source_kind in ["wind","pv","battery"] or (ep.source_kind == "battery") != battery or not ep.sink_kind in AUX_KINDS: continue
+			if not ep.source_kind in ["wind","pv","battery", "battery_sodium", "battery_flow", "caes_aboveground", "liquid_air_store", "hydrogen_storage_system"] or (Catalog.is_electric_storage(ep.source_kind)) != battery or not ep.sink_kind in AUX_KINDS: continue
 			if not prepared.rankine_aux_paths.has(ep.sink_id): prepared.rankine_aux_paths[ep.sink_id] = []
 			prepared.rankine_aux_paths[ep.sink_id].append(ep)
 	var ids: Array = nodes.keys()
@@ -152,7 +153,7 @@ static func _coefficients(route: Dictionary, prepared: Dictionary) -> Dictionary
 static func serve_sink(prepared: Dictionary, sink_id: String, allocate: Callable) -> void:
 	if not prepared.has("rankine_routes") or float(prepared.report.dt_h) <= 0.0: return
 	var r: Dictionary = prepared.report
-	if sink_id != "-1" and prepared.nodes[sink_id].kind == "battery" and r.devices[sink_id].mode == "discharge": return
+	if sink_id != "-1" and Catalog.is_electric_storage(prepared.nodes[sink_id].kind) and r.devices[sink_id].mode == "discharge": return
 	for route in prepared.rankine_routes:
 		if prepared.nodes[route.source].kind in ["high_temp_store", "molten_salt_store"] and r.devices[route.source].mode == "charge": continue
 		var oil: float = (H3-H2)/1000.0/float(prepared.nodes[route.sg].params.transfer_efficiency)
@@ -200,7 +201,7 @@ static func _auxiliary_plan(prepared: Dictionary, sink_id: String, combined: Dic
 		var remaining: float = flow*float(consumer.factor)
 		for ep in prepared.rankine_aux_paths.get(consumer.id, []):
 			if remaining <= 1e-14: break
-			if ep.source_kind == "battery" and (prepared.report.devices[ep.source_id].mode == "charge" or ep.source_id == sink_id): continue
+			if Catalog.is_electric_storage(ep.source_kind) and (prepared.report.devices[ep.source_id].mode == "charge" or ep.source_id == sink_id): continue
 			var sent: float = remaining/float(ep.received)
 			for key in ep.coefficients:
 				if float(ep.coefficients[key]) > 0.0: sent = minf(sent,maxf(0.0,float(resources[key]))/float(ep.coefficients[key]))
@@ -345,12 +346,12 @@ static func audit(prepared: Dictionary, errors: Array[String]) -> Dictionary:
 		elif line.carrier == "electricity_ac":
 			var raw: Dictionary = prepared.raw_links[int(line.index)]
 			var forward: bool = int(line.flow_from) == int(raw.from) and int(line.flow_to) == int(raw.to)
-			var battery_edge: bool = prepared.nodes[str(int(raw.from))].kind == "battery" or (int(raw.to) != -1 and prepared.nodes[str(int(raw.to))].kind == "battery")
+			var battery_edge: bool = Catalog.is_electric_storage(prepared.nodes[str(int(raw.from))].kind) or (int(raw.to) != -1 and Catalog.is_electric_storage(prepared.nodes[str(int(raw.to))].kind))
 			var reverse: bool = battery_edge and int(line.flow_from) == int(raw.to) and int(line.flow_to) == int(raw.from)
 			if not forward and not reverse: errors.append("Independent audit: Rankine changed AC route provenance")
 			if electric_out.has(a): electric_out[a] += float(line.sent_mw)
 			if electrical.has(b): electrical[b] += float(line.received_mw)
-			if prepared.nodes.has(a) and prepared.nodes[a].kind in ["wind", "pv", "battery"] and prepared.nodes.has(b) and prepared.nodes[b].kind == "station": external_station[b] = float(external_station.get(b, 0.0)) + float(line.received_mw)
+			if prepared.nodes.has(a) and prepared.nodes[a].kind in ["wind", "pv", "battery", "battery_sodium", "battery_flow", "caes_aboveground", "liquid_air_store", "hydrogen_storage_system"] and prepared.nodes.has(b) and prepared.nodes[b].kind == "station": external_station[b] = float(external_station.get(b, 0.0)) + float(line.received_mw)
 			if prepared.nodes.has(a) and prepared.nodes[a].kind == "station" and prepared.nodes.has(b) and prepared.nodes[b].kind in AUX_KINDS: auxiliary_station[a] = float(auxiliary_station.get(a, 0.0)) + float(line.sent_mw)
 	for station in auxiliary_station:
 		if float(auxiliary_station[station]) > float(external_station.get(station, 0.0))*(1.0-float(prepared.nodes[station].params.loss_fraction))+2e-6: errors.append("Independent audit: Rankine external-only auxiliary provenance")

@@ -55,6 +55,8 @@ func _run() -> void:
 	clicked.pressed = true
 	clicked.position = former_panel_point
 	game._unhandled_input(clicked)
+	clicked.pressed = false
+	game._input(clicked)
 	check(game.world_clicks == 1, "map remains clickable where hidden panel was")
 	dock.buttons.energy.pressed.emit()
 	await process_frame

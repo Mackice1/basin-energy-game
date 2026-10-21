@@ -227,7 +227,7 @@ func test_ui_events_and_layout() -> void:
 	dock.toggle_panel("energy")
 	await process_frame
 	await process_frame
-	var footer: PanelContainer = game.notice.get_parent().get_parent()
+	var footer: PanelContainer = game.hud_footer
 	var right_point := shell.global_position + Vector2(3, 3)
 	var footer_point := footer.global_position + Vector2(3, 3)
 	check(game.pointer_over_ui(right_point) and game.pointer_over_ui(footer_point), "HUD regions are included in pointer mask")

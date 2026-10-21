@@ -61,7 +61,7 @@ func run() -> void:
 	var service = Controller.new()
 	root.add_child(service)
 	service.setup(game)
-	service.solver_executable = "/workspace/shared/glpk/bin/glpsol"
+	service.solver_executable = (OS.get_environment("BASIN_GLPK") if not OS.get_environment("BASIN_GLPK").is_empty() else "glpsol")
 	service.open()
 	var options := {"horizon_hours": 1.0, "step_minutes": 30.0, "load_multiplier": 1.0, "timeout_s": 20, "strict_supply": false}
 	var original := JSON.stringify(game.state())

@@ -163,5 +163,5 @@ func test_repeated_save_reads() -> void:
 		check(FileAccess.get_sha256(path) == digest, "cycle %d read and presentation never rewrites input file" % iteration)
 		check(game.paused and game.speed == 1 and game.accumulator == 0, "cycle %d restore resets only playback controls" % iteration)
 	check(game.device(STORE).state.energy_mwhth == 0.625 and game.device(BATTERY).state.energy_mwh == 0.25 and game.elapsed_s == 123.5, "all repeated flows retain both nonzero stocks and clock")
-	check(game.state().schema == 12 and game.state().model_version == 21 and game.state().dimension_profile == "metric_v1", "bounded UI polish preserves model/schema and metric dimension profile")
+	check(game.state().schema == 13 and game.state().model_version == 22 and game.state().dimension_profile == "metric_v1", "bounded UI polish preserves model/schema and metric dimension profile")
 	DirAccess.remove_absolute(path)

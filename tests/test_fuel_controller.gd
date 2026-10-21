@@ -167,6 +167,7 @@ func test_resource_form_and_ledgers() -> void:
 func legacy_state(game: Fixture, schema: int) -> Dictionary:
 	var state: Dictionary = game.state()
 	state.schema = schema; state.model_version = {3:11,4:12,5:14,6:15,7:16}[schema]
+	for storage_kind in game.Catalog.NEW_STORAGE_KINDS: state.templates.erase(storage_kind)
 	state.erase("fuel_supply"); state.erase("fuel_energy"); state.templates.erase("fuel_boiler"); state.templates.erase("solar_thermal"); state.erase("tower_energy"); state.templates.erase("solar_tower_receiver"); state.templates.erase("molten_salt_store"); state.templates.erase("salt_steam_generator"); state.erase("rankine_energy"); state.templates.erase("steam_generator"); state.templates.erase("steam_turbine"); state.templates.erase("steam_condenser"); state.templates.erase("feedwater_pump"); state.erase("high_temp_energy"); state.templates.erase("parabolic_trough"); state.templates.erase("high_temp_store"); state.templates.erase("oil_water_exchanger"); state.erase("solar_energy")
 	if schema < 7: state.erase("dimension_profile")
 	if schema < 6: state.erase("stations"); state.erase("next_station_id")
@@ -188,14 +189,14 @@ func test_legacy_and_save() -> void:
 		check(migrated.read_save(path),"old schema %d reads through real boundary: %s" % [schema,migrated.last_notice])
 		check(migrated.fuel_supply == Fuel.defaults() and migrated.fuel_energy == Fuel.initial_energy(),"schema %d migration starts disabled and unbilled" % schema)
 		check(migrated.devices.is_empty() and migrated.links.is_empty() and migrated.elapsed_s == 123.25,"schema %d creates no fuel devices or links and retains clock" % schema)
-		check(migrated.state().schema == 12 and migrated.state().model_version == 21 and migrated.templates.has("fuel_boiler"),"schema %d next write upgrades explicit version/template" % schema)
+		check(migrated.state().schema == 13 and migrated.state().model_version == 22 and migrated.templates.has("fuel_boiler"),"schema %d next write upgrades explicit version/template" % schema)
 		check(var_to_bytes(old) == old_bytes and FileAccess.get_sha256(path) == input_hash,"schema %d read never rewrites original" % schema)
 		check(migrated.validate_state(migrated.state()).is_empty(),"schema %d migrated current state validates" % schema)
 	var game := chain(); var supply := Fuel.defaults(); supply.enabled = true; supply.max_input_mw = 1.5
 	game.apply_fuel_supply(supply); check(game.advance(3.25),"meter fuel before save")
 	var path := path_for("current"); check(game.write_save(path),"current fuel save writes")
 	var frozen := canonical(game.state()); var disk: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path))
-	check(disk.schema == 12 and disk.model_version == 21,"new write pairs schema12/model21")
+	check(disk.schema == 13 and disk.model_version == 22,"new write pairs schema13/model22")
 	var restored := fixture(); restored.paused = false; restored.speed = 60.0; restored.accumulator = 0.5
 	check(restored.read_save(path),"fresh controller reads gas save: " + restored.last_notice)
 	check(canonical(restored.state()) == frozen,"new read preserves entire scene/resources/all ledgers")
@@ -238,7 +239,7 @@ func test_real_glpk_read_only() -> void:
 	var game := fixture(); check(game.read_save(path),"optimizer starts from freshly loaded save")
 	var frozen := canonical(game.state()); var input_hash := FileAccess.get_sha256(path)
 	var service := Optimization.new(); root.add_child(service); service.setup(game)
-	service.solver_executable = "/workspace/shared/glpk/bin/glpsol"
+	service.solver_executable = (OS.get_environment("BASIN_GLPK") if not OS.get_environment("BASIN_GLPK").is_empty() else "glpsol")
 	var options := {"horizon_hours":2.0,"step_minutes":60.0,"load_multiplier":1.0,"strict_supply":false,"timeout_s":20}
 	service.request_id = "fuel_controller"
 	var snapshot: Dictionary = service.snapshot(options)

@@ -110,9 +110,11 @@ static func _prepare(devices: Array, links: Array, weather: Dictionary, direct: 
 			detail.merge({"demand_mw": p.demand_mw, "served_mw": 0.0, "unserved_mw": p.demand_mw, "priority": int(p.priority)})
 			report.demand_mw += p.demand_mw
 			resources["load:" + id] = float(p.demand_mw)
-		elif kind == "battery" and detail.valid:
+		elif Catalog.is_electric_storage(kind) and detail.valid:
 			var limits: Dictionary = Catalog.storage_limits(p, state.energy_mwh, step_s)
 			detail.merge(limits)
+			detail.storage_technology = Catalog.storage_technology(kind)
+			detail.merge(Catalog.storage_stage_metrics(kind, p, 0.0, 0.0, limits.energy_after_self_discharge_mwh))
 			detail.merge({"mode": "idle", "soc": state.energy_mwh / p.capacity_mwh,
 				"soc_before": state.energy_mwh / p.capacity_mwh, "energy_mwh": state.energy_mwh,
 				"next_energy_mwh": limits.energy_after_self_discharge_mwh, "capacity_mwh": p.capacity_mwh,
@@ -218,9 +220,9 @@ static func _prepare(devices: Array, links: Array, weather: Dictionary, direct: 
 		var leaf_id: String = b if nodes[a].kind == "station" else a
 		if not outputs.has(station_id):
 			outputs[station_id] = []
-		if leaf_id == "-1" or nodes[leaf_id].kind in ["load", "battery", "electric_boiler", "fuel_boiler", "solar_thermal", "parabolic_trough", "oil_water_exchanger", "steam_generator", "steam_condenser", "feedwater_pump", "salt_steam_generator", "solar_tower_receiver", "molten_salt_store"]:
+		if leaf_id == "-1" or nodes[leaf_id].kind in ["load", "battery", "battery_sodium", "battery_flow", "caes_aboveground", "liquid_air_store", "hydrogen_storage_system", "electric_boiler", "fuel_boiler", "solar_thermal", "parabolic_trough", "oil_water_exchanger", "steam_generator", "steam_condenser", "feedwater_pump", "salt_steam_generator", "solar_tower_receiver", "molten_salt_store"]:
 			outputs[station_id].append({"id": leaf_id, "line": index})
-		if leaf_id != "-1" and nodes[leaf_id].kind in ["wind", "pv", "battery", "steam_turbine"]:
+		if leaf_id != "-1" and nodes[leaf_id].kind in ["wind", "pv", "battery", "battery_sodium", "battery_flow", "caes_aboveground", "liquid_air_store", "hydrogen_storage_system", "steam_turbine"]:
 			attachments[leaf_id] = {"station": station_id, "line": index}
 	var paths: Array = []
 	for source_id in _sorted_ids(attachments):
@@ -233,20 +235,20 @@ static func _prepare(devices: Array, links: Array, weather: Dictionary, direct: 
 		for target in targets:
 			var sink_id: String = target.id
 			var sink_kind: String = "grid" if sink_id == "-1" else str(nodes[sink_id].kind)
-			if source.kind == "battery" and not sink_kind in ["load", "electric_boiler", "fuel_boiler", "solar_thermal", "parabolic_trough", "oil_water_exchanger", "steam_generator", "steam_condenser", "feedwater_pump", "salt_steam_generator", "solar_tower_receiver", "molten_salt_store"]:
+			if Catalog.is_electric_storage(source.kind) and not sink_kind in ["load", "electric_boiler", "fuel_boiler", "solar_thermal", "parabolic_trough", "oil_water_exchanger", "steam_generator", "steam_condenser", "feedwater_pump", "salt_steam_generator", "solar_tower_receiver", "molten_salt_store"]:
 				continue # No battery-to-battery cycling or discharge for export.
-			if source.kind == "steam_turbine" and not sink_kind in ["load", "battery", "grid"]:
+			if source.kind == "steam_turbine" and not sink_kind in ["load", "battery", "battery_sodium", "battery_flow", "caes_aboveground", "liquid_air_store", "hydrogen_storage_system", "grid"]:
 				continue
 			var outgoing: Dictionary = report.lines[target.line]
 			var arriving: float = 1.0 - incoming.loss_fraction
 			var after_station: float = arriving * (1.0 - float(nodes[station_id].params.loss_fraction))
 			var received: float = after_station * (1.0 - outgoing.loss_fraction)
 			var coeffs: Dictionary = {}
-			coeffs[("discharge:" if source.kind == "battery" else "source:") + source_id] = 1.0
+			coeffs[("discharge:" if Catalog.is_electric_storage(source.kind) else "source:") + source_id] = 1.0
 			coeffs["line:" + str(attach.line)] = 1.0
 			coeffs["station:" + station_id] = arriving
 			coeffs["line:" + str(target.line)] = after_station
-			coeffs["grid" if sink_id == "-1" else ("charge:" if sink_kind == "battery" else ("boiler:" if sink_kind == "electric_boiler" else ("fuel_aux:" if sink_kind == "fuel_boiler" else ("rankine_aux:" if sink_kind in ["steam_generator", "steam_condenser", "feedwater_pump", "salt_steam_generator"] else ("solar_aux:" if sink_kind in ["solar_thermal", "parabolic_trough", "oil_water_exchanger", "solar_tower_receiver", "molten_salt_store"] else "load:"))))) + sink_id] = received
+			coeffs["grid" if sink_id == "-1" else ("charge:" if Catalog.is_electric_storage(sink_kind) else ("boiler:" if sink_kind == "electric_boiler" else ("fuel_aux:" if sink_kind == "fuel_boiler" else ("rankine_aux:" if sink_kind in ["steam_generator", "steam_condenser", "feedwater_pump", "salt_steam_generator"] else ("solar_aux:" if sink_kind in ["solar_thermal", "parabolic_trough", "oil_water_exchanger", "solar_tower_receiver", "molten_salt_store"] else "load:"))))) + sink_id] = received
 			paths.append({"source_id": source_id, "source_kind": source.kind,
 				"station_id": station_id, "sink_id": sink_id, "sink_kind": sink_kind,
 				"incoming": int(attach.line), "outgoing": int(target.line),
@@ -281,7 +283,7 @@ static func _allocate(path: Dictionary, resources: Dictionary, report: Dictionar
 	source.sent_mw += sent
 	source.output_mw += sent
 	source.loss_mw += sent - received
-	if path.source_kind == "battery":
+	if Catalog.is_electric_storage(path.source_kind):
 		source.discharge_mw += sent
 		source.mode = "discharge"
 	station.input_mw += arriving
@@ -316,7 +318,7 @@ static func _external_can_fill(prepared: Dictionary, sink_id: String) -> bool:
 	for path in prepared.paths:
 		if path.sink_id == sink_id and path.source_kind in ["wind", "pv"]:
 			_allocate(path, trial_resources, trial_report)
-	var key: String = "grid" if sink_id == "-1" else ("charge:" if prepared.nodes[sink_id].kind == "battery" else "load:") + sink_id
+	var key: String = "grid" if sink_id == "-1" else ("charge:" if Catalog.is_electric_storage(prepared.nodes[sink_id].kind) else "load:") + sink_id
 	return float(trial_resources.get(key, 0.0)) <= EPS
 
 static func run(devices: Array, links: Array, weather: Dictionary, direct: Dictionary, dt_s: float, generation: Callable, validate: Callable) -> Dictionary:
@@ -352,7 +354,7 @@ static func run(devices: Array, links: Array, weather: Dictionary, direct: Dicti
 				if report.has("rankine") and not _external_can_fill(prepared, load_id): Rankine.serve_sink(prepared, load_id, _allocate)
 				for storage in [false, true]:
 					for path in paths:
-						if path.sink_id == load_id and path.source_kind != "steam_turbine" and (path.source_kind == "battery") == storage:
+						if path.sink_id == load_id and path.source_kind != "steam_turbine" and (Catalog.is_electric_storage(path.source_kind)) == storage:
 							_allocate(path, resources, report)
 		# Boiler demand was reserved/served before either kind of surplus storage.
 		Thermal.charge_solar_storage(prepared, _allocate)
@@ -361,7 +363,7 @@ static func run(devices: Array, links: Array, weather: Dictionary, direct: Dicti
 		Thermal.charge_fuel_storage(prepared, _allocate)
 		# Only renewable surplus may charge, with one mode per battery per step.
 		for battery_id in _sorted_ids(nodes):
-			if nodes[battery_id].kind != "battery" or not nodes[battery_id].valid or report.devices[battery_id].mode == "discharge":
+			if not Catalog.is_electric_storage(nodes[battery_id].kind) or not nodes[battery_id].valid or report.devices[battery_id].mode == "discharge":
 				continue
 			if report.has("rankine") and not _external_can_fill(prepared, battery_id): Rankine.serve_sink(prepared, battery_id, _allocate)
 			for path in paths:
@@ -392,11 +394,12 @@ static func run(devices: Array, links: Array, weather: Dictionary, direct: Dicti
 				d.utilization = d.served_mw / d.demand_mw if d.demand_mw > 0.0 else 1.0
 				report.served_mw += d.served_mw
 				report.unserved_mw += d.unserved_mw
-			"battery":
+			"battery", "battery_sodium", "battery_flow", "caes_aboveground", "liquid_air_store", "hydrogen_storage_system":
 				var p: Dictionary = node.params
 				var e: float = d.energy_after_self_discharge_mwh + (p.charge_efficiency * d.charge_mw - d.discharge_mw / p.discharge_efficiency) * report.dt_h
 				d.next_energy_mwh = clampf(e, 0.0, p.capacity_mwh)
 				d.soc = d.next_energy_mwh / p.capacity_mwh
+				d.merge(Catalog.storage_stage_metrics(node.kind, p, d.charge_mw, d.discharge_mw, d.next_energy_mwh), true)
 				d.storage_conversion_loss_mw = d.charge_mw * (1.0 - p.charge_efficiency) + d.discharge_mw * (1.0 / p.discharge_efficiency - 1.0)
 				d.storage_loss_mw = d.storage_conversion_loss_mw + (d.self_discharge_mwh / report.dt_h if report.dt_h > 0.0 else 0.0)
 				d.storage_balance_error_mwh = e - d.next_energy_mwh
@@ -475,6 +478,7 @@ static func optimization_snapshot(devices: Array, links: Array, weather: Diction
 			continue
 		var entry: Dictionary = node.duplicate(true)
 		entry.ports = Catalog.ports(node.kind)
+		if Catalog.is_storage(node.kind): entry.storage_technology = Catalog.storage_technology(node.kind)
 		if Catalog.is_thermal(node.kind):
 			entry.model_profile = Catalog.model_profile(node.kind)
 			entry.model_profile_version = Catalog.THERMAL_PROFILE_VERSION
@@ -492,11 +496,11 @@ static func optimization_snapshot(devices: Array, links: Array, weather: Diction
 			var typed_port: Dictionary = p.duplicate(true)
 			typed_port.device_id = node.id
 			all_ports.append(typed_port)
-		if node.kind == "battery":
+		if Catalog.is_electric_storage(node.kind):
 			initial_states[id] = node.state.duplicate(true)
 			entry.storage_limits = Catalog.storage_limits(node.params, node.state.energy_mwh, report.dt_s)
 			entry.mode_options = ["idle", "charge", "discharge"]
-		elif node.kind in ["thermal_store", "high_temp_store", "molten_salt_store"]:
+		elif node.kind in ["thermal_store", "solid_thermal_store", "high_temp_store", "molten_salt_store"]:
 			initial_states[id] = node.state.duplicate(true)
 			entry.storage_limits = Catalog.thermal_storage_limits(node.params, node.state.energy_mwhth, report.dt_s)
 			entry.mode_options = ["idle", "charge", "discharge"]
@@ -517,7 +521,7 @@ static func optimization_snapshot(devices: Array, links: Array, weather: Diction
 				"from_port": line.from_port, "to_port": line.to_port, "carrier": line.carrier,
 				"unit": "MW", "voltage_level": Catalog.VOLTAGE_LEVEL,
 				"capacity_mw": line.capacity_mw, "loss_fraction": line.loss_fraction,
-				"bidirectional": prepared.nodes[str(line.from)].kind == "battery" or (line.to != -1 and prepared.nodes[str(line.to)].kind == "battery")})
+				"bidirectional": Catalog.is_electric_storage(prepared.nodes[str(line.from)].kind) or (line.to != -1 and Catalog.is_electric_storage(prepared.nodes[str(line.to)].kind))})
 	var snapshot: Dictionary = {"schema_version": 2, "device_catalog_version": Catalog.SCHEMA_VERSION if report.has("fuel_supply") else 2,
 		"request_id": str(context.get("request_id", "")), "scene_revision": context.get("scene_revision", 0),
 		"simulation_time": context.get("simulation_time", 0.0), "dt_s": report.dt_s, "dt_h": report.dt_h,
@@ -575,6 +579,11 @@ static func optimization_snapshot(devices: Array, links: Array, weather: Diction
 		snapshot.constraints.tower_charge_paths = prepared.get("tower_charge_paths", []).duplicate(true)
 		snapshot.constraints.tower_balance = "receiver_useful + salt_discharge = salt_charge + rankine_salt_input; independent 565/290 C preheated molten-salt inventory"
 		snapshot.notes.append("Tower salt uses an isolated salt-to-steam generator feeding the unchanged 1 MPa/280 C teaching Rankine cycle; this low-pressure cycle does not exploit the full efficiency potential of 565 C salt. No freeze protection or cold-start model.")
+	if entries.any(func(d): return d.kind in Catalog.NEW_STORAGE_KINDS):
+		snapshot.schema_version = 7
+		snapshot.constraints.storage_discharge_to_grid = false
+		snapshot.constraints.storage_to_storage = false
+		snapshot.notes.append("Expanded storage uses finite net-efficiency inventories, not pressure/temperature/electrochemical transients. Hydrogen is an integrated electrolyzer-storage-fuel-cell facility on LHV basis; all input and output stage losses are counted.")
 	return snapshot
 
 ## Independent replay audit, usable for tests and transaction-application gates.
@@ -612,7 +621,7 @@ static func audit_result(devices: Array, links: Array, report: Dictionary, gener
 				continue
 			if _number(prepared.report.devices[id][field]) and not _number(report.devices[id].get(field)):
 				errors.append("Independent audit: missing/nonfinite device field " + id + ":" + field)
-		if n.kind in ["battery", "thermal_store", "high_temp_store", "molten_salt_store"]:
+		if n.kind in ["battery", "battery_sodium", "battery_flow", "caes_aboveground", "liquid_air_store", "hydrogen_storage_system", "thermal_store", "solid_thermal_store", "high_temp_store", "molten_salt_store"]:
 			storage_count += 1
 			errors.append_array(Catalog.validate_state(n.kind, n.params, report.next_states.get(id)))
 	if storage_count != report.next_states.size(): errors.append("Independent audit: unexpected storage state set")

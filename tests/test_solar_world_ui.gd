@@ -12,7 +12,7 @@ func run():
  game.solar_example()
  check(game.device(3).kind=="solar_thermal","collector in example")
  check(game.result.get("valid",false),"example dispatch valid")
- check(game.state().schema == 12 and game.state().model_version == 21,"new version")
+ check(game.state().schema == 13 and game.state().model_version == 22,"new version")
  check(game.state().solar_energy.size()==7,"separate solar energy")
  check(game.connection_candidate(2,3).to==3,"aux input topology")
  check(game.connection_candidate(3,4).from_port=="heat_out","storage topology")

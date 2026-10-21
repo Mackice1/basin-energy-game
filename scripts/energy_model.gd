@@ -37,7 +37,7 @@ static func _range_error(errors: Array[String], p: Dictionary, key: String, low:
 static func validate(kind: String, params: Dictionary) -> Array[String]:
 	if Catalog.is_thermal(kind):
 		return Catalog.validate_thermal(kind, params)
-	if kind in ["load", "battery"]:
+	if kind == "load" or Catalog.is_electric_storage(kind):
 		return Catalog.validate_storage_load(kind, params)
 	var errors: Array[String] = []
 	var p: Dictionary = _params(kind, params)

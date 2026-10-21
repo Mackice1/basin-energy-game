@@ -65,7 +65,14 @@ class RankineAssets(unittest.TestCase):
             self.assertAlmostEqual(dimensions[1], 4, places=5)
             self.assertAlmostEqual(dimensions[2], 4, places=5)
         definition = self.manifest['assets']['tower_station_preview']
-        self.assertEqual(definition['bounds_m'], [[-80,0,-80],[80,25,80]])
+        # Float32-exported bounds can differ by a few micrometres.
+        bounds = definition['bounds_m']
+        self.assertEqual(len(bounds), 2)
+        for actual, expected in zip(bounds, [[-80,0,-80],[80,25,80]]):
+            self.assertEqual(len(actual), 3)
+            for coordinate, target in zip(actual, expected):
+                self.assertTrue(math.isfinite(coordinate))
+                self.assertAlmostEqual(coordinate, target, delta=1e-5)
         self.assertEqual(definition['mirror_aperture_area_m2'], 100*4*4)
         self.assertFalse(definition['commissioned'])
         self.assertEqual(definition['energy_ports'], [])
@@ -135,6 +142,12 @@ class RankineAssets(unittest.TestCase):
         # receipt and verify both the authorized old and new exact hashes.
         authorized = json.loads((ROOT/'tests/v22_authorized_model_hashes.json').read_text())
         self.assertEqual(set(authorized), {f'assets/models/{name}.glb' for name in ('electric_boiler', 'heat_exchanger', 'thermal_station', 'thermal_store', 'wind_turbine')})
+        # This single inherited V23 transition is separate from the unchanged
+        # V22 authorization map; it never exempts any other asset from hashing.
+        inherited = json.loads((ROOT/'tests/storage_1003_baseline_asset_hashes.json').read_text())
+        self.assertEqual(set(inherited), {'assets/models/tower_station_preview.glb'})
+        self.assertEqual(set(inherited['assets/models/tower_station_preview.glb']), {'before', 'after'})
+        authorized.update(inherited)
         def verify(relative, old_hash):
             actual = hashlib.sha256((ROOT/relative).read_bytes()).hexdigest()
             if relative in authorized:
@@ -142,6 +155,11 @@ class RankineAssets(unittest.TestCase):
                 self.assertEqual(actual, authorized[relative]['after'])
             else:
                 self.assertEqual(actual, old_hash)
+        # Check both ends even when an older archive omits the preview asset.
+        receipt = ROOT/'evidence/tower_stage/validation/legacy_glb_hashes.json'
+        preview_entries = [entry for entry in json.loads(receipt.read_text()) if entry['path'] in inherited]
+        self.assertEqual(len(preview_entries), 1)
+        verify(preview_entries[0]['path'], preview_entries[0]['sha256'])
         archives = list((ROOT.parents[1]/'v19_backup_verify').glob('*.zip'))
         if not archives:
             baseline = ROOT.parent/'V20_1_FROZEN_SOURCE_MANIFEST.json'

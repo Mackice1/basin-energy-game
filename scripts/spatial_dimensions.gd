@@ -169,10 +169,10 @@ static func profile(kind: String, params: Dictionary = {}, include_origins: bool
 		"solar_thermal": limits = {"absorber_area_m2": Vector2(0.0, 3030.0)}
 		"pv": limits = {"dc_capacity_mw": Vector2(0.0, 10000.0)}
 		"station": limits = {"capacity_mw": Vector2(0.0, 10000.0)}
-		"battery": limits = {"capacity_mwh": Vector2(0.0, 100000.0), "charge_mw": Vector2(0.0, 10000.0), "discharge_mw": Vector2(0.0, 10000.0)}
+		"battery", "battery_sodium", "battery_flow", "caes_aboveground", "liquid_air_store", "hydrogen_storage_system": limits = {"capacity_mwh": Vector2(0.0, 100000.0), "charge_mw": Vector2(0.0, 10000.0), "discharge_mw": Vector2(0.0, 10000.0)}
 		"electric_boiler": limits = {"rated_electric_mw": Vector2(0.0, 10000.0)}
 		"fuel_boiler": limits = {"rated_fuel_mw": Vector2(0.0, 10000.0)}
-		"thermal_store": limits = {"capacity_mwhth": Vector2(0.0, 100000.0)}
+		"thermal_store", "solid_thermal_store": limits = {"capacity_mwhth": Vector2(0.0, 100000.0)}
 		"heat_exchanger": limits = {"capacity_mwth": Vector2(0.0, 10000.0)}
 		"load", "heat_demand", "thermal_station", "tower_station_preview", "tower_station", "solar_tower_receiver": pass
 		_: return _fail(result, "Unknown spatial device kind: " + kind)
@@ -237,6 +237,25 @@ static func profile(kind: String, params: Dictionary = {}, include_origins: bool
 			result.reference_capacity_mwh_per_module = 5.015
 			result.reference_power_mw_per_module = 2.5
 			return _modules(result, count, Vector3(6.058, 2.896, 2.438), "Sungrow ST5015kWh-2500kW-2h参考箱体；实际教学可用容量及总充放功率仍由原参数限定。", include_origins)
+		"battery_sodium", "battery_flow", "caes_aboveground", "liquid_air_store", "hydrogen_storage_system", "solid_thermal_store":
+			# Technology-specific site envelopes are teaching assumptions, not pressure-vessel sizing.
+			var specifications := {
+				"battery_sodium": [5.0, 2.5, Vector3(6.5, 3.0, 3.2)],
+				"battery_flow": [10.0, 2.0, Vector3(14.0, 5.5, 10.0)],
+				"caes_aboveground": [0.25, 0.1, Vector3(24.0, 6.0, 18.0)],
+				"liquid_air_store": [10.0, 3.0, Vector3(20.0, 11.0, 16.0)],
+				"hydrogen_storage_system": [20.0, 2.0, Vector3(24.0, 5.0, 16.0)],
+				"solid_thermal_store": [4.0, 2.0, Vector3(8.0, 5.0, 6.0)]}
+			var spec: Array = specifications[kind]
+			var thermal := kind == "solid_thermal_store"
+			var capacity_key := "capacity_mwhth" if thermal else "capacity_mwh"
+			var charge_key := "charge_mwth" if thermal else "charge_mw"
+			var discharge_key := "discharge_mwth" if thermal else "discharge_mw"
+			var count := maxi(1, int(ceil(maxf(float(p[capacity_key]) / float(spec[0]), maxf(float(p[charge_key]), float(p[discharge_key])) / float(spec[1])))))
+			result.reference_capacity_per_module = spec[0]
+			result.reference_power_per_module = spec[1]
+			result.geometry_is_teaching_assumption = true
+			return _modules(result, count, spec[2], "完整储能设施教学单元；容量/功率增加会增加模块与占地。尺寸不用于推导实际压力、介质质量或工业安全距离；不是厂家CAD或工程设计。", include_origins)
 		"station":
 			result.reference_capacity_mw_per_module = 2.0
 			return _modules(result, maxi(1, int(ceil(float(p.capacity_mw) / 2.0))), Vector3(6.813, 2.941, 5.538), "SMA MV Power Station 2000SC带平台参考；2 MVA按功率因数1映射2 MW；不重复增加逆变容量。", include_origins)

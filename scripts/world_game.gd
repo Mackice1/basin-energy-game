@@ -11,11 +11,19 @@ const HighTemp = preload("res://scripts/high_temp_thermal.gd")
 const Tower = preload("res://scripts/solar_tower_thermal.gd")
 const Rankine = preload("res://scripts/rankine_cycle.gd")
 const FuelSupply = preload("res://scripts/fuel_supply.gd")
-const DEVICE_NAMES = {"tower_station":"塔式熔盐发电站","solar_tower_receiver":"塔式熔盐接收器","molten_salt_store":"双罐熔盐储热","salt_steam_generator":"熔盐蒸汽发生器","steam_generator":"蒸汽发生器","steam_turbine":"汽轮发电机","steam_condenser":"蒸汽冷凝器","feedwater_pump":"给水泵","thermal_station":"电热站","tower_station_preview":"塔式未投运预览","wind":"风机","pv":"光伏","station":"变电站","load":"需求节点","battery":"电池","electric_boiler":"电热水锅炉","fuel_boiler":"燃气热水锅炉","parabolic_trough":"槽式聚光集热器","high_temp_store":"高温导热油储热","oil_water_exchanger":"油水换热器","solar_thermal":"太阳能集热器","thermal_store":"储热罐","heat_exchanger":"隔离换热器","heat_demand":"热需求节点"}
-const KINDS = ["wind","pv","station","load","battery","electric_boiler","fuel_boiler","solar_thermal","parabolic_trough","high_temp_store","oil_water_exchanger","thermal_store","heat_exchanger","heat_demand","steam_generator","steam_turbine","steam_condenser","feedwater_pump","solar_tower_receiver","molten_salt_store","salt_steam_generator"]
-const THERMAL_KINDS = ["electric_boiler","fuel_boiler","solar_thermal","parabolic_trough","high_temp_store","oil_water_exchanger","thermal_store","heat_exchanger","heat_demand","steam_generator","steam_turbine","steam_condenser","feedwater_pump","solar_tower_receiver","molten_salt_store","salt_steam_generator"]
+const DEVICE_NAMES = {"tower_station":"塔式熔盐发电站","solar_tower_receiver":"塔式熔盐接收器","molten_salt_store":"双罐熔盐储热","salt_steam_generator":"熔盐蒸汽发生器","steam_generator":"蒸汽发生器","steam_turbine":"汽轮发电机","steam_condenser":"蒸汽冷凝器","feedwater_pump":"给水泵","thermal_station":"电热站","tower_station_preview":"塔式未投运预览","wind":"风机","pv":"光伏","station":"变电站","load":"需求节点","battery":"锂离子电池储能","battery_sodium":"钠离子电池储能","battery_flow":"液流电池储能","caes_aboveground":"地上压缩空气储能","liquid_air_store":"液态空气储能","hydrogen_storage_system":"氢储能系统","solid_thermal_store":"固体显热储能","electric_boiler":"电热水锅炉","fuel_boiler":"燃气热水锅炉","parabolic_trough":"槽式聚光集热器","high_temp_store":"高温导热油储热","oil_water_exchanger":"油水换热器","solar_thermal":"太阳能集热器","thermal_store":"储热罐","heat_exchanger":"隔离换热器","heat_demand":"热需求节点"}
+const KINDS = ["wind","pv","station","load","battery","electric_boiler","fuel_boiler","solar_thermal","parabolic_trough","high_temp_store","oil_water_exchanger","thermal_store","heat_exchanger","heat_demand","steam_generator","steam_turbine","steam_condenser","feedwater_pump","solar_tower_receiver","molten_salt_store","salt_steam_generator","battery_sodium","battery_flow","caes_aboveground","liquid_air_store","hydrogen_storage_system","solid_thermal_store"]
+const THERMAL_KINDS = ["solid_thermal_store","electric_boiler","fuel_boiler","solar_thermal","parabolic_trough","high_temp_store","oil_water_exchanger","thermal_store","heat_exchanger","heat_demand","steam_generator","steam_turbine","steam_condenser","feedwater_pump","solar_tower_receiver","molten_salt_store","salt_steam_generator"]
 const INTERNAL_KINDS=["electric_boiler","fuel_boiler","solar_thermal","parabolic_trough","high_temp_store","oil_water_exchanger","thermal_store","heat_exchanger","steam_generator","steam_turbine","steam_condenser","feedwater_pump","solar_tower_receiver","molten_salt_store","salt_steam_generator"]
-const BUILDABLE_KINDS=["wind","pv","station","battery","thermal_station","tower_station","tower_station_preview"]
+const BUILDABLE_KINDS=["wind","pv","station","battery","battery_sodium","battery_flow","caes_aboveground","liquid_air_store","hydrogen_storage_system","solid_thermal_store","molten_salt_store","thermal_station","tower_station","tower_station_preview"]
+# A category is navigation only: every device button still places a real model.
+const BUILD_CATEGORIES = {
+	"power": {"name":"电源", "kinds":["wind","pv","tower_station","tower_station_preview"]},
+	"storage": {"name":"储能", "kinds":["battery","battery_sodium","battery_flow","molten_salt_store","caes_aboveground","liquid_air_store","hydrogen_storage_system","solid_thermal_store"]},
+	"grid": {"name":"电力汇集与外送", "kinds":["station"]},
+	"heat": {"name":"热能", "kinds":["thermal_station"]}
+}
+const BUILD_SHORT_NAMES = {"wind":"风机","pv":"光伏","station":"变电站","battery":"锂离子电池","battery_sodium":"钠离子电池","battery_flow":"液流电池","molten_salt_store":"熔盐储热","caes_aboveground":"地上压缩空气","liquid_air_store":"液态空气","hydrogen_storage_system":"氢储能系统","solid_thermal_store":"固体显热","thermal_station":"电热站","tower_station":"熔盐塔站","tower_station_preview":"塔站预览"}
 const RANKINE_KINDS=["steam_generator","steam_turbine","steam_condenser","feedwater_pump","salt_steam_generator"]
 const FACILITY_KINDS=["thermal_station","tower_station","tower_station_preview"]
 const ENERGY_ZERO = {"generated":0.0,"delivered":0.0,"curtailed":0.0,"loss":0.0,"served":0.0,"unserved":0.0,"charge":0.0,"discharge":0.0,"storage_loss":0.0,"boiler_electric":0.0,"boiler_conversion_loss":0.0}
@@ -157,6 +165,23 @@ var hud_actions: Dictionary = {}
 var hud_dock: Control
 var hud_brand_subtitle: Label
 var save_root := "user://rebuild_slots"
+var build_category := "power"
+var category_buttons: Dictionary = {}
+var build_scroll: ScrollContainer
+var build_row: HBoxContainer
+var build_tray: PanelContainer
+var build_tray_open := false
+var build_tray_tween: Tween
+var build_tray_target := Vector2.ZERO
+var header_tools: HBoxContainer
+var header_brand: HBoxContainer
+var header_run_group: PanelContainer
+var header_metric_tiles: Array[Control] = []
+var selection_row: HBoxContainer
+var category_hint: Label
+var bulk_parameter_editor: Window
+var runtime_chart: Control
+var runtime_chart_layout_available := true
 
 func _ready():
 	# Keep config/name stable: it owns the existing user:// save directory.
@@ -176,6 +201,7 @@ func _ready():
 	optimization_controller = load("res://scripts/optimization_controller.gd").new()
 	add_child(optimization_controller)
 	optimization_controller.setup(self)
+	register_escape_window(optimization_controller.panel)
 	print("REBUILD_V13_READY")
 
 func label(t:String, size_px:int=17)->Label:
@@ -203,12 +229,49 @@ func fold(parent:Node,title:String)->VBoxContainer:
 	toggle.pressed.connect(func():toggle.text=title+("  ▾" if content.visible else "  ▸"))
 	parent.add_child(content);content.visible=false;return content
 
+func compact_button_style(b:Button, height:float=34.0):
+	b.custom_minimum_size.y=height
+	b.add_theme_font_size_override("font_size",14)
+	for state in ["normal","hover","pressed","disabled","focus"]:
+		var style:StyleBox=b.get_theme_stylebox(state).duplicate()
+		style.content_margin_top=4;style.content_margin_bottom=4
+		style.content_margin_left=8;style.content_margin_right=8
+		b.add_theme_stylebox_override(state,style)
+
+func fit_build_button_width(b:Button, minimum_width:float):
+	# Compact the shelf vertically, never abbreviate its names to fit a fixed width.
+	# The device row scrolls horizontally when the complete labels exceed the viewport.
+	var text_width:=b.get_theme_font("font").get_string_size(b.text,HORIZONTAL_ALIGNMENT_LEFT,-1,b.get_theme_font_size("font_size")).x
+	var padding:=0.0
+	for state in ["normal","hover","pressed","disabled","focus"]:
+		padding=maxf(padding,b.get_theme_stylebox(state).get_minimum_size().x)
+	var icon_width:=0.0
+	if b.icon!=null:
+		icon_width=float(b.get_theme_constant("icon_max_width")) if b.expand_icon else float(b.icon.get_width())
+		if b.vertical_icon_alignment==VERTICAL_ALIGNMENT_CENTER:
+			icon_width+=b.get_theme_constant("h_separation")
+		else:
+			text_width=maxf(text_width,icon_width);icon_width=0.0
+	b.custom_minimum_size.x=maxf(minimum_width,ceilf(text_width+padding+icon_width+4.0))
+
 func icon_texture(kind:String)->Texture2D:
 	if kind in FACILITY_KINDS:return icon_texture("station")
 	if kind=="fuel_boiler":return icon_texture("electric_boiler")
-	if kind in ["load","battery"]:return load("res://assets/icon_%s.svg"%kind)
+	if kind=="load":return load("res://assets/icon_load.svg")
 	var paths={"wind":'<path d="M32 27L29 57H35L32 27M32 27L29 4H33L35 23M32 27L10 41L8 37L28 25M32 27L54 40L56 36L36 24"/>',"pv":'<path d="M12 15H52L58 42H6ZM16 15L12 42M28 15L27 42M40 15L42 42M9 28H55M25 42L22 55M39 42L42 55M17 55H47"/>',"electric_boiler":'<rect x="13" y="9" width="38" height="46" rx="8"/><path d="M31 17L24 34H35L29 46M8 40H13M51 23H59"/>',"thermal_store":'<ellipse cx="32" cy="12" rx="20" ry="7"/><path d="M12 12V51C12 60 52 60 52 51V12M12 33H52M7 43H12M52 23H59"/>',"heat_exchanger":'<rect x="12" y="10" width="40" height="44" rx="4"/><path d="M20 15V49M28 15V49M36 15V49M44 15V49M5 22H12M52 43H60"/>',"station":'<path d="M9 13H55V56H9ZM9 23H55M20 13V23M32 13V23M44 13V23M18 33H27V48H18ZM37 33H46V48H37ZM31 30V53"/>'}
-	var svg='<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><g fill="none" stroke="#a8d9d0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+paths[kind]+'</g></svg>'
+	# Technology-specific silhouettes stay distinct at both category and tray sizes.
+	# Bright cyan outlines replace the old dark asset; no energy/model behavior lives here.
+	paths.merge({
+		"battery": '<rect x="14" y="12" width="36" height="44" rx="4"/><path d="M23 6V12M41 6V12M19 61H45M34 21L24 37H34L29 48L42 31H32Z"/>',
+		"battery_sodium": '<rect x="7" y="15" width="50" height="40" rx="5"/><path d="M17 9V15M47 9V15M8 25H56M14 60H50"/><rect x="14" y="31" width="8" height="17" rx="2"/><rect x="28" y="31" width="8" height="17" rx="2"/><rect x="42" y="31" width="8" height="17" rx="2"/>',
+		"battery_flow": '<rect x="5" y="13" width="15" height="42" rx="6"/><rect x="44" y="13" width="15" height="42" rx="6"/><rect x="26" y="25" width="12" height="24" rx="2"/><path d="M20 21H32V25M38 42H44M20 46H26M38 31H44M7 31H18M46 31H57M29 32H35M29 38H35M29 44H35"/>',
+		"caes_aboveground": '<rect x="4" y="23" width="56" height="24" rx="12"/><path d="M18 24V46M46 24V46M16 48V55H23M48 48V55H41M32 23V15H45M41 11H49V19H41Z"/><path d="M10 60H54"/>',
+		"liquid_air_store": '<rect x="19" y="7" width="26" height="47" rx="12"/><path d="M23 54V60M41 54V60M45 40H54V51M29 7V3H35V7M32 22V38M25 26L39 34M25 34L39 26"/>',
+		"hydrogen_storage_system": '<rect x="6" y="20" width="13" height="36" rx="6"/><rect x="25" y="20" width="13" height="36" rx="6"/><rect x="44" y="20" width="13" height="36" rx="6"/><path d="M10 20V13H15V20M29 20V13H34V20M48 20V13H53V20M12 13V7H51V13M31 7V3M5 61H58"/>',
+		"solid_thermal_store": '<path d="M10 21L32 10L54 21V47L32 59L10 47ZM10 21L32 33L54 21M32 33V59M21 16L43 27M21 27L43 16M15 35L27 41M15 42L27 48M38 40L49 34M38 48L49 42"/>',
+		"molten_salt_store": '<ellipse cx="16" cy="20" rx="11" ry="5"/><ellipse cx="48" cy="20" rx="11" ry="5"/><path d="M5 20V49C5 56 27 56 27 49V20M37 20V49C37 56 59 56 59 49V20M27 35H37M8 41H24M40 41H56M13 12C8 8 18 7 13 3M45 12C40 8 50 7 45 3"/>'
+	})
+	var svg='<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><g fill="none" stroke="#b9e8ef" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">'+paths[kind]+'</g></svg>'
 	var im:=Image.new();im.load_svg_from_string(svg);return ImageTexture.create_from_image(im)
 
 func make_ui():
@@ -217,21 +280,31 @@ func make_ui():
 	var root:=Control.new();ui.add_child(root);root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT);root.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	hud_root=root;root.name="GameWorkspace"
 	var theme:=UITheme.create(font_full);root.theme=theme
-	var header:=make_panel(root,Vector2.ZERO,Vector2(1400,72));hud_header=header.get_parent();hud_header.name="WorkspaceHeader"
-	var hr:=HBoxContainer.new();header.add_child(hr);hr.add_theme_constant_override("separation",14)
-	var brand:=VBoxContainer.new();brand.custom_minimum_size.x=154;hr.add_child(brand)
-	brand.add_child(label("荒原 / 能源基地",21))
-	hud_brand_subtitle=label("BASIN 02   ·   教学工作台",11);hud_brand_subtitle.add_theme_color_override("font_color",UITheme.MUTED);brand.add_child(hud_brand_subtitle)
+	var header:=make_panel(root,Vector2.ZERO,Vector2(1400,76));hud_header=header.get_parent();hud_header.name="WorkspaceHeader"
+	hud_header.add_theme_stylebox_override("panel",UITheme.panel(Color("24303d"),12,12))
+	var hr:=HBoxContainer.new();header.add_child(hr);hr.add_theme_constant_override("separation",16)
+	header_brand=HBoxContainer.new();header_brand.custom_minimum_size.x=154;header_brand.add_theme_constant_override("separation",10);hr.add_child(header_brand)
+	var brand_icon:=TextureRect.new();brand_icon.texture=icon_texture("station");brand_icon.custom_minimum_size=Vector2(30,36);brand_icon.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;brand_icon.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;header_brand.add_child(brand_icon)
+	var brand:=VBoxContainer.new();brand.add_theme_constant_override("separation",2);header_brand.add_child(brand)
+	brand.add_child(label("能源基地",21))
+	hud_brand_subtitle=label("荒原 · BASIN 02",12);hud_brand_subtitle.add_theme_color_override("font_color",Color("b3c1cd"));brand.add_child(hud_brand_subtitle)
 	for pair in [["generated","实际发电"],["served","负荷实供"],["unserved","缺供"]]:
-		var tile:=VBoxContainer.new();tile.custom_minimum_size.x=106;hr.add_child(tile)
-		var caption:=label(pair[1]+" · MW",11);caption.add_theme_color_override("font_color",UITheme.MUTED);tile.add_child(caption)
-		var value:=label("0.000",22);tile.add_child(value);hud_metrics[pair[0]]=value
+		var tile:=VBoxContainer.new();tile.custom_minimum_size.x=102;tile.add_theme_constant_override("separation",2);hr.add_child(tile);header_metric_tiles.append(tile)
+		var caption:=label(pair[1],12);caption.add_theme_color_override("font_color",Color("b3c1cd"));tile.add_child(caption)
+		var reading:=HBoxContainer.new();reading.add_theme_constant_override("separation",5);tile.add_child(reading)
+		var value:=label("0.000",23);value.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT;value.custom_minimum_size.x=70;value.size_flags_horizontal=Control.SIZE_EXPAND_FILL;value.clip_text=true;value.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS;reading.add_child(value);hud_metrics[pair[0]]=value
+		var unit:=label("MW",12);unit.vertical_alignment=VERTICAL_ALIGNMENT_BOTTOM;unit.add_theme_color_override("font_color",Color("b3c1cd"));reading.add_child(unit)
 	var spacer:=Control.new();spacer.size_flags_horizontal=Control.SIZE_EXPAND_FILL;hr.add_child(spacer)
-	hud_clock=label("已暂停\n00:00:00",13);hud_clock.vertical_alignment=VERTICAL_ALIGNMENT_CENTER;hr.add_child(hud_clock)
-	run_button=button("▶ 运行 ×1",toggle_run,hr);run_button.name="GlobalRun";run_button.custom_minimum_size=Vector2(112,44)
-	var tools:=HBoxContainer.new();hr.add_child(tools)
-	button("导入 CSV",open_import,tools).custom_minimum_size.y=26
-	button("数据来源",open_data_manager,tools).custom_minimum_size.y=26
+	header_run_group=PanelContainer.new();header_run_group.add_theme_stylebox_override("panel",UITheme.panel(Color("151c25"),6,9));hr.add_child(header_run_group)
+	var run_controls:=HBoxContainer.new();run_controls.add_theme_constant_override("separation",12);header_run_group.add_child(run_controls)
+	hud_clock=label("已暂停\n00:00:00",12);hud_clock.custom_minimum_size.x=72;hud_clock.vertical_alignment=VERTICAL_ALIGNMENT_CENTER;hud_clock.add_theme_color_override("font_color",Color("b3c1cd"));run_controls.add_child(hud_clock)
+	run_button=button("▶ 运行 ×1",toggle_run,run_controls);run_button.name="GlobalRun";compact_button_style(run_button,40);run_button.custom_minimum_size.x=112
+	var run_style:=UITheme.panel(Color("294955"),8,7);run_style.border_color=Color("72cbd8");run_button.add_theme_stylebox_override("normal",run_style)
+	var tools:=VBoxContainer.new();hr.add_child(tools)
+	header_tools=HBoxContainer.new();tools.add_child(header_tools)
+	var data_tools:=VBoxContainer.new();header_tools.add_child(data_tools);data_tools.add_theme_constant_override("separation",4)
+	for item in [["导入 CSV",open_import],["数据来源",open_data_manager]]:
+		var action:=button(item[0],item[1],data_tools);compact_button_style(action,24);action.add_theme_font_size_override("font_size",12);action.custom_minimum_size.x=96
 	weather_orb=load("res://scripts/weather_orb.gd").new();root.add_child(weather_orb);weather_orb.mount_enabled=false;weather_orb.scale=Vector2(0.68,0.68);ui_regions.append(weather_orb)
 	var views:=make_panel(root,Vector2.ZERO,Vector2(412,46));hud_views=views.get_parent();hud_views.name="ViewToolbar"
 	var vr:=HBoxContainer.new();views.add_child(vr)
@@ -247,23 +320,30 @@ func make_ui():
 	for i in range(8):
 		var b:=button(names[i],func():change_layer(i);hud_layer_button.text="图层 · "+names[i];hud_layers.hide(),layer_grid);b.toggle_mode=true;b.button_group=group;b.button_pressed=i==0;b.tooltip_text=descriptions[i];b.size_flags_horizontal=Control.SIZE_EXPAND_FILL;layer_buttons.append(b)
 	layer_hint=label(descriptions[0],13);layer_hint.custom_minimum_size.x=216;layer_hint.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;layer_hint.max_lines_visible=4;layer_hint.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS;left.add_child(layer_hint)
+	var layer_scroll:=ScrollContainer.new();layer_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;layer_scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL
+	hud_layers.remove_child(left);hud_layers.add_child(layer_scroll);layer_scroll.add_child(left)
 	var selection_strip:=make_panel(root,Vector2.ZERO,Vector2(1000,46));hud_context=selection_strip.get_parent();hud_context.name="ContextToolbar"
-	var selection_row:=HBoxContainer.new();selection_strip.add_child(selection_row)
-	interaction_caption=label("单击选择 · 左键拖动视角 · 双击厂站进入",13);interaction_caption.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;interaction_caption.max_lines_visible=2;interaction_caption.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS;interaction_caption.size_flags_horizontal=Control.SIZE_EXPAND_FILL;selection_row.add_child(interaction_caption)
+	selection_row=HBoxContainer.new();selection_strip.add_child(selection_row)
+	var context_style:=UITheme.panel(Color(0.08,0.11,0.15,0.66),6,8);context_style.set_border_width_all(0);hud_context.add_theme_stylebox_override("panel",context_style)
+	interaction_caption=label("单击选择 · 左键拖动视角 · 双击厂站进入",13);interaction_caption.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;interaction_caption.max_lines_visible=1;interaction_caption.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS;interaction_caption.size_flags_horizontal=Control.SIZE_EXPAND_FILL;selection_row.add_child(interaction_caption)
 	quick_station_enter=button("进入设备详情 →",func():self.open_device_details(self.selected_id),selection_row);quick_station_enter.action_mode=BaseButton.ACTION_MODE_BUTTON_PRESS;quick_station_enter.visible=false
 	for command in [["select","选择 / Esc"],["move","移动"],["link","连线"]]:
 		var b:=button(command[1],set_mode.bind(command[0]),selection_row);b.name="Tool_"+command[0];b.toggle_mode=true;hud_actions[command[0]]=b
 	hud_actions.parameters=button("参数",func():open_parameters(false),selection_row)
 	hud_actions.undo=button("撤销",undo,selection_row)
+	for command in selection_row.get_children():
+		if command is Button:compact_button_style(command)
+	quick_station_enter.custom_minimum_size.x=140
 	# Nonmodal, default-collapsed icon navigation. Hidden panels never cover the map.
 	var dock = load("res://scripts/side_dock.gd").new();root.add_child(dock);hud_dock=dock
+	dock.resized.connect(_layout_workspace,CONNECT_DEFERRED)
 	var right:VBoxContainer = dock.create_panel("energy", "能源运行")
 	var rt:=HBoxContainer.new();right.add_child(rt);var title:=label("当前设备与网络",14);title.size_flags_horizontal=Control.SIZE_EXPAND_FILL;rt.add_child(title);button("参数",func():open_parameters(false),rt)
 	status_label=label("",14);right.add_child(status_label)
 	var net:=PanelContainer.new();right.add_child(net);net.add_theme_stylebox_override("panel",UITheme.panel(UITheme.RAISED,8,6));metric(net,"net","净外送 NET","MW",true)
 	metric(right,"generated","实际发电","MW");metric(right,"curtailed","限发 / 弃电","MW");metric(right,"loss","网络损耗","MW");metric(right,"energy","累计外送","MWh")
 	metric(right,"served","负荷实供","MW");metric(right,"unserved","负荷缺供","MW")
-	var power:=fold(right,"功率与能量分项");metric(power,"charge","电池充电","MW");metric(power,"discharge","电池放电","MW");metric(power,"storage_loss","储能内部损耗","MW");metric(power,"available","可用发电","MW");metric(power,"balance","功率守恒差","MW");metric(power,"energy_balance","电量守恒差","MWh");power.add_child(label("外网仅接收 ≤4 MW，无隐含进口\n有功容量流教学模型，非交流潮流\n优先：负荷 → 电池充电 → 外送\n缺口调用电池；同级按设备 ID",13))
+	var power:=fold(right,"功率与能量分项");metric(power,"charge","储能充电","MW");metric(power,"discharge","储能放电","MW");metric(power,"storage_loss","储能内部损耗","MW");metric(power,"available","可用发电","MW");metric(power,"balance","功率守恒差","MW");metric(power,"energy_balance","电量守恒差","MWh");power.add_child(label("外网仅接收 ≤4 MW，无隐含进口\n有功容量流教学模型，非交流潮流\n优先：负荷 → 储能充电 → 外送\n缺口调用储能；同级按设备 ID",13))
 	speed_control=load("res://scripts/speed_control.gd").new();right.add_child(speed_control)
 	speed_control.speed_changed.connect(set_simulation_speed)
 	speed_control.set_speed(speed)
@@ -337,52 +417,147 @@ func make_ui():
 		if is_instance_valid(optimization_controller):optimization_controller.open()
 		else:tell("优化控制器尚未就绪。"),optimize)
 	button("导出优化快照（未求解）",export_optimization_snapshot,optimize)
+	var bulk:VBoxContainer=dock.create_panel("bulk","批量参数")
+	dock.buttons.bulk.text="批量";dock.buttons.bulk.icon=icon_texture("station")
+	var bulk_info:=label("按类型选择已安装设备，再勾选任意子集和要修改的参数。所有设备校验通过后一次提交。",14);bulk_info.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;bulk.add_child(bulk_info)
+	button("打开批量参数",open_bulk_parameters,bulk)
+	dock.panel_opened.connect(func(key):
+		if key=="bulk":dock.close_panels();open_bulk_parameters())
+	var rail:PanelContainer=dock.get_node("DockRail")
+	var entries:Control=rail.get_child(0);rail.remove_child(entries)
+	var rail_scroll:=ScrollContainer.new();rail_scroll.name="DockRailScroll";rail_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;rail_scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL;rail.add_child(rail_scroll);rail_scroll.add_child(entries)
 	for region in dock.get_hit_regions():ui_regions.append(region)
-	var bar:=make_panel(root,Vector2.ZERO,Vector2(1400,90));hud_build=bar.get_parent();hud_build.name="ConstructionShelf"
-	var build_scroll:=ScrollContainer.new();build_scroll.name="ConstructionScroll";build_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_AUTO;build_scroll.vertical_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;bar.add_child(build_scroll)
-	var br:=HBoxContainer.new();build_scroll.add_child(br);br.add_theme_constant_override("separation",7);br.add_child(label("建\n造",15))
-	var short_names={"wind":"风机","pv":"光伏","station":"变电站","battery":"电池","thermal_station":"电热站","tower_station":"熔盐塔站","tower_station_preview":"塔站预览"}
+	var bar:=make_panel(root,Vector2.ZERO,Vector2(1400,48));hud_build=bar.get_parent();hud_build.name="ConstructionShelf"
+	hud_build.add_theme_stylebox_override("panel",UITheme.panel(Color("24303d"),6,12));bar.add_theme_constant_override("separation",4)
+	var categories:=HBoxContainer.new();categories.name="ConstructionCategories";bar.add_child(categories);categories.add_theme_constant_override("separation",5)
+	for key in BUILD_CATEGORIES:
+		var category:=button(BUILD_CATEGORIES[key].name,toggle_build_category.bind(key),categories)
+		category.name="Category_"+key;category.toggle_mode=true
+		category.icon=icon_texture({"power":"wind","storage":"battery","grid":"station","heat":"thermal_store"}[key]);category.expand_icon=true;category.add_theme_constant_override("icon_max_width",26)
+		compact_button_style(category,44);fit_build_button_width(category,82);category_buttons[key]=category
+		category.tooltip_text="展开"+BUILD_CATEGORIES[key].name+"设备；再次点击收起，Esc 只关闭当前展开栏"
+	category_hint=label("点击分类展开设备",12);category_hint.size_flags_horizontal=Control.SIZE_EXPAND_FILL;category_hint.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS;category_hint.add_theme_color_override("font_color",UITheme.MUTED);categories.add_child(category_hint)
+	fleet_count=label("0 台 · 0 条线",11);fleet_count.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT;categories.add_child(fleet_count)
+	var tray_column:=make_panel(root,Vector2.ZERO,Vector2(1400,110));build_tray=tray_column.get_parent();build_tray.name="ConstructionFlyout";build_tray.visible=false
+	build_tray.resized.connect(func():call_deferred("_layout_workspace"))
+	build_tray.add_theme_stylebox_override("panel",UITheme.panel(Color("303e4d"),10,12))
+	build_scroll=ScrollContainer.new();build_scroll.name="ConstructionScroll";build_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_AUTO;build_scroll.vertical_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;build_scroll.follow_focus=true;tray_column.add_child(build_scroll)
+	build_scroll.get_h_scroll_bar().custom_minimum_size.y=6
+	build_row=HBoxContainer.new();build_row.name="ConstructionDevices";build_scroll.add_child(build_row);build_row.add_theme_constant_override("separation",6)
 	for k in BUILDABLE_KINDS:
-		var b:=button(short_names[k],start_build.bind(k),br);b.tooltip_text=DEVICE_NAMES.get(k,k)+" · 点击后在场地放置，Esc取消";b.icon=icon_texture(k);b.icon_alignment=HORIZONTAL_ALIGNMENT_CENTER;b.vertical_icon_alignment=VERTICAL_ALIGNMENT_TOP;b.custom_minimum_size=Vector2(98,66);b.toggle_mode=true;b.expand_icon=true;b.add_theme_constant_override("icon_max_width",30);tool_buttons[k]=b
-	var bc:=VBoxContainer.new();br.add_child(bc);bc.custom_minimum_size.x=170;fleet_count=label("0 台 · 0 条线",13);bc.add_child(fleet_count)
-	var footer:=make_panel(root,Vector2.ZERO,Vector2(1400,54));hud_footer=footer.get_parent();hud_footer.name="WorkspaceStatus"
-	var footer_row:=HBoxContainer.new();footer.add_child(footer_row)
-	mode_label=label("",12);mode_label.size_flags_horizontal=Control.SIZE_EXPAND_FILL;mode_label.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS;footer_row.add_child(mode_label)
-	notice=label("选择设备查看详情；建设与连线操作可随时按 Esc 取消。",12);notice.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;notice.max_lines_visible=1;notice.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS;footer.add_child(notice)
+		var b:=button(BUILD_SHORT_NAMES[k],start_build.bind(k),build_row)
+		b.name="Build_"+k;b.tooltip_text=DEVICE_NAMES.get(k,k)+" · 独立放置；Esc取消";b.icon=icon_texture(k)
+		b.icon_alignment=HORIZONTAL_ALIGNMENT_CENTER;b.vertical_icon_alignment=VERTICAL_ALIGNMENT_TOP
+		compact_button_style(b,92);b.add_theme_font_size_override("font_size",15);b.toggle_mode=true;b.expand_icon=true;b.add_theme_constant_override("icon_max_width",48)
+		b.add_theme_stylebox_override("normal",UITheme.panel(Color("344956"),8,9));b.add_theme_stylebox_override("hover",UITheme.panel(Color("405c69"),8,9))
+		fit_build_button_width(b,110);tool_buttons[k]=b
+		if k=="tower_station_preview":b.tooltip_text="仅结构预览，不发电、不接线；运行设备请选择熔盐塔站。"
+	select_build_category(build_category,false)
+	var footer:=make_panel(root,Vector2.ZERO,Vector2(1400,26));hud_footer=footer.get_parent();hud_footer.name="WorkspaceStatus"
+	var footer_style:=UITheme.panel(Color(0.08,0.11,0.15,0.45),4,6);footer_style.set_border_width_all(0);hud_footer.add_theme_stylebox_override("panel",footer_style)
+	var footer_row:=HBoxContainer.new();footer.add_child(footer_row);footer_row.add_theme_constant_override("separation",12)
+	mode_label=label("",11);mode_label.custom_minimum_size.x=110;mode_label.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS;footer_row.add_child(mode_label)
+	notice=label("选择设备查看详情；Esc 取消操作或返回上一层。",11);notice.size_flags_horizontal=Control.SIZE_EXPAND_FILL;notice.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS;footer_row.add_child(notice)
 	add_child(confirmation);confirmation.theme=theme;confirmation.add_theme_stylebox_override("panel",UITheme.panel());confirmation.ok_button_text="确认";confirmation.cancel_button_text="取消";confirmation.title="确认操作";confirmation.dialog_autowrap=true;confirmation.min_size=Vector2i(550,150);confirmation.confirmed.connect(func():if confirm_action.is_valid():confirm_action.call())
 	import_dialog=ImportUI.new();add_child(import_dialog);import_dialog.theme=theme;import_dialog.applied.connect(apply_import)
 	make_parameter_dialog(theme);make_data_dialog(theme);make_line_dialog(theme)
+	bulk_parameter_editor=load("res://scripts/bulk_parameter_editor.gd").new();add_child(bulk_parameter_editor);bulk_parameter_editor.setup(self)
 	station_interior=load("res://scripts/station_interior.gd").new();add_child(station_interior);station_interior.setup(self)
 	device_inspector=load("res://scripts/device_inspector.gd").new();add_child(device_inspector);device_inspector.setup(self)
 	station_port_dialog=ConfirmationDialog.new();add_child(station_port_dialog);station_port_dialog.theme=theme;station_port_dialog.title="选择厂站边界端口";station_port_dialog.min_size=Vector2i(500,160)
 	station_port_picker=OptionButton.new();station_port_dialog.add_child(station_port_picker);station_port_picker.position=Vector2(20,45);station_port_picker.size=Vector2(460,45)
 	station_port_dialog.confirmed.connect(func():
 		if station_port_picker.item_count>0:link_to(int(station_port_picker.get_item_metadata(station_port_picker.selected))))
+	runtime_chart=load("res://scripts/device_runtime_chart.gd").new();root.add_child(runtime_chart);runtime_chart.name="SelectedRuntimeChart";runtime_chart.setup(self);ui_regions.append(runtime_chart)
 	modal_shade=ColorRect.new();root.add_child(modal_shade);modal_shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT);modal_shade.color=Color(0.025,0.045,0.07,0.58);modal_shade.visible=false
 
+	for window in [confirmation,station_port_dialog,param_dialog,data_dialog,line_dialog,import_dialog]:register_escape_window(window)
 	root.resized.connect(_layout_workspace)
 	call_deferred("_layout_workspace")
 
+func select_build_category(key:String,cancel_pending:bool=true):
+	if not BUILD_CATEGORIES.has(key):return
+	if cancel_pending and key!=build_category and mode in ["build","move","link"]:
+		set_mode("select");tell("已切换分类；未放置的设备已取消。")
+	build_category=key
+	for category_key in category_buttons:category_buttons[category_key].set_pressed_no_signal(build_tray_open and category_key==key)
+	for kind in tool_buttons:tool_buttons[kind].visible=kind in BUILD_CATEGORIES[key].kinds
+	if is_instance_valid(build_scroll):build_scroll.scroll_horizontal=0
+	if is_instance_valid(category_hint):category_hint.text="点击设备放置 · Esc 收起" if build_tray_open else "点击分类展开设备"
+	call_deferred("_layout_workspace")
+
+func toggle_build_category(key:String):
+	if build_tray_open and key==build_category:
+		set_build_tray_open(false);return
+	select_build_category(key)
+	set_build_tray_open(true)
+
+func set_build_tray_open(value:bool,animate:bool=true):
+	if not is_instance_valid(build_tray):return
+	build_tray_open=value
+	if is_instance_valid(build_tray_tween):build_tray_tween.kill()
+	for key in category_buttons:category_buttons[key].set_pressed_no_signal(value and key==build_category)
+	category_hint.text="点击设备放置 · Esc 收起" if value else "点击分类展开设备"
+	_layout_workspace()
+	if not animate:
+		build_tray.visible=value;build_tray.modulate.a=1.0 if value else 0.0;build_tray.position=build_tray_target;return
+	if value:
+		build_tray.show();build_tray.modulate.a=0.0;build_tray.position=build_tray_target+Vector2(0,12)
+		build_tray_tween=create_tween().set_parallel(true)
+		build_tray_tween.tween_property(build_tray,"modulate:a",1.0,0.18)
+		build_tray_tween.tween_property(build_tray,"position",build_tray_target,0.22).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		build_tray_tween.finished.connect(_layout_workspace)
+	else:
+		build_tray_tween=create_tween().set_parallel(true)
+		build_tray_tween.tween_property(build_tray,"modulate:a",0.0,0.12)
+		build_tray_tween.tween_property(build_tray,"position",build_tray_target+Vector2(0,8),0.12).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+		build_tray_tween.chain().tween_callback(func():if not build_tray_open:build_tray.hide())
+
 func _layout_workspace():
-	if not is_instance_valid(hud_root):return
+	if not is_instance_valid(hud_root) or not is_instance_valid(hud_footer):return
 	var extent:=hud_root.size
-	var w:=maxf(1000.0,extent.x)
-	var h:=maxf(700.0,extent.y)
+	var w:=maxf(640.0,extent.x)
+	var h:=maxf(480.0,extent.y)
+	header_tools.get_parent().visible=w>=1120
+	header_brand.visible=w>=960
+	for tile in header_metric_tiles:tile.visible=true
+	for key in hud_metrics:hud_metrics[key].add_theme_font_size_override("font_size",18 if w<900 else 23)
 	hud_header.position=Vector2(12,10);hud_header.size=Vector2(w-24,76)
-	hud_views.position=Vector2(12,96);hud_views.size=Vector2(464,46)
-	hud_layers.position=Vector2(12,164);hud_layers.size=Vector2(244,328)
-	var footer_height:=maxf(54,hud_footer.get_combined_minimum_size().y)
-	var build_height:=maxf(90,hud_build.get_combined_minimum_size().y)
-	var context_height:=maxf(60,hud_context.get_combined_minimum_size().y)
+	hud_views.position=Vector2(12,96);hud_views.size=Vector2(minf(464,w-112),46)
+	hud_layers.position=Vector2(12,150);hud_layers.size=Vector2(244,minf(328,h-330))
+	interaction_caption.visible=w>=900
+	category_hint.visible=w>=1080
+	fleet_count.visible=w>=850
+	var footer_height:=maxf(26,hud_footer.get_combined_minimum_size().y)
+	var build_height:=maxf(46,hud_build.get_combined_minimum_size().y)
+	var context_height:=maxf(46,hud_context.get_combined_minimum_size().y)
 	var footer_y:=h-6-footer_height
-	var build_y:=footer_y-6-build_height
-	var context_y:=build_y-6-context_height
+	var build_y:=footer_y-4-build_height
+	var context_y:=build_y-4-context_height
 	hud_context.position=Vector2(12,context_y);hud_context.size=Vector2(w-24,context_height)
 	hud_build.position=Vector2(12,build_y);hud_build.size=Vector2(w-24,build_height)
 	hud_footer.position=Vector2(12,footer_y);hud_footer.size=Vector2(w-24,footer_height)
+	if is_instance_valid(build_tray):
+		var tray_height:=maxf(110,build_tray.get_combined_minimum_size().y)
+		build_tray.size=Vector2(w-24,tray_height);build_tray_target=Vector2(12,context_y-8-tray_height)
+		if not is_instance_valid(build_tray_tween) or not build_tray_tween.is_running():build_tray.position=build_tray_target
+	if is_instance_valid(runtime_chart):
+		var chart_top:=hud_views.position.y+hud_views.size.y+6.0
+		var available_chart_height:=extent.y-(h-context_y)-chart_top-4.0
+		runtime_chart_layout_available=extent.x-124.0>=310.0 and available_chart_height>=170.0
+		var chart_height:=minf(220.0,maxf(170.0,available_chart_height))
+		runtime_chart.custom_minimum_size=Vector2(310.0,170.0)
+		runtime_chart.position=Vector2(12,chart_top);runtime_chart.size=Vector2(minf(350.0,w-124.0),chart_height)
 	weather_orb.position=Vector2(w-74,94)
-	hud_brand_subtitle.visible=w>=1180
-	if is_instance_valid(hud_dock):hud_dock.call("_layout")
+	hud_brand_subtitle.visible=true
+	if is_instance_valid(hud_dock):
+		hud_dock.call("_layout")
+		var rail:PanelContainer=hud_dock.get_node("DockRail")
+		rail.size.y=minf(rail.size.y,maxf(80.0,context_y-rail.position.y-8.0))
+		hud_layers.size.y=minf(328,maxf(80,context_y-hud_layers.position.y-8))
+		# Keep an opened side panel above the compact construction controls.
+		for panel in hud_dock.panels.values():panel.size.y=maxf(120.0,context_y-panel.position.y-8.0)
+
 
 func ask(message:String,action:Callable):
 	confirm_action=action;confirmation.dialog_text=message;confirmation.popup_centered()
@@ -411,12 +586,15 @@ func edit_selected_demand():
 	open_parameters(false)
 
 func start_build(kind:String):
+	set_build_tray_open(false,false)
+	if dimension_profile!="metric_v1" and (kind in Catalog.NEW_STORAGE_KINDS or kind=="molten_salt_store"):
+		tell("新增储能设备需要米制场景；请在尺寸说明中显式校验并迁移米制，旧场景不会自动缩放。");return
 	if dimension_profile=="metric_v1" and footprint(kind,templates.get(kind,{}))>65.0:
 		tell("此容量所需模块与检修占地超过基地短边，请降低容量或另选模板。");return
 	if kind in FACILITY_KINDS:
 		if kind in ["tower_station","tower_station_preview"] and dimension_profile!="metric_v1":tell("塔式预览需要米制尺寸；请先显式迁移米制。");return
 		build_kind=kind;set_mode("build");ghost=load("res://scripts/station_facade.gd").new();equipment.add_child(ghost);ghost.setup({"id":0,"kind":kind,"name":DEVICE_NAMES[kind],"visual_dimension_profile":dimension_profile});ghost.set_preview(false);return
-	if kind in INTERNAL_KINDS:
+	if kind in INTERNAL_KINDS and not kind in BUILDABLE_KINDS:
 		tell("请进入电热站内部建设此设备。");return
 	build_kind=kind;set_mode("build")
 	ghost=Visual.create(kind,visual_params(templates[kind]),true);equipment.add_child(ghost);ghost.set_preview(false)
@@ -438,6 +616,7 @@ func footprint(kind:String,params:Dictionary={})->float:
 	return maxf(7.0,float(params.get("rotor_diameter_m",126.0))*0.05+0.7) if kind=="wind" else Visual.footprint(kind)
 
 func can_place(kind:String,p:Vector2,ignore_id:int=-2,params:Dictionary={})->String:
+	if dimension_profile!="metric_v1" and (kind in Catalog.NEW_STORAGE_KINDS or kind=="molten_salt_store"):return "新增储能需要米制场景；请在尺寸说明中显式校验并迁移米制，旧场景不会自动缩放。"
 	if kind in ["tower_station","tower_station_preview"] and dimension_profile!="metric_v1":return "塔式预览需要米制尺寸"
 	if not is_finite(p.x) or not is_finite(p.y):return "场地坐标必须是有限数值"
 	var radius:=footprint(kind,params if not params.is_empty() else templates.get(kind,{}))
@@ -488,7 +667,15 @@ func endpoint(id:int,port_id:String="")->Vector3:
 	var child:=device(id)
 	if child.has("parent_station_id"):
 		var key:=str(int(child.parent_station_id))
-		if station_nodes.has(key):return station_nodes[key].get_port_position("ac_out" if child.kind=="steam_turbine" else "ac_in" if child.kind in ["solar_tower_receiver","molten_salt_store","salt_steam_generator","electric_boiler","fuel_boiler","solar_thermal","parabolic_trough","oil_water_exchanger","steam_generator","steam_condenser","feedwater_pump"] else "heat_out")
+		if station_nodes.has(key):
+			var port:Dictionary=Catalog.port(child.kind,port_id)
+			if port.is_empty():
+				for candidate in Catalog.ports(child.kind):
+					if candidate.carrier=="electricity_ac":port=candidate;break
+				if port.is_empty() and not Catalog.ports(child.kind).is_empty():port=Catalog.ports(child.kind)[0]
+			var boundary:String=("heat_out" if port.get("direction","")=="output" else "heat_in") if port.get("carrier","")!="electricity_ac" else "ac_out" if port.get("direction","")=="output" else "ac_in"
+			if port.get("carrier","")=="heat_water" and port.get("grade_id","")==Catalog.PRIMARY_GRADE:boundary="heat_primary_out" if port.get("direction","")=="output" else "heat_primary_in"
+			return station_nodes[key].get_port_position(boundary)
 	if station_nodes.has(str(id)):return station_nodes[str(id)].get_port_position("ac_in")
 	if nodes.has(str(id)) and port_id!="" and nodes[str(id)].has_method("get_named_port_position") and nodes[str(id)].has_named_port(port_id):return nodes[str(id)].get_named_port_position(port_id)
 	return nodes[str(id)].port_global() if nodes.has(str(id)) else Vector3.ZERO
@@ -499,7 +686,7 @@ func rebuild_cables():
 		if same_internal_station(int(l.from),int(l.to)):continue
 		var n=Visual.create_line(endpoint(int(l.from),str(l.get("from_port",""))),endpoint(int(l.to),str(l.get("to_port",""))),physical_lines,int(l.from)==selected_id or int(l.to)==selected_id);cables.add_child(n)
 		if l.get("carrier","")in ["heat_water","heat_oil","heat_salt"] and (int(l.from)==selected_id or int(l.to)==selected_id):
-			var tag:=Label3D.new();tag.text="热90/60" if l.get("grade_id","")=="hw_primary_90_60" else "热70/40";tag.font=font_full;tag.font_size=24;tag.pixel_size=0.005;tag.fixed_size=true;tag.no_depth_test=false;tag.billboard=BaseMaterial3D.BILLBOARD_ENABLED;tag.modulate=Color("e9b47b");tag.position=(endpoint(int(l.from),str(l.from_port))+endpoint(int(l.to),str(l.to_port)))*0.5+Vector3(0,1.5,0);cables.add_child(tag);Visual.fit_screen_label(tag,camera,18)
+			var tag:=Label3D.new();tag.text=thermal_grade_label(str(l.get("grade_id","")));tag.font=font_full;tag.font_size=24;tag.pixel_size=0.005;tag.fixed_size=true;tag.no_depth_test=false;tag.billboard=BaseMaterial3D.BILLBOARD_ENABLED;tag.modulate=Color("e9b47b");tag.position=(endpoint(int(l.from),str(l.from_port))+endpoint(int(l.to),str(l.to_port)))*0.5+Vector3(0,1.5,0);cables.add_child(tag);Visual.fit_screen_label(tag,camera,18)
 
 func nearest(pos:Vector2)->int:
 	var best:=42.0;var found:=-2
@@ -547,6 +734,7 @@ func select_device(id:int):
 	selection.visible=id<0
 	if mode=="move" and id!=selected_id:set_mode("select")
 	selected_id=id
+	if is_instance_valid(runtime_chart):runtime_chart.sync_target()
 	for key in nodes:nodes[key].set_highlight(int(key)==id)
 	for key in station_nodes:station_nodes[key].set_selected(int(key)==int(device(id).get("parent_station_id",id)))
 	rebuild_cables();update_status()
@@ -593,13 +781,15 @@ func state()->Dictionary:
 	var saved_energy:Dictionary=ENERGY_ZERO.duplicate(true);saved_energy.merge(energy,true)
 	for kind in KINDS:
 		if not saved_templates.has(kind):saved_templates[kind]=model.defaults(kind).duplicate(true)
-	return {"schema":12,"model_version":21,"tower_energy":tower_energy.duplicate(true),"rankine_energy":rankine_energy.duplicate(true),"high_temp_energy":high_temp_energy.duplicate(true),"solar_energy":solar_energy.duplicate(true),"fuel_supply":fuel_supply.duplicate(true),"fuel_energy":fuel_energy.duplicate(true),"dimension_profile":dimension_profile,"stations":stations.duplicate(true),"next_station_id":next_station_id,"rebuild":true,"devices":devices.duplicate(true),"links":links.duplicate(true),"templates":saved_templates,"imports":imports.duplicate(true),"next_id":next_id,"elapsed_s":elapsed_s,"energy":saved_energy,"thermal_energy":thermal_energy.duplicate(true),"physical_lines":physical_lines,"climate_config":climate_config.duplicate(true),"weather_effects_enabled":weather_effects_enabled}
+	return {"schema":13,"model_version":22,"tower_energy":tower_energy.duplicate(true),"rankine_energy":rankine_energy.duplicate(true),"high_temp_energy":high_temp_energy.duplicate(true),"solar_energy":solar_energy.duplicate(true),"fuel_supply":fuel_supply.duplicate(true),"fuel_energy":fuel_energy.duplicate(true),"dimension_profile":dimension_profile,"stations":stations.duplicate(true),"next_station_id":next_station_id,"rebuild":true,"devices":devices.duplicate(true),"links":links.duplicate(true),"templates":saved_templates,"imports":imports.duplicate(true),"next_id":next_id,"elapsed_s":elapsed_s,"energy":saved_energy,"thermal_energy":thermal_energy.duplicate(true),"physical_lines":physical_lines,"climate_config":climate_config.duplicate(true),"weather_effects_enabled":weather_effects_enabled}
 
 func checkpoint():
+	if is_instance_valid(runtime_chart):runtime_chart.reset_history()
 	scene_revision+=1
 	undo_states.append(state());if undo_states.size()>40:undo_states.pop_front()
 
 func restore(s:Dictionary):
+	if is_instance_valid(runtime_chart):runtime_chart.reset_history()
 	dimension_profile=str(s.get("dimension_profile","legacy_illustrative"))
 	fuel_supply=s.get("fuel_supply",FuelSupply.defaults()).duplicate(true)
 	fuel_energy=s.get("fuel_energy",FuelSupply.initial_energy()).duplicate(true)
@@ -621,7 +811,7 @@ func restore(s:Dictionary):
 	for key in ENERGY_ZERO:
 		if not energy.has(key):energy[key]=0.0
 	for d in devices:
-		if d.kind in ["battery","thermal_store","high_temp_store"] and not d.has("state"):d.state=Catalog.initial_state(d.kind,d.params)
+		if Catalog.is_storage(d.kind) and not d.has("state"):d.state=Catalog.initial_state(d.kind,d.params)
 	scene_revision+=1;dispatch_dt_s=1.0
 	paused=true;speed=1.0;accumulator=0;selected_id=-2;set_mode("select");rebuild_equipment();refresh()
 
@@ -833,6 +1023,7 @@ func advance(dt:float)->bool:
 		for d in devices:
 			if r.get("next_states",{}).has(str(int(d.id))):d.state=r.next_states[str(int(d.id))].duplicate(true)
 		elapsed_s=next_time;scene_revision+=1
+		if is_instance_valid(runtime_chart):runtime_chart.capture_step(r,elapsed_s)
 	var displayed:=solve_at(elapsed_s)
 	if displayed.get("error","")=="":result=displayed
 	return true
@@ -883,6 +1074,7 @@ func update_status():
 	for key in hud_metrics:
 		var value:float=float(result.get("generated_mw",0))-float(result.get("curtailed_mw",0)) if key=="generated" else float(result.get(key+"_mw",0))
 		hud_metrics[key].text="%.3f"%value
+		hud_metrics[key].tooltip_text=hud_metrics[key].text+" MW"
 		hud_metrics[key].add_theme_color_override("font_color",UITheme.AMBER if key=="unserved" and value>0.000001 else UITheme.INK)
 	for key in ["select","move","link"]:
 		if hud_actions.has(key):hud_actions[key].set_pressed_no_signal(mode==key)
@@ -914,18 +1106,20 @@ func update_status():
 		metric_names["device_available"].text="请求功率";metric_values["device_available"].text="%.3f"%report.get("demand_mw",0)
 		metric_names["device_sent"].text="负荷实供";metric_values["device_sent"].text="%.3f"%report.get("served_mw",0)
 		device_summary.text="需求节点 · 优先级 %d（数值小优先）\n缺供 %.3f MW · %s"%[d.params.get("priority",1),report.get("unserved_mw",0),"已连接" if report.get("connected",false) else "孤立 / 未连线"]
-	elif d.get("kind","")=="battery":
+	elif Catalog.is_electric_storage(d.get("kind","")):
 		metric_names["device_available"].text="正在充电";metric_values["device_available"].text="%.3f"%report.get("charge_mw",0)
 		metric_names["device_sent"].text="正在放电";metric_values["device_sent"].text="%.3f"%report.get("discharge_mw",0)
 		device_summary.text="SOC %.2f%% · %.4f / %.2f MWh\n%s · %s\nAC端效率教学假设；无免费补能"%[100.0*float(d.get("state",{}).get("energy_mwh",0))/maxf(0.000001,d.params.get("capacity_mwh",1)),d.get("state",{}).get("energy_mwh",0),d.params.get("capacity_mwh",0),{"charge":"充电","discharge":"放电","idle":"待机"}.get(report.get("mode","idle"),"待机"),"已连接" if report.get("connected",false) else "孤立 / 未连线"]
+		if d.kind=="hydrogen_storage_system":device_summary.text=device_summary.text.replace("MWh", "MWh(LHV)")+"\n库存为氢低位热值，回电还需放电效率。"
 	else:metric_names["device_sent"].text="实际送出"
 	source_label.text="来源：%s\n数据集 %d · 风速 %.1f m/s\n辐照 %.0f W/m²"%[sources.get(str(selected_id),"变电站网络" if d.get("kind","")=="station" else "未选择"),imports.size(),last_weather.get("wind_speed_mps",0),last_weather.get("irradiance_wm2",0)]
+	if Catalog.is_electric_storage(d.get("kind","")):source_label.text=str(Catalog.storage_technology(d.kind).get("assumptions",""))
 	if d.get("kind","")=="wind":source_label.text+="\n空气密度：实际 %.3f / 参考 %.3f kg/m³"%[last_weather.get("air_density_kgm3",1.225),d.params.get("reference_air_density_kgm3",1.225)]
 	for id in nodes:
 		var marker=nodes[id].get_node_or_null("PortIndicator")
 		if marker:marker.modulate=Color("3a9c83") if result.get("devices",{}).get(id,{}).get("connected",false) else Color("c29a4f")
 	var demands:Array=devices.filter(func(item):return item.kind in ["load","heat_demand"])
-	fleet_count.text="%d设备 · %d厂站\n%d需求 · %d条线"%[devices.size()-demands.size(),stations.size(),demands.size(),links.size()]
+	fleet_count.text="%d设备 · %d厂站 · %d需求 · %d条线"%[devices.size()-demands.size(),stations.size(),demands.size(),links.size()]
 	if is_instance_valid(demand_picker):
 		var sig:=str(demands.map(func(item):return int(item.id)))
 		if sig!=demand_signature or demand_picker.item_count==0:
@@ -939,7 +1133,8 @@ func update_status():
 	update_thermal_display(d,report)
 	update_station_display()
 	update_dimension_display()
-	mode_label.text="%s  ·  左键/中键平移 / 右键旋转 / 滚轮缩放 / F1–F3视角"%{"select":"选择设备","build":"放置 "+DEVICE_NAMES.get(build_kind,build_kind),"move":"移动选中设备","link":"选择起点与终点端口"}.get(mode,mode)
+	mode_label.text="%s · Esc 返回"%{"select":"选择设备","build":"放置 "+DEVICE_NAMES.get(build_kind,build_kind),"move":"移动选中设备","link":"选择起点与终点端口"}.get(mode,mode)
+	mode_label.tooltip_text="左键/中键平移 · 右键旋转 · 滚轮缩放 · F1–F3视角 · Esc 取消或返回"
 
 func pointer_over_ui(pos:Vector2,padding:Vector2=Vector2.ZERO)->bool:
 	for control in ui_regions:
@@ -963,7 +1158,61 @@ func _notification(what):
 		if booted and drag_active:
 			set_mode("select");tell("移动已取消：窗口失去焦点；设备保留原位。")
 
+func register_escape_window(window:Window):
+	if is_instance_valid(window):window.window_input.connect(_auxiliary_window_input.bind(window))
+
+func _auxiliary_window_input(event:InputEvent,window:Window):
+	if event is InputEventKey and (event.keycode==KEY_ESCAPE or event.physical_keycode==KEY_ESCAPE):
+		if event.pressed and not event.echo:handle_escape()
+		window.set_input_as_handled()
+
+func _close_nested_popup(node:Node)->bool:
+	for child in node.get_children():
+		if child is Window:
+			if not child.visible:continue
+			if _close_nested_popup(child):return true
+			child.hide();return true
+		if _close_nested_popup(child):return true
+	return false
+
+func handle_escape()->bool:
+	cancel_camera_drag()
+	# Each press consumes exactly one layer. Editors never commit on Escape.
+	for dialog in [confirmation,station_port_dialog,param_dialog,data_dialog,line_dialog,bulk_parameter_editor]:
+		if is_instance_valid(dialog) and dialog.is_inside_tree() and dialog.visible:
+			if not _close_nested_popup(dialog):
+				if dialog==bulk_parameter_editor and dialog.has_method("handle_escape"):dialog.handle_escape()
+				else:dialog.hide()
+			if dialog==confirmation:confirm_action=Callable()
+			return true
+	if is_instance_valid(import_dialog) and import_dialog.is_inside_tree() and import_dialog.visible:
+		if not _close_nested_popup(import_dialog):import_dialog.cancel_import()
+		return true
+	if is_instance_valid(optimization_controller) and is_instance_valid(optimization_controller.panel) and optimization_controller.panel.visible:
+		if not _close_nested_popup(optimization_controller.panel):optimization_controller.panel.call("_close")
+		return true
+	if is_instance_valid(device_inspector) and device_inspector.is_inside_tree() and device_inspector.visible:
+		if not _close_nested_popup(device_inspector):device_inspector.close_device()
+		return true
+	if is_instance_valid(station_interior) and station_interior.is_inside_tree() and station_interior.visible:
+		if station_interior.has_method("handle_escape"):station_interior.handle_escape()
+		else:station_interior.close_station()
+		return true
+	if is_instance_valid(build_tray) and (build_tray_open or build_tray.visible):
+		set_build_tray_open(false);return true
+	if mode!="select" or pending_link!=-2 or drag_active:
+		cancel_interaction();return true
+	if is_instance_valid(hud_dock) and not hud_dock.active_key.is_empty():
+		hud_dock.close_panels();return true
+	if is_instance_valid(hud_layers) and hud_layers.visible:
+		hud_layers.hide();return true
+	cancel_interaction()
+	return true
+
 func _input(event):
+	if event is InputEventKey and (event.keycode==KEY_ESCAPE or event.physical_keycode==KEY_ESCAPE):
+		if event.pressed and not event.echo:handle_escape()
+		get_viewport().set_input_as_handled();return
 	if modal_visible():cancel_camera_drag()
 	if event is InputEventMouseMotion and left_pan_pending and not (event.button_mask & MOUSE_BUTTON_MASK_LEFT):
 		cancel_camera_drag()
@@ -985,8 +1234,6 @@ func _input(event):
 			elif drag_active:
 				finish_drag(event.position);get_viewport().set_input_as_handled()
 			drag_candidate=-2
-	if event is InputEventKey and event.pressed and not event.echo and not modal_visible():
-		if event.keycode==KEY_ESCAPE:cancel_interaction();get_viewport().set_input_as_handled()
 
 func select_map_at(screen_point:Vector2,double_click:bool=false):
 	var picked:=nearest(screen_point)
@@ -1017,10 +1264,12 @@ func finish_drag(screen_point:Vector2):
 	drag_candidate=-2;drag_active=false
 
 func _unhandled_input(event):
+	if event is InputEventKey and (event.keycode==KEY_ESCAPE or event.physical_keycode==KEY_ESCAPE):
+		if event.pressed and not event.echo:handle_escape()
+		get_viewport().set_input_as_handled();return
 	if modal_visible():cancel_camera_drag();return
 	if event is InputEventMouse and pointer_over_ui(event.position):return
 	if event is InputEventKey and event.pressed:
-		if event.keycode==KEY_ESCAPE:cancel_interaction();return
 		if event.ctrl_pressed and event.keycode==KEY_Z:undo();return
 		if event.keycode==KEY_F:focus_selected();return
 	if event is InputEventMouseMotion:
@@ -1076,10 +1325,21 @@ func compatible_target(id:int)->bool:
 	var candidate:=connection_candidate(pending_link,id)
 	return not candidate.is_empty() and Catalog.validate_link(devices,links,candidate)==""
 
+func thermal_grade_label(grade:String)->String:
+	return {"salt_565_290":"熔盐565/290°C","oil_300_200":"导热油300/200°C","hw_primary_90_60":"热水90/60°C","hw_secondary_70_40":"热水70/40°C"}.get(grade,"热接口 · "+grade)
+
 func endpoint_description(id:int)->String:
 	if id==-1:return "外部电网 · AC输入 · 接收上限 4 MW"
 	if station_is_preview(id):return str(station(id).name)+" · 未投运预览 · 无能量端口、无网络连接、零发电"
-	if not station(id).is_empty():return str(station(id).name)+" · AC输入 / 70/40°C热输出 · 端口映射至内部设备"
+	if not station(id).is_empty():
+		var mapped:Array[String]=[]
+		for member in devices:
+			if int(member.get("parent_station_id",-1))!=id:continue
+			for port in Catalog.ports(member.kind):
+				if port.carrier=="water_steam":continue
+				var caption:String=("AC输出" if port.direction=="output" else "AC输入") if port.carrier=="electricity_ac" else thermal_grade_label(str(port.get("grade_id","")))
+				if not mapped.has(caption):mapped.append(caption)
+		return str(station(id).name)+" · "+(" / ".join(mapped) if not mapped.is_empty() else "尚无已建设备端口")+" · 映射至内部设备"
 	var d:=device(id)
 	if d.is_empty():return ""
 	var descriptions:Array[String]=[]
@@ -1099,6 +1359,8 @@ func endpoint_description(id:int)->String:
 		"electric_boiler":capacity="电输入上限 %.2f MW"%d.params.get("rated_electric_mw",0)
 		"thermal_store":capacity="充/放 %.2f/%.2f MWth"%[d.params.get("charge_mwth",0),d.params.get("discharge_mwth",0)]
 		"heat_exchanger":capacity="热侧上限 %.2f MWth"%d.params.get("capacity_mwth",0)
+	if Catalog.is_electric_storage(d.kind):capacity="充/放 %.2f/%.2f MW"%[d.params.get("charge_mw",0),d.params.get("discharge_mw",0)]
+	if Catalog.is_thermal_storage(d.kind):capacity="充/放 %.2f/%.2f MWth"%[d.params.get("charge_mwth",0),d.params.get("discharge_mwth",0)]
 	return "%s #%d · %s · %s"%[DEVICE_NAMES[d.kind],id," / ".join(descriptions),capacity]
 
 func endpoint_name(id:int)->String:
@@ -1117,7 +1379,7 @@ func connection_caption(target_id:int)->String:
 	var candidate:=connection_candidate(pending_link,target_id)
 	if candidate.is_empty():return first+" → "+endpoint_name(target_id)+"\n不可连接：载体、方向或厂站边界不兼容。"
 	var error:=Catalog.validate_link(devices,links,candidate)
-	var carrier:="蒸汽/给水" if candidate.get("carrier","")=="water_steam" else "AC" if candidate.get("carrier","")=="electricity_ac" else ("90/60°C" if candidate.get("grade_id","")==Catalog.PRIMARY_GRADE else "70/40°C")
+	var carrier:="蒸汽/给水" if candidate.get("carrier","")=="water_steam" else "AC" if candidate.get("carrier","")=="electricity_ac" else thermal_grade_label(str(candidate.get("grade_id","")))
 	return "%s → %s\n%s · 上限 %.2f %s · %s"%[endpoint_name(int(candidate.from)),endpoint_name(int(candidate.to)),carrier,candidate.get("mass_flow_capacity_kg_s",candidate.get("capacity_mwth",candidate.get("capacity_mw",0))),candidate.get("unit","MW"),"可连接" if error=="" else error]
 
 func suppress_annotation_collisions(annotations:Array)->void:
@@ -1254,7 +1516,7 @@ func update_placement_outline(p:Vector2,radius:float,valid:bool,land_dimensions:
 	mesh.surface_end();placement_outline.mesh=mesh
 
 func modal_visible()->bool:
-	return (is_instance_valid(device_inspector) and device_inspector.visible) or (is_instance_valid(station_interior) and station_interior.visible) or (is_instance_valid(station_port_dialog) and station_port_dialog.visible) or (is_instance_valid(optimization_controller) and is_instance_valid(optimization_controller.panel) and optimization_controller.panel.visible) or confirmation.visible or param_dialog.visible or data_dialog.visible or line_dialog.visible or (is_instance_valid(import_dialog) and import_dialog.visible)
+	return (is_instance_valid(bulk_parameter_editor) and bulk_parameter_editor.visible) or (is_instance_valid(device_inspector) and device_inspector.visible) or (is_instance_valid(station_interior) and station_interior.visible) or (is_instance_valid(station_port_dialog) and station_port_dialog.visible) or (is_instance_valid(optimization_controller) and is_instance_valid(optimization_controller.panel) and optimization_controller.panel.visible) or confirmation.visible or param_dialog.visible or data_dialog.visible or line_dialog.visible or (is_instance_valid(import_dialog) and import_dialog.visible)
 
 func window_background(w:Window):
 	w.hide();w.transient=true;w.exclusive=true
@@ -1264,19 +1526,66 @@ func select_site(p:Vector2):
 	super.select_site(p)
 	detail.text="地块 %.1f, %.1f  / 坡度 %.1f°\n%s"%[p.x,p.y,slope_at(p.x,p.y),"可建初筛通过" if exclusion(p.x,p.y)=="" and slope_at(p.x,p.y)<=8 else "禁建或陡坡"]
 
+func open_bulk_parameters():
+	if is_instance_valid(bulk_parameter_editor):bulk_parameter_editor.open()
+
+func apply_bulk_parameters(kind:String,ids:Array,patch:Dictionary)->Dictionary:
+	var fail:Dictionary={"ok":false,"error":"","count":0,"ids":ids.duplicate()}
+	if ids.is_empty():fail.error="请先选择至少一台设备。";return fail
+	if patch.is_empty():fail.error="请勾选至少一个要修改的参数。";return fail
+	if not kind in KINDS:fail.error="设备类型无效。";return fail
+	var defaults:Dictionary=model.defaults(kind)
+	for key in patch:
+		if key=="initial_soc":fail.error="初始库存仅用于新建，不能给现有设备补能。";return fail
+		if not defaults.has(key):fail.error="未知参数："+str(key);return fail
+	var selected:Dictionary={}
+	for id in ids:
+		if not (id is int or id is float) or not is_finite(float(id)) or float(id)!=floor(float(id)):
+			fail.error="设备ID必须是有效整数。";return fail
+		var key:=int(id)
+		if selected.has(key):fail.error="选择范围有重复设备ID。";return fail
+		var item:=device(key)
+		if item.is_empty() or item.kind!=kind:fail.error="设备 #%d 已删除或类型已变化，请重新选择。"%key;return fail
+		var params:Dictionary=defaults.duplicate(true);params.merge(item.params,true);params.merge(patch,true)
+		var errors:Array=model.validate(kind,params)
+		if not errors.is_empty():fail.error="设备 #%d 未通过："%key+"；".join(errors);return fail
+		if Catalog.is_electric_storage(kind) and float(item.get("state",{}).get("energy_mwh",0))>float(params.capacity_mwh):
+			fail.error="设备 #%d 的容量不能小于当前库存；不会丢弃电量。"%key;return fail
+		if Catalog.is_thermal_storage(kind) and float(item.get("state",{}).get("energy_mwhth",0))>float(params.capacity_mwhth):
+			fail.error="设备 #%d 的热容量不能小于当前库存；不会丢弃热量。"%key;return fail
+		selected[key]=params
+	# Validate all new footprints together, not against each other's old sizes.
+	var candidate:=state()
+	for item in candidate.devices:
+		if selected.has(int(item.id)):item.params=selected[int(item.id)].duplicate(true)
+	var error:=validate_state(candidate)
+	if error!="":fail.error="整组校验未通过，所有设备均未修改："+error;return fail
+	checkpoint();paused=true;accumulator=0.0
+	for item in devices:
+		if selected.has(int(item.id)):item.params=selected[int(item.id)].duplicate(true)
+	set_mode("select");rebuild_equipment();refresh()
+	if is_instance_valid(optimization_controller) and is_instance_valid(optimization_controller.panel):optimization_controller.panel.mark_stale()
+	tell("已统一设置 %d 台%s；未选设备和当前库存保持不变，可一次撤销。"%[ids.size(),DEVICE_NAMES.get(kind,kind)])
+	return {"ok":true,"error":"","count":ids.size(),"ids":ids.duplicate()}
+
 func make_parameter_dialog(theme:Theme):
-	add_child(param_dialog);param_dialog.title="设备参数";param_dialog.borderless=true;param_dialog.size=Vector2i(940,790);param_dialog.theme=theme;window_background(param_dialog)
+	add_child(param_dialog);param_dialog.title="设备参数 · Esc 取消";param_dialog.borderless=false;param_dialog.size=Vector2i(940,790);param_dialog.theme=theme;window_background(param_dialog)
 	param_dialog.close_requested.connect(func():param_dialog.hide())
-	var v:=VBoxContainer.new();param_dialog.add_child(v);v.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT);v.offset_left=20;v.offset_right=-20;v.offset_top=18;v.offset_bottom=-18;v.add_theme_constant_override("separation",10)
-	v.add_child(label("设备参数",25));parameter_scope_label=label("",16);v.add_child(parameter_scope_label);v.add_child(param_target)
+	var v:=VBoxContainer.new();param_dialog.add_child(v);v.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT);v.offset_left=16;v.offset_right=-16;v.offset_top=14;v.offset_bottom=-14;v.add_theme_constant_override("separation",8)
+	var title_row:=HBoxContainer.new();v.add_child(title_row)
+	var title:=label("设备参数",23);title.size_flags_horizontal=Control.SIZE_EXPAND_FILL;title_row.add_child(title)
+	compact_button_style(button("关闭 / Esc",func():param_dialog.hide(),title_row))
+	parameter_scope_label=label("",13);parameter_scope_label.add_theme_color_override("font_color",UITheme.MUTED);parameter_scope_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;v.add_child(parameter_scope_label);v.add_child(param_target)
 	param_target.item_selected.connect(func(_i):load_parameter_text())
 	parameter_form=preload("res://scripts/parameter_form.gd").new();v.add_child(parameter_form)
 	parameter_form.parameters_changed.connect(func():param_errors.text="修改后校验并应用。取消或关闭不修改场景。")
-	param_errors.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;param_errors.add_theme_color_override("font_color",UITheme.AMBER);v.add_child(param_errors)
+	param_errors.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;param_errors.max_lines_visible=2;param_errors.add_theme_font_size_override("font_size",13);param_errors.add_theme_color_override("font_color",UITheme.AMBER);v.add_child(param_errors)
 	var row:=HBoxContainer.new();v.add_child(row)
 	button("恢复参考默认（待应用）",func():parameter_form.set_parameters(parameter_kind(),model.defaults(parameter_kind()),param_scope=="template");param_errors.text="参考默认已载入，校验并应用后生效。",row)
 	var spacer:=Control.new();spacer.size_flags_horizontal=Control.SIZE_EXPAND_FILL;row.add_child(spacer)
 	button("取消",func():param_dialog.hide(),row);button("校验并应用",apply_parameters,row)
+	for action in row.get_children():
+		if action is Button:compact_button_style(action)
 
 func parameter_kind()->String:
 	return KINDS[param_target.selected] if param_scope=="template" else device(parameter_id).get("kind","wind")
@@ -1286,15 +1595,17 @@ func open_parameters(as_template:bool):
 	paused=true;param_scope="template" if as_template else "device";parameter_id=selected_id
 	param_target.clear()
 	for k in KINDS:param_target.add_item(DEVICE_NAMES[k]+"默认值")
-	param_target.visible=as_template;load_parameter_text();update_status();param_dialog.popup_centered(Vector2i(mini(940,int(get_viewport().get_visible_rect().size.x)-48),mini(790,int(get_viewport().get_visible_rect().size.y)-48)))
+	param_target.visible=as_template;load_parameter_text();update_status();param_dialog.popup_centered(Vector2i(mini(940,int(get_viewport().get_visible_rect().size.x)-24),mini(790,int(get_viewport().get_visible_rect().size.y)-24)))
 
 func load_parameter_text():
+	if param_scope=="device" and device(parameter_id).is_empty():param_errors.text="设备已删除，请重新选择。";return
 	var p:Dictionary=templates[parameter_kind()] if param_scope=="template" else device(parameter_id).params
 	parameter_form.set_parameters(parameter_kind(),p,param_scope=="template")
 	parameter_scope_label.text="应用范围 · 仅未来新建模板；不修改现有设备。" if param_scope=="template" else "应用范围 · 仅当前设备 #%d；不修改其他设备或未来模板。"%parameter_id
 	param_errors.text="修改后校验并应用。取消或关闭不修改场景。"
 
 func apply_parameters():
+	if param_scope=="device" and device(parameter_id).is_empty():param_errors.text="设备已删除，未应用参数；请关闭并重新选择。";return
 	var parsed=parameter_form.get_parameters()
 	if not parsed is Dictionary:param_errors.text="JSON格式错误，未应用。";return
 	var errors:Array=model.validate(parameter_kind(),parsed)
@@ -1303,9 +1614,9 @@ func apply_parameters():
 	if param_scope=="device":
 		var d:=device(parameter_id);var placement_error:=can_place_internal(int(d.parent_station_id),d.kind,Vector2(d.interior_x,d.interior_z),parameter_id,parsed) if d.has("parent_station_id") else can_place(d.kind,Vector2(d.x,d.z),parameter_id,parsed)
 		if placement_error!="":param_errors.text="尺寸不适合当前地块："+placement_error;return
-	if param_scope=="device" and parameter_kind()=="battery" and float(device(parameter_id).get("state",{}).get("energy_mwh",0))>float(parsed.capacity_mwh):
+	if param_scope=="device" and Catalog.is_electric_storage(parameter_kind()) and float(device(parameter_id).get("state",{}).get("energy_mwh",0))>float(parsed.capacity_mwh):
 		param_errors.text="容量不能小于当前已存电量；请先放电，不能通过改参删除能量。";return
-	if param_scope=="device" and parameter_kind() in ["thermal_store","high_temp_store","molten_salt_store"] and float(device(parameter_id).get("state",{}).get("energy_mwhth",0))>float(parsed.capacity_mwhth):
+	if param_scope=="device" and Catalog.is_thermal_storage(parameter_kind()) and float(device(parameter_id).get("state",{}).get("energy_mwhth",0))>float(parsed.capacity_mwhth):
 		param_errors.text="热容量不能小于当前库存；不允许通过改参删除热量。";return
 	checkpoint()
 	if param_scope=="template":templates[parameter_kind()]=parsed.duplicate(true)
@@ -1476,28 +1787,41 @@ func connection_candidate(first:int,second:int)->Dictionary:
 	if first<0 or first==second:return {}
 	var a:=first;var b:=second
 	var ka:String=device(a).get("kind","");var kb:String=device(b).get("kind","grid" if b==-1 else "")
-	var mass_paths:={"salt_steam_generator>steam_turbine":["steam_out","steam_in","rankine_live_v1"],"feedwater_pump>salt_steam_generator":["feed_out","feed_in","rankine_feedwater_v1"],"steam_generator>steam_turbine":["steam_out","steam_in","rankine_live_v1"],"steam_turbine>steam_condenser":["exhaust_out","exhaust_in","rankine_exhaust_v1"],"steam_condenser>feedwater_pump":["condensate_out","condensate_in","rankine_condensate_v1"],"feedwater_pump>steam_generator":["feed_out","feed_in","rankine_feedwater_v1"]}
+	# Canonicalize a bidirectional storage cable irrespective of click order.
+	if ka=="station" and Catalog.is_electric_storage(kb):
+		var swap:=a;a=b;b=swap;var swap_kind:=ka;ka=kb;kb=swap_kind
 	for pair in [[a,b,ka,kb],[b,a,kb,ka]]:
-		var key:String=pair[2]+">"+pair[3]
-		if mass_paths.has(key):
-			if not same_internal_station(int(pair[0]),int(pair[1])):return {}
-			var ports:Array=mass_paths[key]
-			return {"from":int(pair[0]),"to":int(pair[1]),"from_port":ports[0],"to_port":ports[1],"carrier":"water_steam","unit":"kg/s","grade_id":ports[2],"mass_flow_capacity_kg_s":0.05,"loss_fraction":0.0}
-	var heat_paths:={"solar_tower_receiver>molten_salt_store":["heat_out","heat_in","salt_565_290"],"solar_tower_receiver>salt_steam_generator":["heat_out","salt_in","salt_565_290"],"molten_salt_store>salt_steam_generator":["heat_out","salt_in","salt_565_290"],"parabolic_trough>steam_generator":["heat_out","oil_in","oil_300_200"],"high_temp_store>steam_generator":["heat_out","oil_in","oil_300_200"],"parabolic_trough>high_temp_store":["heat_out","heat_in","oil_300_200"],"parabolic_trough>oil_water_exchanger":["heat_out","hot_in","oil_300_200"],"high_temp_store>oil_water_exchanger":["heat_out","hot_in","oil_300_200"],"oil_water_exchanger>heat_exchanger":["warm_out","hot_in","hw_primary_90_60"],"solar_thermal>heat_exchanger":["heat_out","hot_in","hw_primary_90_60"],"solar_thermal>thermal_store":["heat_out","heat_in","hw_primary_90_60"],"fuel_boiler>heat_exchanger":["heat_out","hot_in","hw_primary_90_60"],"fuel_boiler>thermal_store":["heat_out","heat_in","hw_primary_90_60"],"electric_boiler>heat_exchanger":["heat_out","hot_in","hw_primary_90_60"],"electric_boiler>thermal_store":["heat_out","heat_in","hw_primary_90_60"],"thermal_store>heat_exchanger":["heat_out","hot_in","hw_primary_90_60"],"heat_exchanger>heat_demand":["warm_out","heat_in","hw_secondary_70_40"]}
-	if heat_paths.has(kb+">"+ka):
-		var swap:=a;a=b;b=swap;var swap_kind:=ka;ka=kb;kb=swap_kind
-	if heat_paths.has(ka+">"+kb):
-		var pa:int=int(device(a).get("parent_station_id",-1));var pb:int=int(device(b).get("parent_station_id",-1))
-		if pa!=pb and not (ka=="heat_exchanger" and kb=="heat_demand" and pb==-1):return {}
-		var ports:Array=heat_paths[ka+">"+kb]
-		return {"from":a,"to":b,"from_port":ports[0],"to_port":ports[1],"carrier":"heat_salt" if ports[2]=="salt_565_290" else "heat_oil" if ports[2]=="oil_300_200" else "heat_water","unit":"MWth","grade_id":ports[2],"capacity_mwth":2.0,"loss_fraction":0.0}
-	if ka in ["solar_tower_receiver","molten_salt_store","salt_steam_generator","load","electric_boiler","fuel_boiler","solar_thermal","parabolic_trough","oil_water_exchanger","steam_generator","steam_condenser","feedwater_pump"] or (ka=="station" and kb in ["wind","pv","battery","steam_turbine"]):
-		var swap:=a;a=b;b=swap;var swap_kind:=ka;ka=kb;kb=swap_kind
-	if not ((ka in ["wind","pv","battery","steam_turbine"] and kb=="station") or (ka=="station" and kb in ["solar_tower_receiver","molten_salt_store","salt_steam_generator","load","electric_boiler","fuel_boiler","solar_thermal","parabolic_trough","oil_water_exchanger","steam_generator","steam_condenser","feedwater_pump","grid"])):return {}
-	var candidate:={"from":a,"to":b,"capacity_mw":8.0 if b!=-1 else 4.0,"loss_fraction":0.02,"carrier":"electricity_ac","unit":"MW"}
-	candidate.merge(Catalog.connection_ports(devices,candidate),true)
-	candidate.erase("grade_id")
-	return candidate
+		if int(pair[0])<0:continue
+		for source_port in Catalog.ports(str(pair[2])):
+			if not source_port.direction in ["output","bidirectional"]:continue
+			for target_port in Catalog.ports(str(pair[3])):
+				if not target_port.direction in ["input","bidirectional"]:continue
+				if source_port.carrier!=target_port.carrier or source_port.unit!=target_port.unit:continue
+				var carrier:String=source_port.carrier
+				var candidate:={"from":int(pair[0]),"to":int(pair[1]),"from_port":source_port.id,"to_port":target_port.id,"carrier":carrier,"unit":source_port.unit,"loss_fraction":0.0}
+				if carrier=="electricity_ac":
+					candidate.capacity_mw=4.0 if int(pair[1])==-1 else 8.0;candidate.loss_fraction=0.02
+				elif carrier=="water_steam":
+					if not same_internal_station(int(pair[0]),int(pair[1])):continue
+					candidate.grade_id=source_port.grade_id;candidate.mass_flow_capacity_kg_s=0.05
+				else:
+					if not _thermal_boundary_allowed(device(int(pair[0])),device(int(pair[1]))):continue
+					candidate.grade_id=source_port.grade_id;candidate.capacity_mwth=2.0
+				# The catalog remains the single source of carrier, grade and route legality.
+				if Catalog.validate_link(devices,[],candidate)=="":return candidate
+	return {}
+
+func _thermal_boundary_allowed(source:Dictionary,target_device:Dictionary)->bool:
+	if source.is_empty() or target_device.is_empty():return false
+	var source_parent:=int(source.get("parent_station_id",-1));var target_parent:=int(target_device.get("parent_station_id",-1))
+	if source_parent==target_parent:return true
+	if source.kind=="heat_exchanger" and target_device.kind=="heat_demand" and target_parent==-1:return true
+	# Only the independent storage interface is exposed, not arbitrary station internals.
+	if source.kind=="solar_tower_receiver" and target_device.kind=="molten_salt_store" and target_parent==-1:return true
+	if source.kind=="molten_salt_store" and source_parent==-1 and target_device.kind=="salt_steam_generator":return true
+	if source.kind in ["electric_boiler","fuel_boiler","solar_thermal"] and target_device.kind=="solid_thermal_store" and target_parent==-1:return true
+	if source.kind=="solid_thermal_store" and source_parent==-1 and target_device.kind=="heat_exchanger":return true
+	return false
 
 func update_thermal_display(d:Dictionary,report:Dictionary)->void:
 	update_fuel_resource_summary()
@@ -1505,7 +1829,7 @@ func update_thermal_display(d:Dictionary,report:Dictionary)->void:
 	var any_heat:=devices.any(func(item):return item.kind in THERMAL_KINDS)
 	var actual_heat_inventory:=0.0
 	for item in devices:
-		if item.kind in ["thermal_store","high_temp_store","molten_salt_store"]:
+		if Catalog.is_thermal_storage(item.kind):
 			var stock:float=item.get("state",{}).get("energy_mwhth",0)
 			actual_heat_inventory+=stock
 			if nodes.has(str(int(item.id))) and nodes[str(int(item.id))].has_method("set_thermal_soc"):nodes[str(int(item.id))].set_thermal_soc(stock/float(item.params.capacity_mwhth))
@@ -1535,6 +1859,9 @@ func update_thermal_display(d:Dictionary,report:Dictionary)->void:
 				text=rankine_report_text(kind,report)
 			"parabolic_trough", "oil_water_exchanger":
 				text=high_temp_report_text(kind,report)+"\n"+thermal_connection_status(int(d.id))
+			"molten_salt_store":
+				var stored:float=d.get("state",{}).get("energy_mwhth",0);var capacity:float=d.params.get("capacity_mwhth",1)
+				text="565/290°C 双罐熔盐储热\n库存 %.4f / %.3f MWhth · SOC %.2f%%\n充 %.4f / 放 %.4f MWth\n盐泵辅机 %.5f MW\n290°C冷端为库存基线，不是室温冷启动。"%[stored,capacity,stored/capacity*100.0,report.get("charge_mwth",0),report.get("discharge_mwth",0),report.get("auxiliary_electric_mw",0)]
 			"high_temp_store":
 				text="Therminol 66 · 固定300/200°C\n库存 %.5f MWhth · SOC0=200°C冷端基线\n充热 %.5f / 放热 %.5f MWth\n非室温冷启动；放热需要下游换热或蒸汽循环辅电"%[d.get("state",{}).get("energy_mwhth",0),report.get("charge_mwth",0),report.get("discharge_mwth",0)]
 			"solar_thermal":
@@ -1543,9 +1870,9 @@ func update_thermal_display(d:Dictionary,report:Dictionary)->void:
 				text="燃气热水锅炉 · 天然气 LHV + AC辅机 → 90/60°C\n燃料 %.4f MW(LHV) · 出热 %.4f MWth\n燃料转换散失 %.4f MW · 辅机 %.4f MW\n气量 %.3f Nm³/h · 教学燃料费 %.2f 元/h\n%s"%[report.get("fuel_input_mw",0),report.get("heat_output_mwth",0),report.get("conversion_loss_mw",0),report.get("auxiliary_electric_mw",0),report.get("fuel_volume_nm3_per_h",0),report.get("fuel_cost_per_h",0),thermal_connection_status(int(d.id))]
 			"electric_boiler":
 				text="电热水锅炉 · AC → 90/60°C\n电输入 %.4f MW\n出热 %.4f MWth · 转换散失 %.4f MW\n%s"%[report.get("electric_input_mw",report.get("input_mw",0)),report.get("output_mwth",report.get("heat_output_mwth",0)),report.get("conversion_loss_mw",0),thermal_connection_status(int(d.id))]
-			"thermal_store":
+			"thermal_store", "solid_thermal_store":
 				var stored:float=d.get("state",{}).get("energy_mwhth",0);var capacity:float=d.params.get("capacity_mwhth",1)
-				text="90/60°C 双区等效储热\n库存 %.4f / %.3f MWhth · SOC %.2f%%\n充 %.4f / 放 %.4f MWth\n%s\n自损系数 %.4f /h\n固定供热品质，SOC不是罐温；断线仍自损。"%[stored,capacity,stored/capacity*100.0,report.get("charge_mwth",0),report.get("discharge_mwth",0),"已空" if stored<0.000001 else "已满" if stored>=capacity-0.000001 else "库存可用",d.params.get("self_discharge_per_h",0)]
+				text=("固体显热 · 90/60°C 等效换热接口" if kind=="solid_thermal_store" else "90/60°C 双区等效储热")+"\n库存 %.4f / %.3f MWhth · SOC %.2f%%\n充 %.4f / 放 %.4f MWth\n%s\n自损系数 %.4f /h\n固定供热品质，SOC不是罐温；断线仍自损。"%[stored,capacity,stored/capacity*100.0,report.get("charge_mwth",0),report.get("discharge_mwth",0),"已空" if stored<0.000001 else "已满" if stored>=capacity-0.000001 else "库存可用",d.params.get("self_discharge_per_h",0)]
 				if nodes.has(str(int(d.id))) and nodes[str(int(d.id))].has_method("set_thermal_soc"):nodes[str(int(d.id))].set_thermal_soc(stored/capacity)
 			"heat_exchanger":
 				text="隔离换热器 · 90/60 → 70/40°C\n热侧输入 %.4f MWth\n冷侧输出 %.4f MWth · 散失 %.4f MWth\n热侧容量 %.3f MWth · 最小端温差 %.1f K\n%s"%[report.get("input_mwth",0),report.get("output_mwth",0),report.get("loss_mwth",report.get("exchanger_loss_mwth",0)),d.params.get("capacity_mwth",0),d.params.get("min_approach_k",0),thermal_connection_status(int(d.id))]
@@ -1557,22 +1884,32 @@ func update_thermal_display(d:Dictionary,report:Dictionary)->void:
 			source_label.text="天然气低位热值输入；AC辅机独立计量并列为散失。\n固定90/60°C热水教学模型；不是蒸汽火电。" if kind=="fuel_boiler" else "固定温区热服务模型\n已充水、循环辅机包含于等效效率\n不是蒸汽压力/流量仿真。"
 			if Catalog.is_high_temp(kind):source_label.text="Therminol 66 · 固定300/200°C预热教学模型\nDNI独立；辅机、换热泵电独立计量；本设备不直接发电。"
 			if kind in RANKINE_KINDS:source_label.text="固定1MPa/280°C蒸汽 → 10kPa冷凝闭式循环\n质量流量与焓差分账；外部电源保证辅机，禁止自举。\n已预热固定工况；无冷启动、汽包库存或瞬态压力仿真。"
+			if Catalog.is_thermal_storage(kind):source_label.text=str(Catalog.storage_technology(kind).get("assumptions",""))
 			if kind=="solar_thermal":source_label.text="非聚光真空管 · 固定90/60°C\n教学等效固定面POA；不是DNI，不再转置。\n吸热面积基准，辅机电独立计量。"
 	if is_instance_valid(demand_summary) and any_heat:demand_summary.text+="\n热需求 %.3f MWth\n实供 %.3f · 缺供 %.3f MWth"%[heat.get("demand_mwth",0),heat.get("served_mwth",0),heat.get("unserved_mwth",0)]
 
 func thermal_connection_status(id:int)->String:
 	var kind:String=device(id).get("kind","")
-	var incoming:=false;var outgoing:=false;var electric:=false
+	var incoming:=false;var outgoing:=false;var electric:=false;var salt_in:=false;var salt_out:=false
 	for line in links:
 		if int(line.to)==id:
 			incoming=true
 			if line.get("carrier","electricity_ac")=="electricity_ac":electric=true
-		if int(line.from)==id:outgoing=true
+			if line.get("carrier","")=="heat_salt":salt_in=true
+		if int(line.from)==id:
+			outgoing=true
+			if line.get("carrier","")=="heat_salt":salt_out=true
 	if kind in RANKINE_KINDS:return str(result.get("devices",{}).get(str(id),{}).get("status_reason","需闭合蒸汽/冷凝水/给水回路并为辅机接入外部AC电源"))
 	if kind in ["parabolic_trough","oil_water_exchanger"]:
 		if not electric:return "辅机未接电：没有AC供电不能送热"
 		if not outgoing:return "热出口未连接"
 		return "导热油300/200°C；辅机供电与下游接纳共同限制传热"
+	if kind=="molten_salt_store":
+		var missing:Array[String]=[]
+		if not electric:missing.append("盐泵辅机未接AC电源")
+		if not salt_in:missing.append("充热口未接熔盐热源")
+		if not salt_out:missing.append("放热口未接盐蒸汽发生器")
+		return "；".join(missing) if not missing.is_empty() else "565/290°C充放热口与AC辅机均已连接；实际充放受库存、辅机供电与蒸汽循环约束"
 	if kind=="high_temp_store":return "高温库存可供油水换热器或蒸汽发生器；放热须有对应辅机电"
 	if kind=="solar_thermal":
 		if not electric:return "辅机未接电：需变电站AC供电"
@@ -1754,13 +2091,21 @@ func choose_station_port(sid:int):
 	station_port_picker.clear()
 	for d in devices:
 		if int(d.get("parent_station_id",-1))!=sid:continue
-		if not d.kind in ["solar_tower_receiver","molten_salt_store","salt_steam_generator","electric_boiler","fuel_boiler","solar_thermal","parabolic_trough","oil_water_exchanger","heat_exchanger","steam_generator","steam_turbine","steam_condenser","feedwater_pump"]:continue
-		# When the other endpoint is known, show only compatible mapped nodes.
-		if pending_link!=-2 and (same_internal_station(pending_link,int(d.id)) or connection_candidate(pending_link,int(d.id)).is_empty()):continue
-		station_port_picker.add_item(("AC发电 ← 汽轮机" if d.kind=="steam_turbine" else "AC给水泵 → 给水泵" if d.kind=="feedwater_pump" else "AC冷却辅机 → 冷凝器" if d.kind=="steam_condenser" else "AC油泵 → 蒸汽发生器" if d.kind=="steam_generator" else "AC泵 → 油水换热器" if d.kind=="oil_water_exchanger" else "AC辅机 → 槽式集热器" if d.kind=="parabolic_trough" else "AC辅机 → 集热器" if d.kind=="solar_thermal" else "AC辅机 → 燃气锅炉" if d.kind=="fuel_boiler" else "AC输入 → 电锅炉" if d.kind=="electric_boiler" else "AC熔盐辅机 → "+DEVICE_NAMES[d.kind] if d.kind in ["solar_tower_receiver","molten_salt_store","salt_steam_generator"] else "70/40热输出 ← 换热器")+" #%d"%int(d.id))
-		station_port_picker.set_item_metadata(station_port_picker.item_count-1,int(d.id))
-	if station_port_picker.item_count==0:tell("本站没有兼容边界端口；请先进入内部建设锅炉或换热器。");return
-	station_port_dialog.dialog_text="端口直接映射到内部设备，不另建容量或重复计能。"
+		var ports:Array=Catalog.ports(d.kind).filter(func(port):return port.carrier!="water_steam")
+		if ports.is_empty():continue
+		var candidate:Dictionary={}
+		if pending_link!=-2:
+			candidate=connection_candidate(pending_link,int(d.id))
+			if same_internal_station(pending_link,int(d.id)) or candidate.is_empty():continue
+		var carriers:Array[String]=[]
+		for port in ports:
+			var description:String={"electricity_ac":"AC电", "heat_salt":"565/290°C熔盐", "heat_oil":"300/200°C导热油", "heat_water":"热水"}.get(port.carrier,port.carrier)
+			if not carriers.has(description):carriers.append(description)
+		var caption:String=DEVICE_NAMES.get(d.kind,d.kind)+" #%d · "%int(d.id)+" / ".join(carriers)
+		if not candidate.is_empty():caption=DEVICE_NAMES.get(d.kind,d.kind)+" #%d · "%int(d.id)+("输出 →" if int(candidate.from)==int(d.id) else "← 输入")+" "+str(candidate.unit)
+		station_port_picker.add_item(caption);station_port_picker.set_item_metadata(station_port_picker.item_count-1,int(d.id))
+	if station_port_picker.item_count==0:tell("本站没有兼容边界端口；请先建设对应设备并检查能量载体。");return
+	station_port_dialog.dialog_text="端口直接映射到内部设备；独立储热按对应温区接入，不重复计能。"
 	station_port_dialog.popup_centered()
 
 func update_station_display():
@@ -1782,7 +2127,7 @@ func update_station_display():
 			if d.kind in ["solar_tower_receiver","molten_salt_store","salt_steam_generator","fuel_boiler","solar_thermal","parabolic_trough","oil_water_exchanger","steam_generator","steam_condenser","feedwater_pump"]:pin+=float(r.get("auxiliary_electric_mw",0))
 			if d.kind=="steam_turbine":gross+=float(r.get("gross_electric_mw",0))
 			if d.kind=="heat_exchanger":qout+=float(r.get("output_mwth",0))
-			if d.kind in ["thermal_store","high_temp_store","molten_salt_store"]:stock+=float(d.get("state",{}).get("energy_mwhth",0))
+			if Catalog.is_thermal_storage(d.kind):stock+=float(d.get("state",{}).get("energy_mwhth",0))
 		if station_nodes.has(str(int(facility.id))):station_nodes[str(int(facility.id))].set_status(pin,qout,stock)
 		if int(facility.id)==selected_id:
 			selection_label.text=str(facility.name)
@@ -1792,7 +2137,7 @@ func update_station_display():
 	if is_instance_valid(station_enter_button):
 		station_enter_button.visible=not station(selected_id).is_empty() or not device(selected_id).is_empty()
 		station_enter_button.text="进入塔式未投运预览" if station_is_preview(selected_id) else "进入塔式熔盐发电站" if station(selected_id).get("kind","")=="tower_station" else "进入电热站内部" if not station(selected_id).is_empty() else "进入设备详情"
-	if is_instance_valid(station_interior) and station_interior.visible:station_interior.refresh()
+	if is_instance_valid(station_interior) and station_interior.is_inside_tree() and station_interior.visible:station_interior.refresh()
 
 func normalize_id_cursors():
 	while not station(next_id).is_empty():next_id+=1
@@ -1804,6 +2149,7 @@ func visual_params(params:Dictionary)->Dictionary:
 func visual_station(item:Dictionary)->Dictionary:
 	var result_item:=item.duplicate(true);result_item.visual_dimension_profile=dimension_profile
 	result_item["has_rankine_output"]=not station_is_preview(int(item.id)) and devices.any(func(d):return int(d.get("parent_station_id",-1))==int(item.id) and d.kind=="steam_turbine")
+	result_item["has_primary_storage_boundary"]=item.get("kind","thermal_station")=="thermal_station" and devices.any(func(d):return int(d.get("parent_station_id",-1))==int(item.id) and d.kind in ["electric_boiler","fuel_boiler","solar_thermal","heat_exchanger"])
 	return result_item
 
 func request_metric_migration():
@@ -1867,7 +2213,7 @@ func apply_fuel_supply(candidate:Dictionary)->bool:
 	if error!="":tell("未应用燃料资源："+error);return false
 	if candidate==fuel_supply:sync_fuel_resource_form();return true
 	checkpoint();fuel_supply=candidate.duplicate(true);paused=true;sync_fuel_resource_form();refresh()
-	if is_instance_valid(station_interior) and station_interior.visible:station_interior.refresh()
+	if is_instance_valid(station_interior) and station_interior.is_inside_tree() and station_interior.visible:station_interior.refresh()
 	tell("天然气供给已更新；模拟暂停。累计消耗与成本保留，可撤销。")
 	return true
 

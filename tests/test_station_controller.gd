@@ -136,7 +136,8 @@ func test_construction_and_open() -> void:
 	check(game.device(SITE).is_empty() and game.station(-1).is_empty(), "station lookup never invents a physical device")
 	check(not game.station(SITE).has("state") and not game.station(SITE).has("params"), "container has neither energy inventory nor duplicate equipment capacity")
 	check("thermal_station" in game.BUILDABLE_KINDS, "base build catalog exposes station")
-	for kind in game.INTERNAL_KINDS: check(not kind in game.BUILDABLE_KINDS, "internal " + kind + " stays off base build catalog")
+	for kind in game.INTERNAL_KINDS:
+		check((kind in game.BUILDABLE_KINDS) == (kind == "molten_salt_store"), "only reusable molten salt is also standalone: " + kind)
 	game.templates.thermal_store.initial_soc = 0.375
 	check(game.add_internal_device(SITE,"thermal_store",Vector2.ZERO), "construct station store")
 	near(game.device(0).state.energy_mwhth,1.5,"construction applies configured initial SOC exactly once")
@@ -274,10 +275,10 @@ func test_boundary_picker() -> void:
 	root.add_child(game.station_port_dialog)
 	var before := frozen(game)
 	game.set_mode("link"); game.choose_station_port(SITE)
-	check(game.station_port_picker.item_count == 2,"uncommitted station boundary exposes boiler AC and exchanger heat ports only")
+	check(game.station_port_picker.item_count == 3,"station boundary exposes compatible electrical and heat-storage interfaces")
 	var offered: Array = []
 	for i in game.station_port_picker.item_count: offered.append(int(game.station_port_picker.get_item_metadata(i)))
-	check(BOILER in offered and EXCHANGER in offered and not STORE in offered,"boundary choices map to actual children and omit internal-only store")
+	check(BOILER in offered and EXCHANGER in offered and STORE in offered,"boundary choices map to actual children including thermal storage")
 	check(frozen(game) == before,"opening boundary picker does not create phantom physical devices or lines")
 	game.station_port_dialog.hide()
 	game.pending_link = AC_STATION; game.choose_station_port(SITE)
@@ -367,7 +368,7 @@ func test_file_roundtrip_and_legacy() -> void:
 	var path := path_for("schema6_resume")
 	check(control.write_save(path),"write actual station file through controller")
 	var disk: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path))
-	check(disk.schema == 12 and disk.model_version == 21 and disk.stations.size() == 1,"persist schema 12/model 21 separate stations")
+	check(disk.schema == 13 and disk.model_version == 22 and disk.stations.size() == 1,"persist schema 13/model 22 separate stations")
 	check(disk.next_station_id >= 1000000 and disk.devices.size() == 6,"save contains real devices once and separate next station ID")
 	var resumed := fixture(); resumed.paused = false; resumed.speed = 60.0; resumed.accumulator = 0.4
 	check(resumed.read_save(path),"restore saved station via FileAccess: " + resumed.last_notice)
@@ -393,6 +394,7 @@ func test_file_roundtrip_and_legacy() -> void:
 	for edge in old.links:
 		if edge.get("carrier", "electricity_ac") == "electricity_ac": edge.grade_id = ""
 	var legacy: Dictionary = old.state(); legacy.schema = 5; legacy.model_version = 14
+	for storage_kind in old.Catalog.NEW_STORAGE_KINDS: legacy.templates.erase(storage_kind)
 	legacy.erase("stations"); legacy.erase("next_station_id"); legacy.erase("dimension_profile")
 	legacy.erase("tower_energy"); legacy.templates.erase("solar_tower_receiver"); legacy.templates.erase("molten_salt_store"); legacy.templates.erase("salt_steam_generator"); legacy.erase("rankine_energy"); legacy.templates.erase("steam_generator"); legacy.templates.erase("steam_turbine"); legacy.templates.erase("steam_condenser"); legacy.templates.erase("feedwater_pump"); legacy.erase("high_temp_energy"); legacy.templates.erase("parabolic_trough"); legacy.templates.erase("high_temp_store"); legacy.templates.erase("oil_water_exchanger"); legacy.erase("solar_energy"); legacy.templates.erase("solar_thermal"); legacy.erase("fuel_supply"); legacy.erase("fuel_energy"); legacy.templates.erase("fuel_boiler")
 	var legacy_path := path_for("schema5_flat"); write_fixture(legacy_path,legacy)
@@ -401,7 +403,7 @@ func test_file_roundtrip_and_legacy() -> void:
 	check(migrated.stations.is_empty() and migrated.devices.size() == 6,"legacy load does not silently group or duplicate devices")
 	check(migrated.devices.all(func(d): return not d.has("parent_station_id")),"legacy thermal devices remain valid base devices")
 	near(migrated.device(3).state.energy_mwhth,0.625,"legacy actual heat inventory preserved")
-	check(migrated.next_station_id >= 1000000 and migrated.state().schema == 12,"legacy load upgrades future saves and station counter")
+	check(migrated.next_station_id >= 1000000 and migrated.state().schema == 13,"legacy load upgrades future saves and station counter")
 	var legacy_frozen := frozen(migrated)
 	var optimizer := Optimization.new(); optimizer.host = migrated
 	var options := {"horizon_hours":1.0,"step_minutes":60.0,"load_multiplier":1.0,"strict_supply":false,"timeout_s":20}
@@ -477,7 +479,7 @@ func test_real_glpk_single_expansion() -> void:
 	var input_path := path_for("glpk_input"); var output_path := path_for("glpk_output")
 	write_fixture(input_path,snapshot)
 	var solver := OS.get_environment("BASIN_GLPK") if OS.has_environment("BASIN_GLPK") else "glpsol"
-	if solver == "glpsol" and FileAccess.file_exists("/workspace/shared/glpk/bin/glpsol"): solver = "/workspace/shared/glpk/bin/glpsol"
+	if solver == "glpsol" and FileAccess.file_exists((OS.get_environment("BASIN_GLPK") if not OS.get_environment("BASIN_GLPK").is_empty() else "glpsol")): solver = (OS.get_environment("BASIN_GLPK") if not OS.get_environment("BASIN_GLPK").is_empty() else "glpsol")
 	var python := OS.get_environment("BASIN_PYTHON") if OS.has_environment("BASIN_PYTHON") else "python3"
 	var output: Array = []
 	var code := OS.execute(python,PackedStringArray([ProjectSettings.globalize_path("res://tools/dispatch_solver.py"),

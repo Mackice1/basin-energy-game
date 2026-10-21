@@ -21,6 +21,15 @@ import tempfile
 import time
 
 SCHEMA_VERSION = 3
+# Schema 7 adds bounded, lumped storage models; earlier schema contracts stay intact.
+EXPANDED_ELECTRIC_STORAGE_KINDS = ("battery_sodium", "battery_flow", "caes_aboveground",
+                                   "liquid_air_store", "hydrogen_storage_system")
+EXPANDED_STORAGE_KINDS = EXPANDED_ELECTRIC_STORAGE_KINDS + ("solid_thermal_store",)
+ELECTRIC_STORAGE_KINDS = ("battery",) + EXPANDED_ELECTRIC_STORAGE_KINDS
+WATER_STORAGE_KINDS = ("thermal_store", "solid_thermal_store")
+THERMAL_STORAGE_KINDS = WATER_STORAGE_KINDS + ("high_temp_store", "molten_salt_store")
+STORAGE_KINDS = ELECTRIC_STORAGE_KINDS + THERMAL_STORAGE_KINDS
+HYDROGEN_LHV_KWH_PER_KG = 33.33
 THERMAL_PROFILE = "thermal_stage1_v1"
 PRIMARY_GRADE = "hw_primary_90_60"
 SECONDARY_GRADE = "hw_secondary_70_40"
@@ -33,7 +42,7 @@ SALT_GRADE = "salt_565_290"
 TOWER_KINDS = ("solar_tower_receiver", "molten_salt_store", "salt_steam_generator")
 RANKINE_KINDS = ("salt_steam_generator", "steam_generator", "steam_turbine", "steam_condenser", "feedwater_pump")
 RANKINE_AUX_KINDS = ("salt_steam_generator", "steam_generator", "steam_condenser", "feedwater_pump")
-THERMAL_KINDS = TOWER_KINDS + RANKINE_KINDS + HIGH_TEMP_KINDS + ("solar_thermal", "fuel_boiler", "electric_boiler", "thermal_store", "heat_exchanger", "heat_demand")
+THERMAL_KINDS = TOWER_KINDS + RANKINE_KINDS + HIGH_TEMP_KINDS + ("solar_thermal", "fuel_boiler", "electric_boiler", "thermal_store", "solid_thermal_store", "heat_exchanger", "heat_demand")
 THERMAL_ROUTES = {
     ("solar_thermal", "heat_exchanger"): ("heat_out", "hot_in", PRIMARY_GRADE),
     ("solar_thermal", "thermal_store"): ("heat_out", "heat_in", PRIMARY_GRADE),
@@ -109,6 +118,36 @@ RANGES.update({
                        "min_approach_k": (0, 20)},
     "heat_demand": {"demand_mwth": (0, 10000), "priority": (0, 1000)},
 })
+
+
+# AC powers are net terminal powers. CAES and liquid-air conversion efficiencies
+# include their charge/discharge trains; no pressure/fluid transient is claimed.
+# Hydrogen charge efficiency is net electrolyzer + compression (LHV basis), and
+# discharge efficiency is net fuel-cell + inverter. Inventory remains energy_mwh.
+for _kind, _values in {
+    "battery_sodium": (6., 2., 2., .92, .92, .0001),
+    "battery_flow": (12., 2., 2., .85, .85, .0002),
+    "caes_aboveground": (.25, .1, .1, .75, .70, .002),
+    "liquid_air_store": (8., 2., 1., .70, .65, .002),
+    "hydrogen_storage_system": (20., 2., 1., .65, .50, .0001),
+}.items():
+    DEFAULTS[_kind] = dict(zip(("capacity_mwh", "charge_mw", "discharge_mw",
+                               "charge_efficiency", "discharge_efficiency", "self_discharge_per_h"), _values),
+                           initial_soc=0.)
+    RANGES[_kind] = dict(RANGES["battery"])
+RANGES["caes_aboveground"].update(capacity_mwh=(0, 10, True), charge_mw=(0, 2), discharge_mw=(0, 2))
+DEFAULTS["solid_thermal_store"] = {
+    "capacity_mwhth": 8., "charge_mwth": 2., "discharge_mwth": 1.,
+    "charge_efficiency": .95, "discharge_efficiency": .95,
+    "self_discharge_per_h": .001, "initial_soc": 0.,
+}
+RANGES["solid_thermal_store"] = dict(RANGES["thermal_store"])
+# The solid store exposes only the same primary-water-grade exchanger interface
+# as thermal_store. It has neither an AC port nor a direct electric-return path.
+for (_source, _sink), _route in list(THERMAL_ROUTES.items()):
+    if _source == "thermal_store" or _sink == "thermal_store":
+        THERMAL_ROUTES[("solid_thermal_store" if _source == "thermal_store" else _source,
+                        "solid_thermal_store" if _sink == "thermal_store" else _sink)] = _route
 
 
 DEFAULTS.update({
@@ -351,7 +390,7 @@ def normalize(snapshot):
     """Reject an invalid snapshot as a whole; never optimize a partial topology."""
     root = object_value(snapshot, "snapshot")
     schema = integer(root.get("schema_version", 1), "schema_version", 1)
-    if schema not in (1, 2, 3, 4, 5, 6):
+    if schema not in (1, 2, 3, 4, 5, 6, 7):
         raise InputError("Unsupported dispatch schema_version")
     raw_devices, raw_links, raw_steps = root.get("devices"), root.get("links"), root.get("steps")
     if not isinstance(raw_devices, list) or len(raw_devices) > MAX_DEVICES:
@@ -370,6 +409,8 @@ def normalize(snapshot):
         kind = d.get("kind")
         if not isinstance(kind, str) or kind not in DEFAULTS:
             raise InputError(f"Unknown device kind for {ident}")
+        if kind in EXPANDED_STORAGE_KINDS and schema < 7:
+            raise InputError("Expanded storage devices require dispatch schema_version 7")
         if kind in TOWER_KINDS and schema < 6:
             raise InputError("Tower devices require dispatch schema_version 6")
         if kind in RANKINE_KINDS and schema < 5:
@@ -417,20 +458,22 @@ def normalize(snapshot):
                 raise InputError("Wind speeds must satisfy cut-in < rated < cut-out")
             if p["hub_height_m"] <= p["rotor_diameter_m"] / 2:
                 raise InputError("Wind hub height must exceed rotor radius")
-        if kind in ("battery", "thermal_store", "high_temp_store", "molten_salt_store"):
-            ek = "energy_mwhth" if kind in ("thermal_store", "high_temp_store", "molten_salt_store") else "energy_mwh"
-            ck = "capacity_mwhth" if kind in ("thermal_store", "high_temp_store", "molten_salt_store") else "capacity_mwh"
+        if kind in STORAGE_KINDS:
+            ek = "energy_mwhth" if kind in THERMAL_STORAGE_KINDS else "energy_mwh"
+            ck = "capacity_mwhth" if kind in THERMAL_STORAGE_KINDS else "capacity_mwh"
             state = object_value(d.get("state", {ek: p[ck] * p["initial_soc"]}),
-                                 f"battery {ident}.state")
+                                 f"{kind} {ident}.state")
             if set(state) != {ek}:
                 raise InputError(f"{kind} state requires only {ek}")
             energy = number(state[ek], f"{kind} {ident}.{ek}", 0, p[ck])
         else:
             state = d.get("state", {})
             if not isinstance(state, dict) or state:
-                raise InputError("Only battery and thermal_store devices have state")
+                raise InputError("Only storage devices have state")
             energy = None
         nodes[ident] = {"id": int(ident), "kind": kind, "params": p, "energy": energy}
+    if schema == 7 and not any(d["kind"] in EXPANDED_STORAGE_KINDS for d in nodes.values()):
+        raise InputError("Schema 7 is reserved for the expanded storage extension")
     if schema == 6 and not any(d["kind"] in TOWER_KINDS for d in nodes.values()):
         raise InputError("Schema 6 is reserved for the tower extension")
     if schema == 5 and not any(d["kind"] in RANKINE_KINDS for d in nodes.values()):
@@ -492,13 +535,13 @@ def normalize(snapshot):
             pairs.add(pair)
             links.append({**line, "index": i, "capacity_mwth": cap, "loss_fraction": loss})
             continue
-        if not ((ak in ("wind", "pv", "battery", "steam_turbine") and bk == "station") or
-                (ak == "station" and bk in ("load", "battery", "grid", "electric_boiler", "fuel_boiler", "solar_thermal", "parabolic_trough", "oil_water_exchanger") + RANKINE_AUX_KINDS + ("solar_tower_receiver", "molten_salt_store"))):
+        if not ((ak in ("wind", "pv", "steam_turbine") + ELECTRIC_STORAGE_KINDS and bk == "station") or
+                (ak == "station" and bk in ("load", "grid", "electric_boiler", "fuel_boiler", "solar_thermal", "parabolic_trough", "oil_water_exchanger") + ELECTRIC_STORAGE_KINDS + RANKINE_AUX_KINDS + ("solar_tower_receiver", "molten_salt_store"))):
             raise InputError(f"Link {i}: unsupported electricity route")
         if "capacity_mwth" in line or "grade_id" in line or "mass_flow_capacity_kg_s" in line:
             raise InputError(f"Link {i}: electricity edge cannot contain heat capacity or grade")
-        fp = "ac" if ak == "battery" else ("ac_out" if ak == "steam_turbine" else "out")
-        tp = "ac" if bk == "battery" else ("ac_in" if bk in ("electric_boiler", "fuel_boiler", "solar_thermal", "parabolic_trough", "oil_water_exchanger") + RANKINE_AUX_KINDS + ("solar_tower_receiver", "molten_salt_store") else "in")
+        fp = "ac" if ak in ELECTRIC_STORAGE_KINDS else ("ac_out" if ak == "steam_turbine" else "out")
+        tp = "ac" if bk in ELECTRIC_STORAGE_KINDS else ("ac_in" if bk in ("electric_boiler", "fuel_boiler", "solar_thermal", "parabolic_trough", "oil_water_exchanger") + RANKINE_AUX_KINDS + ("solar_tower_receiver", "molten_salt_store") else "in")
         if line.get("from_port", fp) != fp or line.get("to_port", tp) != tp:
             raise InputError(f"Link {i}: invalid electric port")
         if bk in ("electric_boiler", "fuel_boiler", "solar_thermal", "parabolic_trough", "oil_water_exchanger") + RANKINE_AUX_KINDS + ("solar_tower_receiver", "molten_salt_store") and not {"from_port", "to_port", "carrier", "unit"} <= set(line):
@@ -521,18 +564,18 @@ def normalize(snapshot):
                       "from_port": fp, "to_port": tp, "carrier": "electricity_ac", "unit": "MW",
                       "voltage_level": "AC_BUS"})
         kind = "grid" if leaf == "-1" else nodes[leaf]["kind"]
-        if kind in ("wind", "pv", "battery", "steam_turbine"):
+        if kind in ("wind", "pv", "steam_turbine") + ELECTRIC_STORAGE_KINDS:
             attachments[leaf] = (station, i)
-        if kind in ("load", "battery", "grid", "electric_boiler", "fuel_boiler", "solar_thermal", "parabolic_trough", "oil_water_exchanger") + RANKINE_AUX_KINDS + ("solar_tower_receiver", "molten_salt_store"):
+        if kind in ("load", "grid", "electric_boiler", "fuel_boiler", "solar_thermal", "parabolic_trough", "oil_water_exchanger") + ELECTRIC_STORAGE_KINDS + RANKINE_AUX_KINDS + ("solar_tower_receiver", "molten_salt_store"):
             outputs.setdefault(station, []).append((leaf, i))
     paths = []
     for source, (station, incoming) in sorted(attachments.items(), key=lambda x: int(x[0])):
         for sink, outgoing in sorted(outputs.get(station, []), key=lambda x: int(x[0])):
             sk = nodes[source]["kind"]
             tk = "grid" if sink == "-1" else nodes[sink]["kind"]
-            if sk == "steam_turbine" and tk not in ("load", "battery", "grid"):
+            if sk == "steam_turbine" and tk not in ("load", "grid") + ELECTRIC_STORAGE_KINDS:
                 continue
-            if sk == "battery" and tk not in ("load", "electric_boiler", "fuel_boiler", "solar_thermal", "parabolic_trough", "oil_water_exchanger") + RANKINE_AUX_KINDS + ("solar_tower_receiver", "molten_salt_store"):
+            if sk in ELECTRIC_STORAGE_KINDS and tk not in ("load", "electric_boiler", "fuel_boiler", "solar_thermal", "parabolic_trough", "oil_water_exchanger") + RANKINE_AUX_KINDS + ("solar_tower_receiver", "molten_salt_store"):
                 continue
             arriving = 1 - links[incoming]["loss_fraction"]
             after = arriving * (1 - nodes[station]["params"]["loss_fraction"])
@@ -563,7 +606,7 @@ def normalize(snapshot):
     grid = number(root.get("grid_capacity_mw", 4), "grid_capacity_mw", 0, 1e9)
     generators = [k for k, d in nodes.items() if d["kind"] in ("wind", "pv")]
     loads = [k for k, d in nodes.items() if d["kind"] == "load"]
-    batteries = [k for k, d in nodes.items() if d["kind"] == "battery"]
+    batteries = [k for k, d in nodes.items() if d["kind"] in ELECTRIC_STORAGE_KINDS]
     solar_collectors = [k for k, d in nodes.items() if d["kind"] == "solar_thermal"]
     troughs = [k for k, d in nodes.items() if d["kind"] == "parabolic_trough"]
     receivers = [k for k, d in nodes.items() if d["kind"] == "solar_tower_receiver"]
@@ -572,7 +615,7 @@ def normalize(snapshot):
     oil_exchangers = [k for k, d in nodes.items() if d["kind"] == "oil_water_exchanger"]
     boilers = [k for k, d in nodes.items() if d["kind"] == "electric_boiler"]
     fuel_boilers = [k for k, d in nodes.items() if d["kind"] == "fuel_boiler"]
-    thermal_stores = [k for k, d in nodes.items() if d["kind"] in ("thermal_store", "high_temp_store", "molten_salt_store")]
+    thermal_stores = [k for k, d in nodes.items() if d["kind"] in THERMAL_STORAGE_KINDS]
     heat_demands = [k for k, d in nodes.items() if d["kind"] == "heat_demand"]
     exchangers = [k for k, d in nodes.items() if d["kind"] in ("heat_exchanger", "oil_water_exchanger")]
     rankine_ids = [k for k, d in nodes.items() if d["kind"] in RANKINE_KINDS]
@@ -685,7 +728,7 @@ def normalize(snapshot):
             "grid": grid, "strict": strict, "terminal": terminal, "timeout": timeout,
             "schema": schema, "solar_collectors": solar_collectors, "source_collectors": source_collectors, "troughs": troughs, "oil_exchangers": oil_exchangers, "boilers": boilers, "fuel_boilers": fuel_boilers, "fuel_supply": fuel_supply, "thermal_stores": thermal_stores, "heat_demands": heat_demands,
             "high_stores": [k for k in thermal_stores if nodes[k]["kind"] == "high_temp_store"],
-            "water_stores": [k for k in thermal_stores if nodes[k]["kind"] == "thermal_store"],
+            "water_stores": [k for k in thermal_stores if nodes[k]["kind"] in WATER_STORAGE_KINDS],
             "water_exchangers": [k for k in exchangers if nodes[k]["kind"] == "heat_exchanger"],
             "has_high_temp": any(d["kind"] in HIGH_TEMP_KINDS for d in nodes.values()),
             "exchangers": exchangers, "heat_links": heat_links, "terminal_heat": terminal_heat,
@@ -1159,6 +1202,16 @@ def assemble_schedule(problem, values):
                                "mode_binary": values[f"{prefix}mode_{t}_{k}"],
                                f"storage_conversion_loss_{suffix}": conversion,
                                f"storage_loss_{suffix}": conversion+(before-decay)/dt if dt else 0.0})
+                if nodes[k]["kind"] in ELECTRIC_STORAGE_KINDS:
+                    detail.update(charge_conversion_loss_mw=charge*(1-p["charge_efficiency"]),
+                                  discharge_conversion_loss_mw=discharge*(1/p["discharge_efficiency"]-1))
+                if nodes[k]["kind"] == "hydrogen_storage_system":
+                    detail.update(hydrogen_charge_loss_mw=charge*(1-p["charge_efficiency"]),
+                                  hydrogen_discharge_loss_mw=discharge*(1/p["discharge_efficiency"]-1),
+                                  hydrogen_produced_mw_lhv=charge*p["charge_efficiency"],
+                                  hydrogen_consumed_mw_lhv=discharge/p["discharge_efficiency"],
+                                  hydrogen_mass_kg=energy*1000/HYDROGEN_LHV_KWH_PER_KG,
+                                  hydrogen_energy_basis="LHV")
                 if k in problem["salt_stores"]:
                     detail["auxiliary_electric_mw"] = (charge+discharge)*p["auxiliary_electric_ratio"]
                 report["next_states"][k] = {f"energy_{energy_unit}": energy}
@@ -1435,7 +1488,7 @@ def validate_schedule(problem, reports):
                     if "sent_mw" in line or "capacity_mw" in line:
                         errors.append(label+": heat line mixes electrical units")
                 elif line["flow_from"] != expected["from"] and not (
-                        nodes.get(a, {}).get("kind") == "battery" or nodes.get(b, {}).get("kind") == "battery"):
+                        nodes.get(a, {}).get("kind") in ELECTRIC_STORAGE_KINDS or nodes.get(b, {}).get("kind") in ELECTRIC_STORAGE_KINDS):
                     errors.append(label+": illegal electric line reversal")
                 bound(sent, 0, expected[f"capacity_{suffix}"], label+" line cap")
                 bound(received, 0, expected[f"capacity_{suffix}"], label+" received flow")
@@ -1604,8 +1657,8 @@ def validate_schedule(problem, reports):
                     bound(params["min_approach_k"], 0, min(temperatures[0]-temperatures[2], temperatures[1]-temperatures[3]), label+" both exchanger approaches")
                     if kind == "heat_exchanger":
                         exchanger_loss += heat_in[k]-heat_out[k]
-                elif kind in ("battery", "thermal_store", "high_temp_store", "molten_salt_store"):
-                    thermal = kind in ("thermal_store", "high_temp_store", "molten_salt_store")
+                elif kind in STORAGE_KINDS:
+                    thermal = kind in THERMAL_STORAGE_KINDS
                     suffix, energy_unit = ("mwth", "mwhth") if thermal else ("mw", "mwh")
                     ek = f"energy_{energy_unit}"
                     same(set(report["next_states"][k]), {ek}, label+" dimensioned state")
@@ -1643,6 +1696,25 @@ def validate_schedule(problem, reports):
                     equal(detail[f"storage_conversion_loss_{suffix}"], conversion, label+" storage conversion loss")
                     equal(detail[f"storage_loss_{suffix}"], conversion+(before-decay)/dt if dt else 0, label+" storage total loss")
                     equal(energy, decay+(params["charge_efficiency"]*charge-discharge/params["discharge_efficiency"])*dt, label+" storage recurrence")
+                    if kind in ELECTRIC_STORAGE_KINDS:
+                        equal(detail["charge_conversion_loss_mw"], incoming[k]*(1-params["charge_efficiency"]),
+                              label+" storage charge conversion loss")
+                        equal(detail["discharge_conversion_loss_mw"], outgoing[k]*(1/params["discharge_efficiency"]-1),
+                              label+" storage discharge conversion loss")
+                    if kind == "hydrogen_storage_system":
+                        # Independently reconstruct stage quantities from audited AC
+                        # flows and dimensioned inventory, not reported losses/SOC.
+                        equal(detail["hydrogen_charge_loss_mw"], incoming[k]*(1-params["charge_efficiency"]),
+                              label+" hydrogen electrolyzer/compression loss")
+                        equal(detail["hydrogen_discharge_loss_mw"], outgoing[k]*(1/params["discharge_efficiency"]-1),
+                              label+" hydrogen fuel-cell/inverter loss")
+                        equal(detail["hydrogen_produced_mw_lhv"], incoming[k]*params["charge_efficiency"],
+                              label+" hydrogen produced LHV energy")
+                        equal(detail["hydrogen_consumed_mw_lhv"], outgoing[k]/params["discharge_efficiency"],
+                              label+" hydrogen consumed LHV energy")
+                        equal(detail["hydrogen_mass_kg"], report["next_states"][k][ek]*1000/HYDROGEN_LHV_KWH_PER_KG,
+                              label+" hydrogen LHV mass")
+                        same(detail["hydrogen_energy_basis"], "LHV", label+" hydrogen energy basis")
                     equal(detail["soc"], energy/capacity, label+" storage SOC")
                     equal(detail["soc_before"], before/capacity, label+" storage initial SOC")
                     equal(report["next_states"][k][ek], energy, label+" next state")
@@ -1663,11 +1735,12 @@ def validate_schedule(problem, reports):
                         if line["carrier"] != "electricity_ac":
                             continue
                         a, b = str(line["flow_from"]), str(line["flow_to"])
-                        if b == station and nodes[a]["kind"] in ("wind", "pv", "battery"):
+                        if b == station and nodes[a]["kind"] in ("wind", "pv") + ELECTRIC_STORAGE_KINDS:
                             external += line["received_mw"]
-                        if a == station and b != "-1" and nodes[b]["kind"] not in ("load", "battery"):
+                        if a == station and b != "-1" and nodes[b]["kind"] not in ("load",) + ELECTRIC_STORAGE_KINDS:
                             conversion += line["sent_mw"]
                     bound(conversion, 0, external*(1-node["params"]["loss_fraction"]), label+" external-only conversion/auxiliary provenance")
+            if problem["has_rankine"] or problem["schema"] >= 7:
                 path_lines = {i: 0. for i, line in enumerate(problem["links"]) if line["carrier"] == "electricity_ac"}
                 same(len(report["path_flows"]), len(problem["paths"]), label+" path decision count")
                 for path, flow in zip(problem["paths"], report["path_flows"]):
@@ -1676,14 +1749,17 @@ def validate_schedule(problem, reports):
                     source, sink = path["source"], path["sink"]
                     sk = nodes[source]["kind"]
                     tk = "grid" if sink == "-1" else nodes[sink]["kind"]
-                    if sk == "steam_turbine" and tk not in ("load", "battery", "grid"):
+                    if sk == "steam_turbine" and tk not in ("load", "grid") + ELECTRIC_STORAGE_KINDS:
                         errors.append(label+": turbine electricity cannot feed conversion/auxiliary sinks")
+                    if sk in ELECTRIC_STORAGE_KINDS and (tk in ELECTRIC_STORAGE_KINDS or tk == "grid"):
+                        errors.append(label+": storage electricity cannot feed storage or export")
                     sent = flow["sent_mw"]
                     bound(sent, 0, problem["links"][path["incoming"]]["capacity_mw"] if dt else 0, label+" path source flow")
                     path_lines[path["incoming"]] += sent
                     path_lines[path["outgoing"]] += sent*(1-problem["links"][path["incoming"]]["loss_fraction"])*(1-nodes[path["station"]]["params"]["loss_fraction"])
                 for i, sent in path_lines.items():
                     equal(report["lines"][i]["sent_mw"], sent, label+" independent path-to-cable provenance")
+            if problem["has_rankine"]:
                 same(len(report["mass_flows"]), len(problem["mass_links"]), label+" mass decision count")
                 for i, flow in zip(problem["mass_links"], report["mass_flows"]):
                     same(flow["line_index"], i, label+" mass decision identity")
@@ -1790,7 +1866,9 @@ def validate_schedule(problem, reports):
                           "ambient_limited_dry_condenser", "external_only_auxiliary_provenance",
                           "rankine_shaft_motor_and_SG_losses", "shared_oil_and_station_caps"] if problem["has_rankine"] else [])
                       + (["independent_salt_grade_inventory", "tower_DNI_daylight_gate",
-                          "salt_storage_external_charge_discharge_auxiliaries"] if problem["has_tower"] else [])}
+                          "salt_storage_external_charge_discharge_auxiliaries"] if problem["has_tower"] else [])
+                      + (["restricted_storage_path_provenance", "expanded_storage_conversion_losses",
+                          "hydrogen_LHV_stage_energy_and_mass"] if problem["schema"] >= 7 else [])}
 
 
 def validate_physical_decisions(problem, values):
@@ -1969,6 +2047,21 @@ def solve(snapshot, glpsol="glpsol", cancel_file=None):
                 "currency": "CNY", "price_note": "User-configurable teaching assumption, not a market price or public cost claim",
                 "auxiliary_note": "AC auxiliary electricity is consumed and dissipated separately; it is not useful heat",
                 "emissions_model": False}
+        if problem["schema"] >= 7:
+            result["expanded_storage_assumptions"] = {
+                "inventory": "Finite lumped energy with exponential self-discharge before port conversion",
+                "electric_ports": "Net AC terminal powers; no storage-to-storage paths or storage-fed export",
+                "conversion": "Constant net charge/discharge efficiencies include conversion trains and auxiliaries",
+                "caes": "Aboveground vessels only, capacity <= 10 MWh and each power <= 2 MW; no underground caverns",
+                "solid_thermal": "Useful heat through primary-water 90/60 C ports only; no direct electricity output",
+                "hydrogen_energy_basis": "LHV", "hydrogen_lhv_kwh_per_kg": HYDROGEN_LHV_KWH_PER_KG,
+                "hydrogen_charge": "Net electrolyzer plus compression efficiency on an LHV basis",
+                "hydrogen_discharge": "Net fuel-cell plus inverter efficiency; no recovered-heat credit",
+                "limitations": "Teaching energy ledger, not pressure/temperature/fluid transients, gas safety or equipment sizing",
+            }
+            result["objective"]["stages"][2] = (
+                "minimize electric and thermal storage port throughput (explicit weights 1 and 1)"
+                if problem["has_thermal"] else "minimize electric-storage AC throughput MWh")
         if cancel_file and Path(cancel_file).exists():
             result.update(status="cancelled", message="Cancelled before solver start")
             return result
@@ -2031,7 +2124,7 @@ def solve(snapshot, glpsol="glpsol", cancel_file=None):
         result.update(status="optimal" if optimal else "feasible", success=True, optimal=optimal,
                       steps=reports, totals=summarize(problem, reports),
                       message="Validated optimal dispatch" if optimal else "Validated feasible dispatch; optimality not proven",
-                      initial_states={k: {"energy_mwhth" if problem["nodes"][k]["kind"] in ("thermal_store", "high_temp_store", "molten_salt_store") else "energy_mwh": problem["nodes"][k]["energy"]}
+                      initial_states={k: {"energy_mwhth" if problem["nodes"][k]["kind"] in THERMAL_STORAGE_KINDS else "energy_mwh": problem["nodes"][k]["energy"]}
                                       for k in problem["batteries"]+problem["thermal_stores"]},
                       final_states=reports[-1]["next_states"])
         for report in reports:

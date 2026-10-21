@@ -286,7 +286,7 @@ func test_save_resume_undo_and_rejection() -> void:
 	var path := path_for("resume")
 	check(control.write_save(path), "write real isolated schema 5 file")
 	var on_disk: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path))
-	check(on_disk.schema == 12 and on_disk.model_version == 21, "controller persists schema 12 model 21")
+	check(on_disk.schema == 13 and on_disk.model_version == 22, "controller persists schema 13 model 22")
 	for key in HEAT_KEYS: check(on_disk.thermal_energy.has(key), "persisted heat field " + key)
 	check(on_disk.energy.has("boiler_electric") and on_disk.energy.has("boiler_conversion_loss"), "persisted electric boiler ledger fields")
 	var resumed := fixture()
@@ -353,6 +353,7 @@ func test_parameters_and_legacy() -> void:
 		var source := chain()
 		var old: Dictionary = source.state()
 		old.schema = schema; old.model_version = 11 if schema == 3 else 12
+		for storage_kind in source.Catalog.NEW_STORAGE_KINDS: old.templates.erase(storage_kind)
 		old.erase("stations");old.erase("next_station_id");old.erase("dimension_profile")
 		old.erase("tower_energy"); old.templates.erase("solar_tower_receiver"); old.templates.erase("molten_salt_store"); old.templates.erase("salt_steam_generator"); old.erase("rankine_energy"); old.templates.erase("steam_generator"); old.templates.erase("steam_turbine"); old.templates.erase("steam_condenser"); old.templates.erase("feedwater_pump"); old.erase("high_temp_energy"); old.templates.erase("parabolic_trough"); old.templates.erase("high_temp_store"); old.templates.erase("oil_water_exchanger"); old.erase("solar_energy"); old.templates.erase("solar_thermal"); old.erase("fuel_supply"); old.erase("fuel_energy")
 		old.devices = old.devices.filter(func(d): return d.kind in (["pv","station"] if schema == 3 else ["pv","station","load","battery"]))

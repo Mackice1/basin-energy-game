@@ -45,6 +45,9 @@ func motion(point: Vector2, mask: int = 0, relative := Vector2.ZERO) -> void:
 	interior.view_container.gui_input.emit(event)
 
 func begin_drag() -> Vector2:
+	# Select-mode drag orbits/pans in V23; explicitly enter move for this test.
+	interior._select(0)
+	interior._start_move()
 	var start := body_pixel(0)
 	press(start)
 	var end := start + Vector2(40, 30)

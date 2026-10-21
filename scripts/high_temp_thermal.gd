@@ -109,7 +109,7 @@ static func supply(path: Dictionary, prepared: Dictionary, allocate: Callable, r
 			for battery in [false, true]:
 				if battery and not allow_battery: continue
 				for ep in prepared.paths:
-					if ep.sink_id != consumer.id or (ep.source_kind == "battery") != battery: continue
+					if ep.sink_id != consumer.id or (Catalog.is_electric_storage(ep.source_kind)) != battery: continue
 					var next: Array = choice.duplicate()
 					next.append({"path": ep, "factor": float(consumer.ratio) / float(ep.received)})
 					expanded.append(next)

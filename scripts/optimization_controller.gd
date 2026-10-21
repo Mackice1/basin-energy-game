@@ -42,7 +42,7 @@ func open() -> void:
 
 func _has_thermal_devices(devices: Array) -> bool:
 	for device in devices:
-		if device.get("kind", "") in ["electric_boiler", "fuel_boiler", "solar_thermal", "parabolic_trough", "high_temp_store", "oil_water_exchanger", "thermal_store", "heat_exchanger", "heat_demand","steam_generator","steam_turbine","steam_condenser","feedwater_pump","solar_tower_receiver","molten_salt_store","salt_steam_generator"]:
+		if device.get("kind", "") in ["electric_boiler", "fuel_boiler", "solar_thermal", "parabolic_trough", "high_temp_store", "oil_water_exchanger", "thermal_store", "solid_thermal_store", "heat_exchanger", "heat_demand","steam_generator","steam_turbine","steam_condenser","feedwater_pump","solar_tower_receiver","molten_salt_store","salt_steam_generator"]:
 			return true
 	return false
 
@@ -90,9 +90,9 @@ func snapshot(options: Dictionary) -> Dictionary:
 		var state_errors := Catalog.validate_state(d.kind, params, state)
 		if not state_errors.is_empty():
 			return {"error": "设备库存状态无效：" + "; ".join(state_errors)}
-		if d.has("state") or d.kind in ["battery", "thermal_store", "high_temp_store", "molten_salt_store"]:
+		if d.has("state") or d.kind in ["battery", "battery_sodium", "battery_flow", "caes_aboveground", "liquid_air_store", "hydrogen_storage_system", "thermal_store", "solid_thermal_store", "high_temp_store", "molten_salt_store"]:
 			item.state = state.duplicate(true)
-		if d.kind in ["electric_boiler", "fuel_boiler", "solar_thermal", "parabolic_trough", "high_temp_store", "oil_water_exchanger", "thermal_store", "heat_exchanger", "heat_demand","steam_generator","steam_turbine","steam_condenser","feedwater_pump","solar_tower_receiver","molten_salt_store","salt_steam_generator"]:
+		if d.kind in ["electric_boiler", "fuel_boiler", "solar_thermal", "parabolic_trough", "high_temp_store", "oil_water_exchanger", "thermal_store", "solid_thermal_store", "heat_exchanger", "heat_demand","steam_generator","steam_turbine","steam_condenser","feedwater_pump","solar_tower_receiver","molten_salt_store","salt_steam_generator"]:
 			item.model_profile = d.get("model_profile", Catalog.model_profile(d.kind))
 			item.model_profile_version = d.get("model_profile_version", 1)
 		frozen.append(item)
@@ -142,7 +142,7 @@ func snapshot(options: Dictionary) -> Dictionary:
 					source_labels[key] = "CSV气象/未绑定字段内置天气" if not dat.sources.is_empty() or dat.device_weather.has(key) else "内置教学天气"
 		steps.append({"time_s": t, "dt_h": duration / 3600.0, "available_mw": available, "demand_mw": demands, "heat_demand_mwth": heat_demands, "weather": dat.weather.duplicate(true)})
 		t += duration
-	return {"schema_version": 6 if frozen.any(func(d):return Catalog.is_tower(d.kind)) else 5 if frozen.any(func(d):return d.kind in ["steam_generator","steam_turbine","steam_condenser","feedwater_pump","solar_tower_receiver","molten_salt_store","salt_steam_generator"]) else 4 if frozen.any(func(d):return Catalog.is_high_temp(d.kind)) else Catalog.SCHEMA_VERSION if _has_fuel_devices(frozen) or frozen.any(func(d):return d.kind in ["solar_thermal","parabolic_trough","high_temp_store","oil_water_exchanger"]) else 2, "devices": frozen, "links": valid_links, "steps": steps, "grid_capacity_mw": Catalog.GRID_CAPACITY_MW,
+	return {"schema_version": 7 if frozen.any(func(d):return d.kind in Catalog.NEW_STORAGE_KINDS) else 6 if frozen.any(func(d):return Catalog.is_tower(d.kind)) else 5 if frozen.any(func(d):return d.kind in ["steam_generator","steam_turbine","steam_condenser","feedwater_pump","solar_tower_receiver","molten_salt_store","salt_steam_generator"]) else 4 if frozen.any(func(d):return Catalog.is_high_temp(d.kind)) else Catalog.SCHEMA_VERSION if _has_fuel_devices(frozen) or frozen.any(func(d):return d.kind in ["solar_thermal","parabolic_trough","high_temp_store","oil_water_exchanger"]) else 2, "devices": frozen, "links": valid_links, "steps": steps, "grid_capacity_mw": Catalog.GRID_CAPACITY_MW,
 		"fuel_supply": frozen_fuel, "options": frozen_options, "metadata": {"request_id": request_id, "scene_revision": host.scene_revision, "start_time_s": host.elapsed_s,"climate_config":host.climate_config.duplicate(true)},
 		"forecast": {"sampling": "left endpoint; piecewise constant; split exactly at every active CSV boundary", "sources": source_labels, "climate": "same deterministic location/calendar and imported/teaching weather sampler as live world; isolated from live visual time", "load": "fixed electric demand multiplied by explicit forecast task factor", "heat_demand": "constant device demand; heat-demand CSV import is not supported", "heat_service_weight": "teaching service weight, not an electricity/heat price or economic equivalence", "capacity_expansion": false, "fuel": "shared bounded LHV input; explicit auxiliary AC consumption; configured CNY/MWh teaching cost, not a market tariff"}}
 
@@ -177,11 +177,11 @@ func make_baseline(data: Dictionary) -> Dictionary:
 		for d in fleet:
 			var key := str(int(d.id))
 			if d.kind in ["wind", "pv"]: row[d.kind + "_mw"] += float(r.devices[key].sent_mw)
-			if d.kind == "battery":
+			if Catalog.is_electric_storage(d.kind):
 				d.state = r.next_states[key].duplicate(true)
 				row.energy_mwh += float(d.state.energy_mwh)
 				capacity += float(d.params.capacity_mwh)
-			elif d.kind in ["thermal_store", "high_temp_store", "molten_salt_store"]:
+			elif d.kind in ["thermal_store", "solid_thermal_store", "high_temp_store", "molten_salt_store"]:
 				if not r.get("next_states", {}).has(key) or not r.next_states[key].has("energy_mwhth"):
 					return {"error": "基准调度缺少热库存状态。", "steps": []}
 				d.state = r.next_states[key].duplicate(true)

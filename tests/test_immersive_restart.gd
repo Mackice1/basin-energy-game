@@ -21,7 +21,7 @@ func run():
 	assert(snapshot.devices.all(func(d):return d.kind!="thermal_station"))
 	var input:=FileAccess.open("user://metric_solver_input.json",FileAccess.WRITE);input.store_string(JSON.stringify(snapshot));input.close()
 	var output:Array=[]
-	var code:=OS.execute("python3",PackedStringArray([ProjectSettings.globalize_path("res://tools/dispatch_solver.py"),"--input",ProjectSettings.globalize_path("user://metric_solver_input.json"),"--output",ProjectSettings.globalize_path("user://metric_solver_output.json"),"--glpsol","/workspace/shared/glpk/bin/glpsol"]),output,true)
+	var code:=OS.execute("python3",PackedStringArray([ProjectSettings.globalize_path("res://tools/dispatch_solver.py"),"--input",ProjectSettings.globalize_path("user://metric_solver_input.json"),"--output",ProjectSettings.globalize_path("user://metric_solver_output.json"),"--glpsol",(OS.get_environment("BASIN_GLPK") if not OS.get_environment("BASIN_GLPK").is_empty() else "glpsol")]),output,true)
 	assert(code==0,str(output))
 	var solved=JSON.parse_string(FileAccess.get_file_as_string("user://metric_solver_output.json"))
 	assert(solved.get("validation",{}).get("valid",false),str(solved))
