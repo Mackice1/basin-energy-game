@@ -103,6 +103,9 @@ var source_label: Label
 var run_button: Button
 var mode_label: Label
 var slot: OptionButton
+var scene_close_guard: Window
+var external_grid_button: Button
+var topology_hint_label: Label
 var scene_name := "未命名场景"
 var scene_saved_signature := ""
 var scene_saved_elapsed := -1.0
@@ -212,6 +215,7 @@ var runtime_chart: Control
 var runtime_chart_layout_available := true
 
 func _ready():
+	get_tree().auto_accept_quit=false
 	# Keep config/name stable: it owns the existing user:// save directory.
 	get_window().title = "%s · %s" % [ProjectSettings.get_setting("application/config/name"), ProjectSettings.get_setting("application/config/version", "")]
 	dimension_profile="metric_v1"
@@ -415,9 +419,11 @@ func make_ui():
 	station_enter_button=button("进入设备详情",func():self.open_device_details(self.selected_id),selected);station_enter_button.action_mode=BaseButton.ACTION_MODE_BUTTON_PRESS;station_enter_button.visible=false
 	device_picker=OptionButton.new();device_picker.fit_to_longest_item=false;selected.add_child(device_picker);device_picker.item_selected.connect(func(i):select_device(int(device_picker.get_item_metadata(i))))
 	device_summary=label("点击地图设备或从清单选择",14);device_summary.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;selected.add_child(device_summary)
+	topology_hint_label=sidebar_note(selected,"");topology_hint_label.add_theme_color_override("font_color",UITheme.AMBER)
 	metric(selected,"device_available","可用出力","MW");metric(selected,"device_sent","实际送出","MW")
 	button("参数",func():open_parameters(false),selected)
-	var tech:=fold(selected,"技术详情");source_label=sidebar_note(tech,"");metric(tech,"device_curtail","设备限发","MW");button("连接外部电网",func():link_to(-1),tech);button("编辑设备参数",func():open_parameters(false),tech)
+	external_grid_button=button("连接外部电网",connect_selected_to_grid,selected)
+	var tech:=fold(selected,"技术详情");source_label=sidebar_note(tech,"");metric(tech,"device_curtail","设备限发","MW");button("编辑设备参数",func():open_parameters(false),tech)
 	var edit_row:=HBoxContainer.new();selected.add_child(edit_row);button("移动",set_mode.bind("move"),edit_row);button("拆除",remove_selected,edit_row);button("撤销",undo,edit_row)
 	thermal_detail=sidebar_note(tech,"");thermal_detail.name="ThermalDeviceSummary"
 	dimension_summary=sidebar_note(tech,"")
@@ -559,6 +565,9 @@ func make_ui():
 	mode_label=label("",11);mode_label.custom_minimum_size.x=110;mode_label.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS;footer_row.add_child(mode_label)
 	notice=label("选择设备查看详情；Esc 取消操作或返回上一层。",11);notice.size_flags_horizontal=Control.SIZE_EXPAND_FILL;notice.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS;footer_row.add_child(notice)
 	add_child(confirmation);confirmation.theme=theme;confirmation.add_theme_stylebox_override("panel",UITheme.panel());confirmation.ok_button_text="确认";confirmation.cancel_button_text="取消";confirmation.title="确认操作";confirmation.dialog_autowrap=true;confirmation.min_size=Vector2i(550,150);confirmation.confirmed.connect(func():if confirm_action.is_valid():confirm_action.call())
+	scene_close_guard=load("res://scripts/scene_close_guard.gd").new();add_child(scene_close_guard);scene_close_guard.setup(theme)
+	scene_close_guard.request_save.connect(_show_save_after_close_request)
+	scene_close_guard.quit_confirmed.connect(_confirm_application_quit)
 	import_dialog=ImportUI.new();add_child(import_dialog);import_dialog.theme=theme;import_dialog.applied.connect(apply_import)
 	make_parameter_dialog(theme);make_data_dialog(theme);make_line_dialog(theme)
 	bulk_parameter_editor=load("res://scripts/bulk_parameter_editor.gd").new();add_child(bulk_parameter_editor);bulk_parameter_editor.setup(self)
@@ -903,11 +912,17 @@ func select_device(id:int):
 	for key in station_nodes:station_nodes[key].set_selected(int(key)==int(device(id).get("parent_station_id",id)))
 	rebuild_cables();update_status()
 
+func connect_selected_to_grid()->void:
+	if not Catalog.is_electric_station(str(device(selected_id).get("kind",""))):
+		tell("请选择配电汇集单元或基地汇集站后连接外网。");return
+	pending_link=selected_id
+	link_to(-1)
+
 func link_to(id:int):
 	if not station(id).is_empty():choose_station_port(id);return
 	if mode!="link":
-		if selected_id>=0 and device(selected_id).get("kind","")=="station":pending_link=selected_id
-		else:tell("先选变电站，或用端口连线选择两端。");return
+		if selected_id>=0 and Catalog.is_electric_station(str(device(selected_id).get("kind",""))):pending_link=selected_id
+		else:tell("先选配电汇集单元或基地汇集站，或用端口连线选择两端。");return
 	if pending_link==-2:
 		if id<0:tell("请先点击设备端口。");return
 		pending_link=id;select_device(id);tell("已选 #%d，再点另一设备；端口按类型和温区连接。"%id);return
@@ -1349,6 +1364,10 @@ func update_status():
 	update_material_sidebar()
 	for key in ["served","unserved","charge","discharge","storage_loss"]:vals[key]=result.get(key+"_mw",0)
 	var d:=device(selected_id);var report:Dictionary=result.get("devices",{}).get(str(selected_id),{})
+	if is_instance_valid(external_grid_button):external_grid_button.disabled=not Catalog.is_electric_station(str(d.get("kind","")))
+	if is_instance_valid(topology_hint_label):
+		topology_hint_label.text=preload("res://scripts/topology_hint.gd").for_device(selected_id,devices,links)
+		topology_hint_label.visible=not topology_hint_label.text.is_empty()
 	vals["device_available"]=report.get("input_mw",0) if Catalog.is_electric_station(str(d.get("kind",""))) else report.get("mw",0)
 	metric_names["device_available"].text="实际输入" if Catalog.is_electric_station(str(d.get("kind",""))) else "可用出力"
 	vals["device_sent"]=report.get("sent_mw",0);vals["device_curtail"]=report.get("curtailed_mw",0)
@@ -1425,7 +1444,30 @@ func cancel_camera_drag():
 	left_pan_pending=false;left_pan_active=false;left_pan_double_click=false
 	camera_drag_blocked=false
 
+func request_application_close()->void:
+	if not is_instance_valid(scene_close_guard):return
+	update_scene_identity(true)
+	if not scene_close_guard.visible:
+		var host:Node=self
+		for child in get_children():
+			if child is Window and child!=scene_close_guard and child.visible:host=child
+		if scene_close_guard.get_parent()!=host:scene_close_guard.reparent(host)
+	scene_close_guard.request_close(scene_name,scene_is_dirty)
+
+func _show_save_after_close_request()->void:
+	# Do not apply drafts, write a slot, or arrange a delayed automatic exit.
+	for child in get_children():
+		if child is Window and child!=scene_close_guard:child.hide()
+	hud_dock.close_panels();hud_dock.toggle_panel("templates")
+	scene_file_feedback("关闭已取消。请选择存档并确认保存；未应用的参数草稿不会保存，保存后仍留在场景。")
+	slot.grab_focus()
+
+func _confirm_application_quit()->void:
+	get_tree().quit()
+
 func _notification(what):
+	if what==NOTIFICATION_WM_CLOSE_REQUEST:
+		request_application_close();return
 	if what==NOTIFICATION_WM_WINDOW_FOCUS_OUT:
 		cancel_camera_drag();drag_candidate=-2
 		if booted and drag_active:
@@ -1449,6 +1491,7 @@ func _close_nested_popup(node:Node)->bool:
 	return false
 
 func handle_escape()->bool:
+	if is_instance_valid(scene_close_guard) and scene_close_guard.handle_escape():return true
 	cancel_camera_drag()
 	# Each press consumes exactly one layer. Editors never commit on Escape.
 	for dialog in [confirmation,station_port_dialog,param_dialog,data_dialog,line_dialog,bulk_parameter_editor]:
@@ -1727,7 +1770,7 @@ func _process(delta):
 	if modal_visible():
 		cancel_camera_drag()
 		# Interior is navigation, not a second simulator; keep the single world clock.
-		if ((is_instance_valid(device_inspector) and device_inspector.visible) or (is_instance_valid(station_interior) and station_interior.visible)) and not (is_instance_valid(station_interior.remove_confirmation) and station_interior.remove_confirmation.visible) and not param_dialog.visible and not confirmation.visible and not line_dialog.visible and not (is_instance_valid(optimization_controller) and is_instance_valid(optimization_controller.panel) and optimization_controller.panel.visible):
+		if not (is_instance_valid(scene_close_guard) and scene_close_guard.visible) and ((is_instance_valid(device_inspector) and device_inspector.visible) or (is_instance_valid(station_interior) and station_interior.visible)) and not (is_instance_valid(station_interior.remove_confirmation) and station_interior.remove_confirmation.visible) and not param_dialog.visible and not confirmation.visible and not line_dialog.visible and not (is_instance_valid(optimization_controller) and is_instance_valid(optimization_controller.panel) and optimization_controller.panel.visible):
 			if not paused:advance(delta*speed)
 			update_status()
 		return
@@ -1799,7 +1842,7 @@ func update_placement_outline(p:Vector2,radius:float,valid:bool,land_dimensions:
 	mesh.surface_end();placement_outline.mesh=mesh
 
 func modal_visible()->bool:
-	return (is_instance_valid(bulk_parameter_editor) and bulk_parameter_editor.visible) or (is_instance_valid(device_inspector) and device_inspector.visible) or (is_instance_valid(station_interior) and station_interior.visible) or (is_instance_valid(station_port_dialog) and station_port_dialog.visible) or (is_instance_valid(optimization_controller) and is_instance_valid(optimization_controller.panel) and optimization_controller.panel.visible) or confirmation.visible or param_dialog.visible or data_dialog.visible or line_dialog.visible or (is_instance_valid(import_dialog) and import_dialog.visible)
+	return (is_instance_valid(scene_close_guard) and scene_close_guard.visible) or (is_instance_valid(bulk_parameter_editor) and bulk_parameter_editor.visible) or (is_instance_valid(device_inspector) and device_inspector.visible) or (is_instance_valid(station_interior) and station_interior.visible) or (is_instance_valid(station_port_dialog) and station_port_dialog.visible) or (is_instance_valid(optimization_controller) and is_instance_valid(optimization_controller.panel) and optimization_controller.panel.visible) or confirmation.visible or param_dialog.visible or data_dialog.visible or line_dialog.visible or (is_instance_valid(import_dialog) and import_dialog.visible)
 
 func window_background(w:Window):
 	w.hide();w.transient=true;w.exclusive=true
