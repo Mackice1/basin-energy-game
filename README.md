@@ -1,3 +1,30 @@
+# BASIN 02 / 荒原 · 能源大基地 — 1.0.0.2
+
+当前版本 **1.0.0.2**，在 [1.0.0.1 公开基线](https://github.com/Mackice1/basin-energy-game/tree/f97065c04d383717188ff729d5734915f9625755)上增量更新设备详情与塔站外观。版本唯一源仍是 `project.godot` 的 `application/config/version`，项目名称和存档目录规则不变。不创建标签、发布页或重写历史。下方 1.0.0.1、V23、V22 说明保留为历史记录；[版本规则](docs/VERSIONING.md)同步标明 1.0.0.2，当前版本以项目配置及本节为准。
+
+## 本轮变化与边界
+
+- 21 种设备详情统一灰蓝背景、实体地台、天空反射与阴影，继续保留 1.0.0.1 的相机边界。适配取景排除地台与隐藏选择环，并调整近裁面及阴影偏移。
+- 光伏详情展示 3 块代表性组件；变电站详情展示精细变压器/开关柜组合。两者只是独立展示示例，不代表全场数量，不改主场景光伏阵列、容量、端口或物理计算。
+- 塔站采用参考敦煌外置吸热器光热塔形态的原创简化资产。塔高 25 m、靶点 24 m、100 面定日镜及 1,600 m² 镜面积保持不变，不是实厂尺寸复刻或厂家 CAD。只有已有 `tower_station_preview.glb` 被替换，其他已有 GLB 不变。
+- 原物理核心、设备目录、尺寸定义、主场景控制器及站内控制器保持不变。本轮不增加能源技术、容量、发电能力或工程精度。
+
+操作、模型边界与来源见 [1.0.0.2 详情说明](docs/DETAIL_STUDIO_1002_ZH.md)和 [变电站模型说明](docs/STATION_DETAIL_MODEL_1002_ZH.md)。
+
+## 验证状态：通过范围与已知失败
+
+最终针对性记录为 **311 项新详情测试 + 23,522 项相机边界 + 1,021 项原设备详情 = 24,854 项，0 失败**；`tests/run_all.sh` 的既定测试集也通过。**这不等于全部历史测试通过。** 历史站内响应式测试 1,565 项中仍有 9 个 headless 拾取/拖动断言失败，独立 1.0.0.1 基线复现相同 9 项；未计作本轮通过。
+
+真实原生 Godot 输入已验证滚轮放大/缩小、左键拖动、适配、返回与 1024 小窗口重开。**右键旋转只有自动回归覆盖，本轮没有可靠原生右拖证据。** 图形运行使用 CPU 软件渲染，不宣称真实硬件 GPU 性能达标。上述为已验收源码的记录，公开整理没有重跑游戏测试；详情说明保留验证出处与复现入口。
+
+## 公开内容
+
+公开源码保留运行所需 GLB、结构数据、GDScript、测试及建模生成器。此次不发布运行日志、截图、录屏或实时遥测。新增塔模型的可选 `.blend` 编辑工程因含本机路径元数据而省略，原文件在本地保留；可使用 `tools/build_csp_tower_visual.py` 重建，因此不声称本次含完整 Blender 编辑工程。资产清单中的该 `.blend` 路径记录原构建来源，不表示已随仓库提供。原有安全合成夹具和其他历史建模源保持不变，不新增项目许可证。
+
+Version **1.0.0.2** refines the detail-view studio and representative PV/substation models, and replaces only the existing tower GLB. Physics, capacity, field arrays and controllers are unchanged. The latest three targeted suites recorded 24,854 assertions with zero failures and the bounded `run_all.sh` suite passed; a historical station-responsive suite still has nine failures reproduced on 1.0.0.1. Native wheel/left-drag/fit/back/small-window flows were checked, but right-drag rotation has automated coverage only. Runtime evidence and the new optional Blender project are omitted; the generator remains available. Publication preparation did not rerun tests.
+
+## 保留的 1.0.0.1 与更早公开说明
+
 # BASIN 02 / 荒原 · 能源大基地 — 1.0.0.1
 
 当前正式版本号为 **1.0.0.1**，采用“主版本.功能版本.修订版本.构建号”四段格式，集中读取 `project.godot` 的 `application/config/version`。日常小改通过同一仓库的 Git 提交累积，批次验收后才统一更新版本；本次不创建标签或发布页。规则见 [版本命名](docs/VERSIONING.md)。

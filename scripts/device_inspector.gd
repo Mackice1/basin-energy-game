@@ -3,12 +3,15 @@ extends Window
 ## API: setup(host), open_device(id) -> bool, refresh(), close_device().
 const Catalog = preload("res://scripts/device_catalog.gd")
 const Visual = preload("res://scripts/equipment_visual.gd")
+const TowerDetail = preload("res://scripts/tower_detail_sample.gd")
+const StationDetail = preload("res://scripts/station_detail_sample.gd")
+const PVDetail = preload("res://scripts/pv_detail_sample.gd")
 const Form = preload("res://scripts/parameter_form.gd")
 const UITheme = preload("res://scripts/ui_theme.gd")
 const NAMES := {"wind":"风机", "pv":"光伏", "station":"变电站", "load":"用电需求", "battery":"电池", "electric_boiler":"电热水锅炉", "thermal_store":"储热罐", "heat_exchanger":"隔离换热器", "heat_demand":"热需求", "fuel_boiler":"燃气热水锅炉", "solar_thermal":"太阳能集热器", "parabolic_trough":"槽式聚光集热器", "high_temp_store":"高温导热油储热", "oil_water_exchanger":"油水换热器", "steam_generator":"蒸汽发生器", "steam_turbine":"汽轮发电机", "steam_condenser":"蒸汽冷凝器", "feedwater_pump":"给水泵", "solar_tower_receiver":"塔式熔盐接收器", "molten_salt_store":"双罐熔盐储热", "salt_steam_generator":"熔盐蒸汽发生器"}
 const LIMITS := {
  "wind":"未建模：叶片结构、尾流、机械载荷与电网暂态。外形不是可进入的机舱仿真。",
- "pv":"未建模：逐组件电路、遮挡细节与逆变器开关暂态。阵列外形为压缩展示。",
+ "pv":"未建模：逐组件电路、遮挡细节与逆变器开关暂态。代表性组件示例，非全场数量；不推断全场布置。",
  "station":"未建模：交流潮流、电压、无功与变压器电磁暂态；这里不是电热站。",
  "load":"未建模：建筑内部、逐电器回路与电压响应。",
  "battery":"未建模：电芯电化学、热管理、老化与逐电芯结构。",
@@ -37,6 +40,9 @@ var view_container: SubViewportContainer
 var camera: Camera3D
 var scene_root: Node3D
 var model_node: Node3D
+var studio_ground: MeshInstance3D
+var studio_environment: Environment
+var studio_light: DirectionalLight3D
 var title_label: Label
 var status_label: Label
 var model_label: Label
@@ -148,6 +154,7 @@ func _build_ui() -> void:
  environment.environment = Environment.new()
  environment.environment.background_mode = Environment.BG_COLOR
  environment.environment.background_color = Color("12212b")
+ studio_environment = environment.environment
  environment.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
  environment.environment.ambient_light_color = Color("cadfe9")
  environment.environment.ambient_light_energy = 0.75
@@ -155,6 +162,7 @@ func _build_ui() -> void:
  var light := DirectionalLight3D.new()
  light.rotation_degrees = Vector3(-45, -35, 0)
  light.light_energy = 1.5
+ studio_light = light
  scene_root.add_child(light)
  camera = Camera3D.new()
  camera.fov = 42
@@ -210,11 +218,18 @@ func refresh() -> void:
  var signature := str([kind, vp])
  if signature != _signature:
   if is_instance_valid(model_node): model_node.free()
-  model_node = Visual.create(kind, vp, true)
+  model_node = PVDetail.new() if kind == "pv" else (StationDetail.new() if kind == "station" else (TowerDetail.new() if kind == "solar_tower_receiver" else Visual.create(kind, vp, true)))
+  _configure_studio()
   scene_root.add_child(model_node)
   _signature = signature
   reset_camera()
  model_label.text = "现有设备真实展示资产 · %s\n外形用于识别与检查，不代表额外内部物理仿真。" % ("米制尺寸" if vp.get("visual_dimension_profile", "") == "metric_v1" else "旧版示意尺寸")
+ if kind == "pv":
+  model_label.text = "代表性组件示例，非全场数量 · 3块组件结构示意\n边框 / 电池片 / 支架 / 接线细节仅用于展示；右侧仍为全场真实参数。"
+ if kind == "station":
+  model_label.text = "代表性中压变压器 / 开关柜示例，非全站数量\n非厂家CAD；不新增电压 / 保护仿真。右侧为全站真实参数。"
+ if kind == "solar_tower_receiver":
+  model_label.text = "接收塔结构示意 · 与塔站同源外观，非实厂尺寸 / CAD\n既有教学塔高25m / 靶点24m；形态参考非实厂尺寸复刻。"
  var results: Dictionary = host.get("result") if host.get("result") is Dictionary else {}
  var report: Dictionary = results.get("devices", {}).get(str(device_id), {})
  texts["运行"].text = "主场景最新计算结果\n\n" + (_rows(report) if not report.is_empty() else "尚无本设备计算结果；本页不会独立求解。") + "\n\n持久运行状态\n" + (_rows(item.get("state", {})) if not item.get("state", {}).is_empty() else "无独立持久状态")
@@ -236,6 +251,46 @@ func refresh() -> void:
  boundaries.append("\n3D视角、缩放、窗口开关不会改变设备参数、库存、线路或模拟时钟。")
  texts["边界"].text = "\n\n".join(boundaries)
  texts["连接"].text = _connections(kind)
+
+func _configure_studio() -> void:
+ # Ground is a sibling, deliberately excluded from model fitting/pan bounds.
+ if is_instance_valid(studio_ground): studio_ground.free()
+ studio_environment.background_color = Color("87989f")
+ studio_environment.ambient_light_color = Color("c8d8e4")
+ studio_environment.ambient_light_energy = 0.55
+ studio_environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+ var sky_material := ProceduralSkyMaterial.new()
+ sky_material.sky_top_color = Color("7897b2")
+ sky_material.sky_horizon_color = Color("b5c4c8")
+ sky_material.ground_horizon_color = Color("8d9790")
+ var sky := Sky.new()
+ sky.sky_material = sky_material
+ studio_environment.sky = sky
+ studio_environment.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
+ studio_light.shadow_enabled = true
+ studio_light.light_energy = 0.8
+ studio_light.light_color = Color("fff0d7")
+ studio_light.light_angular_distance = 1.8
+ studio_light.shadow_bias = 0.4
+ studio_light.shadow_normal_bias = 2.0
+ viewport.msaa_3d = Viewport.MSAA_4X
+ studio_ground = PVDetail.box(scene_root, Vector3.ONE, Vector3.ZERO, PVDetail.material("626255", 0.0, 0.95))
+ studio_ground.name = "DisplayGroundNotEquipment"
+
+func _fit_studio_ground() -> void:
+ if not is_instance_valid(studio_ground): return
+ var span := maxf(model_radius, 0.1)
+ var ground_width := maxf(model_bounds.size.x + span * 0.9, span * 1.25)
+ var ground_depth := maxf(model_bounds.size.z + span * 0.9, span * 1.25)
+ studio_ground.scale = Vector3(ground_width, span * 0.035, ground_depth)
+ studio_ground.position = Vector3(model_center.x, model_bounds.position.y - span * 0.02, model_center.z)
+ studio_ground.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+ studio_light.directional_shadow_max_distance = span * 12.0
+ for child in studio_ground.get_children(): child.free()
+ var joint := PVDetail.material("5c5d52", 0.0, 0.95)
+ for coordinate in [-0.25, 0.0, 0.25]:
+  PVDetail.box(studio_ground, Vector3(0.001, 0.006, 1), Vector3(coordinate, 0.502, 0), joint)
+  PVDetail.box(studio_ground, Vector3(1, 0.006, 0.001), Vector3(0, 0.502, coordinate), joint)
 
 func _value(value: Variant) -> String:
  if value is bool: return "是" if value else "否"
@@ -288,6 +343,7 @@ func _connections(kind: String) -> String:
 
 func _bounds(node: Node3D, transform: Transform3D = Transform3D.IDENTITY) -> Array[AABB]:
  var found: Array[AABB] = []
+ if not node.visible: return found
  var current := transform * node.transform
  if node is MeshInstance3D and node.mesh != null: found.append(current * node.get_aabb())
  for child in node.get_children():
@@ -303,9 +359,10 @@ func reset_camera() -> void:
   for part in parts: model_bounds = model_bounds.merge(part)
  model_center = model_bounds.get_center()
  model_radius = maxf(model_bounds.size.length() * 0.5, 0.1)
+ _fit_studio_ground()
  camera_target = model_center
- camera_yaw = 35.0
- camera_pitch = 22.0
+ camera_yaw = 145.0 if model_node.get("device_kind") == "pv" else (-145.0 if model_node.get("device_kind") == "station" else 35.0)
+ camera_pitch = 25.0 if model_node.get("device_kind") in ["pv", "station"] else 22.0
  fit_distance = _fitted_distance()
  camera_distance = fit_distance
  _update_camera()
@@ -356,7 +413,8 @@ func _update_camera() -> void:
  var dy := clampf(offset.dot(axes[1]), -half_height * PAN_SCREEN_FRACTION, half_height * PAN_SCREEN_FRACTION)
  camera_target = model_center + axes[0] * dx + axes[1] * dy
  camera.position = camera_target + axes[2] * camera_distance
- camera.near = maxf(0.000001, minf(model_radius * 0.00001, camera_distance * 0.1))
+ # Adaptive near plane preserves close zoom without wasting depth precision at fit distance.
+ camera.near = maxf(0.0000001, minf(model_radius * 0.01, camera_distance * 0.05))
  camera.far = maxf(100.0, camera_distance + model_radius * 60.0)
  camera.look_at(camera_target, Vector3.UP)
 

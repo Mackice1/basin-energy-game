@@ -200,7 +200,7 @@
     },
     "tower_station_preview": {
       "glb": "assets/models/tower_station_preview.glb",
-      "source": "art_source/blender/rankine_assets.blend",
+      "source": "art_source/blender/csp_tower_visual.blend",
       "world_units_per_meter": 0.1,
       "bounds_m": [
         [
@@ -210,15 +210,15 @@
         ],
         [
           80.0,
-          25.0,
+          25.000001907348633,
           80.0
         ]
       ],
       "ports": {},
-      "bytes": 1071284,
+      "bytes": 1205288,
       "profile_anchor": [
         0,
-        2.5300000000000002,
+        2.5300001907348637,
         0
       ],
       "commissioned": false,

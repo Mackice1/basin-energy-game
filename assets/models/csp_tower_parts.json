@@ -1,0 +1,2854 @@
+{
+  "world_units_per_meter": 0.1,
+  "height_m": 25,
+  "receiver_target_m": [
+    0,
+    24,
+    0
+  ],
+  "parts": [
+    {
+      "type": "box",
+      "name": "TowerFooting",
+      "pos": [
+        0,
+        0.25,
+        0
+      ],
+      "size": [
+        8,
+        0.3,
+        8
+      ],
+      "material": "concrete"
+    },
+    {
+      "type": "cylinder",
+      "name": "TaperedConcreteShaft",
+      "a": [
+        0,
+        0.4,
+        0
+      ],
+      "b": [
+        0,
+        21.9,
+        0
+      ],
+      "radius": 1.72,
+      "top_radius": 0.98,
+      "segments": 48,
+      "material": "concrete"
+    },
+    {
+      "type": "cylinder",
+      "name": "ReceiverSupportShoulder",
+      "a": [
+        0,
+        21.9,
+        0
+      ],
+      "b": [
+        0,
+        22.4,
+        0
+      ],
+      "radius": 0.98,
+      "top_radius": 1.22,
+      "segments": 32,
+      "material": "concrete"
+    },
+    {
+      "type": "box",
+      "name": "ServiceDoor",
+      "pos": [
+        0,
+        1.15,
+        -1.69
+      ],
+      "size": [
+        0.8,
+        1.5,
+        0.07
+      ],
+      "material": "dark"
+    },
+    {
+      "type": "box",
+      "name": "DoorLintel",
+      "pos": [
+        0,
+        1.94,
+        -1.72
+      ],
+      "size": [
+        1,
+        0.09,
+        0.13
+      ],
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "ConcreteLiftJoint",
+      "a": [
+        0,
+        3.2,
+        0
+      ],
+      "b": [
+        0,
+        3.225,
+        0
+      ],
+      "radius": 1.626627906976744,
+      "top_radius": 1.625627906976744,
+      "segments": 48,
+      "material": "joint"
+    },
+    {
+      "type": "cylinder",
+      "name": "ConcreteLiftJoint",
+      "a": [
+        0,
+        6.3,
+        0
+      ],
+      "b": [
+        0,
+        6.325,
+        0
+      ],
+      "radius": 1.5199302325581394,
+      "top_radius": 1.5189302325581395,
+      "segments": 48,
+      "material": "joint"
+    },
+    {
+      "type": "cylinder",
+      "name": "ConcreteLiftJoint",
+      "a": [
+        0,
+        9.4,
+        0
+      ],
+      "b": [
+        0,
+        9.425,
+        0
+      ],
+      "radius": 1.4132325581395346,
+      "top_radius": 1.4122325581395347,
+      "segments": 48,
+      "material": "joint"
+    },
+    {
+      "type": "cylinder",
+      "name": "ConcreteLiftJoint",
+      "a": [
+        0,
+        12.5,
+        0
+      ],
+      "b": [
+        0,
+        12.525,
+        0
+      ],
+      "radius": 1.30653488372093,
+      "top_radius": 1.3055348837209302,
+      "segments": 48,
+      "material": "joint"
+    },
+    {
+      "type": "cylinder",
+      "name": "ConcreteLiftJoint",
+      "a": [
+        0,
+        15.6,
+        0
+      ],
+      "b": [
+        0,
+        15.625,
+        0
+      ],
+      "radius": 1.1998372093023255,
+      "top_radius": 1.1988372093023256,
+      "segments": 48,
+      "material": "joint"
+    },
+    {
+      "type": "cylinder",
+      "name": "ConcreteLiftJoint",
+      "a": [
+        0,
+        18.7,
+        0
+      ],
+      "b": [
+        0,
+        18.724999999999998,
+        0
+      ],
+      "radius": 1.093139534883721,
+      "top_radius": 1.092139534883721,
+      "segments": 48,
+      "material": "joint"
+    },
+    {
+      "type": "cylinder",
+      "name": "DarkReceiver",
+      "a": [
+        0,
+        22.5,
+        0
+      ],
+      "b": [
+        0,
+        24.94,
+        0
+      ],
+      "radius": 1.3,
+      "top_radius": 1.3,
+      "segments": 48,
+      "material": "dark"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        1.302,
+        22.57,
+        0.0
+      ],
+      "b": [
+        1.302,
+        24.88,
+        0.0
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        1.290861209508701,
+        22.57,
+        0.16994510227050716
+      ],
+      "b": [
+        1.290861209508701,
+        24.88,
+        0.16994510227050716
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        1.257635425828367,
+        22.57,
+        0.336982396723482
+      ],
+      "b": [
+        1.257635425828367,
+        24.88,
+        0.336982396723482
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        1.2028911513296954,
+        22.57,
+        0.4982538289393469
+      ],
+      "b": [
+        1.2028911513296954,
+        24.88,
+        0.4982538289393469
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        1.1275650757273392,
+        22.57,
+        0.6509999999999999
+      ],
+      "b": [
+        1.1275650757273392,
+        24.88,
+        0.6509999999999999
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        1.0329460490591882,
+        22.57,
+        0.7926073805693543
+      ],
+      "b": [
+        1.0329460490591882,
+        24.88,
+        0.7926073805693543
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        0.920653029104885,
+        22.57,
+        0.9206530291048848
+      ],
+      "b": [
+        0.920653029104885,
+        24.88,
+        0.9206530291048848
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        0.7926073805693543,
+        22.57,
+        1.0329460490591882
+      ],
+      "b": [
+        0.7926073805693543,
+        24.88,
+        1.0329460490591882
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        0.6510000000000001,
+        22.57,
+        1.127565075727339
+      ],
+      "b": [
+        0.6510000000000001,
+        24.88,
+        1.127565075727339
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        0.498253828939347,
+        22.57,
+        1.2028911513296954
+      ],
+      "b": [
+        0.498253828939347,
+        24.88,
+        1.2028911513296954
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        0.336982396723482,
+        22.57,
+        1.257635425828367
+      ],
+      "b": [
+        0.336982396723482,
+        24.88,
+        1.257635425828367
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        0.16994510227050733,
+        22.57,
+        1.290861209508701
+      ],
+      "b": [
+        0.16994510227050733,
+        24.88,
+        1.290861209508701
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        7.97245066244927e-17,
+        22.57,
+        1.302
+      ],
+      "b": [
+        7.97245066244927e-17,
+        24.88,
+        1.302
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        -0.1699451022705072,
+        22.57,
+        1.290861209508701
+      ],
+      "b": [
+        -0.1699451022705072,
+        24.88,
+        1.290861209508701
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        -0.33698239672348185,
+        22.57,
+        1.257635425828367
+      ],
+      "b": [
+        -0.33698239672348185,
+        24.88,
+        1.257635425828367
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        -0.49825382893934655,
+        22.57,
+        1.2028911513296956
+      ],
+      "b": [
+        -0.49825382893934655,
+        24.88,
+        1.2028911513296956
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        -0.6509999999999997,
+        22.57,
+        1.1275650757273392
+      ],
+      "b": [
+        -0.6509999999999997,
+        24.88,
+        1.1275650757273392
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        -0.7926073805693543,
+        22.57,
+        1.0329460490591882
+      ],
+      "b": [
+        -0.7926073805693543,
+        24.88,
+        1.0329460490591882
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        -0.9206530291048848,
+        22.57,
+        0.920653029104885
+      ],
+      "b": [
+        -0.9206530291048848,
+        24.88,
+        0.920653029104885
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        -1.0329460490591882,
+        22.57,
+        0.7926073805693546
+      ],
+      "b": [
+        -1.0329460490591882,
+        24.88,
+        0.7926073805693546
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        -1.1275650757273392,
+        22.57,
+        0.6509999999999999
+      ],
+      "b": [
+        -1.1275650757273392,
+        24.88,
+        0.6509999999999999
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        -1.2028911513296954,
+        22.57,
+        0.49825382893934705
+      ],
+      "b": [
+        -1.2028911513296954,
+        24.88,
+        0.49825382893934705
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        -1.2576354258283668,
+        22.57,
+        0.3369823967234824
+      ],
+      "b": [
+        -1.2576354258283668,
+        24.88,
+        0.3369823967234824
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        -1.290861209508701,
+        22.57,
+        0.1699451022705077
+      ],
+      "b": [
+        -1.290861209508701,
+        24.88,
+        0.1699451022705077
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        -1.302,
+        22.57,
+        1.594490132489854e-16
+      ],
+      "b": [
+        -1.302,
+        24.88,
+        1.594490132489854e-16
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        -1.290861209508701,
+        22.57,
+        -0.1699451022705074
+      ],
+      "b": [
+        -1.290861209508701,
+        24.88,
+        -0.1699451022705074
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        -1.257635425828367,
+        22.57,
+        -0.33698239672348207
+      ],
+      "b": [
+        -1.257635425828367,
+        24.88,
+        -0.33698239672348207
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        -1.2028911513296956,
+        22.57,
+        -0.4982538289393468
+      ],
+      "b": [
+        -1.2028911513296956,
+        24.88,
+        -0.4982538289393468
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        -1.1275650757273394,
+        22.57,
+        -0.6509999999999997
+      ],
+      "b": [
+        -1.1275650757273394,
+        24.88,
+        -0.6509999999999997
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        -1.0329460490591882,
+        22.57,
+        -0.7926073805693543
+      ],
+      "b": [
+        -1.0329460490591882,
+        24.88,
+        -0.7926073805693543
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        -0.9206530291048854,
+        22.57,
+        -0.9206530291048844
+      ],
+      "b": [
+        -0.9206530291048854,
+        24.88,
+        -0.9206530291048844
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        -0.7926073805693546,
+        22.57,
+        -1.032946049059188
+      ],
+      "b": [
+        -0.7926073805693546,
+        24.88,
+        -1.032946049059188
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        -0.6510000000000006,
+        22.57,
+        -1.1275650757273388
+      ],
+      "b": [
+        -0.6510000000000006,
+        24.88,
+        -1.1275650757273388
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        -0.49825382893934655,
+        22.57,
+        -1.2028911513296956
+      ],
+      "b": [
+        -0.49825382893934655,
+        24.88,
+        -1.2028911513296956
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        -0.33698239672348185,
+        22.57,
+        -1.257635425828367
+      ],
+      "b": [
+        -0.33698239672348185,
+        24.88,
+        -1.257635425828367
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        -0.16994510227050721,
+        22.57,
+        -1.290861209508701
+      ],
+      "b": [
+        -0.16994510227050721,
+        24.88,
+        -1.290861209508701
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        -2.3917351987347806e-16,
+        22.57,
+        -1.302
+      ],
+      "b": [
+        -2.3917351987347806e-16,
+        24.88,
+        -1.302
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        0.16994510227050677,
+        22.57,
+        -1.2908612095087013
+      ],
+      "b": [
+        0.16994510227050677,
+        24.88,
+        -1.2908612095087013
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        0.33698239672348146,
+        22.57,
+        -1.257635425828367
+      ],
+      "b": [
+        0.33698239672348146,
+        24.88,
+        -1.257635425828367
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        0.4982538289393461,
+        22.57,
+        -1.2028911513296956
+      ],
+      "b": [
+        0.4982538289393461,
+        24.88,
+        -1.2028911513296956
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        0.6510000000000001,
+        22.57,
+        -1.127565075727339
+      ],
+      "b": [
+        0.6510000000000001,
+        24.88,
+        -1.127565075727339
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        0.7926073805693533,
+        22.57,
+        -1.0329460490591889
+      ],
+      "b": [
+        0.7926073805693533,
+        24.88,
+        -1.0329460490591889
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        0.9206530291048847,
+        22.57,
+        -0.9206530291048851
+      ],
+      "b": [
+        0.9206530291048847,
+        24.88,
+        -0.9206530291048851
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        1.032946049059188,
+        22.57,
+        -0.7926073805693546
+      ],
+      "b": [
+        1.032946049059188,
+        24.88,
+        -0.7926073805693546
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        1.1275650757273388,
+        22.57,
+        -0.6510000000000006
+      ],
+      "b": [
+        1.1275650757273388,
+        24.88,
+        -0.6510000000000006
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        1.2028911513296956,
+        22.57,
+        -0.4982538289393466
+      ],
+      "b": [
+        1.2028911513296956,
+        24.88,
+        -0.4982538289393466
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        1.2576354258283666,
+        22.57,
+        -0.3369823967234831
+      ],
+      "b": [
+        1.2576354258283666,
+        24.88,
+        -0.3369823967234831
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "AbsorberPanelSeam",
+      "a": [
+        1.290861209508701,
+        22.57,
+        -0.1699451022705073
+      ],
+      "b": [
+        1.290861209508701,
+        24.88,
+        -0.1699451022705073
+      ],
+      "radius": 0.012,
+      "top_radius": 0.012,
+      "segments": 6,
+      "material": "receiver_seam"
+    },
+    {
+      "type": "cylinder",
+      "name": "ReceiverTopCap",
+      "a": [
+        0,
+        24.94,
+        0
+      ],
+      "b": [
+        0,
+        25,
+        0
+      ],
+      "radius": 1.36,
+      "top_radius": 1.36,
+      "segments": 48,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "ReceiverCasing",
+      "a": [
+        0,
+        22.4,
+        0
+      ],
+      "b": [
+        0,
+        22.5,
+        0
+      ],
+      "radius": 1.44,
+      "top_radius": 1.44,
+      "segments": 48,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceDeck",
+      "a": [
+        0,
+        21.97,
+        0
+      ],
+      "b": [
+        0,
+        22.08,
+        0
+      ],
+      "radius": 1.88,
+      "top_radius": 1.88,
+      "segments": 48,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRailPost",
+      "a": [
+        1.82,
+        22.08,
+        0.0
+      ],
+      "b": [
+        1.82,
+        22.47,
+        0.0
+      ],
+      "radius": 0.022,
+      "top_radius": 0.022,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        1.82,
+        22.25,
+        0.0
+      ],
+      "b": [
+        1.7579850038461045,
+        22.25,
+        0.47105066208658775
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        1.82,
+        22.47,
+        0.0
+      ],
+      "b": [
+        1.7579850038461045,
+        22.47,
+        0.47105066208658775
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "DeckBracket",
+      "a": [
+        0.99,
+        21.3,
+        0.0
+      ],
+      "b": [
+        1.82,
+        21.98,
+        0.0
+      ],
+      "radius": 0.04,
+      "top_radius": 0.04,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRailPost",
+      "a": [
+        1.7579850038461045,
+        22.08,
+        0.47105066208658775
+      ],
+      "b": [
+        1.7579850038461045,
+        22.47,
+        0.47105066208658775
+      ],
+      "radius": 0.022,
+      "top_radius": 0.022,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        1.7579850038461045,
+        22.25,
+        0.47105066208658775
+      ],
+      "b": [
+        1.5761662348876786,
+        22.25,
+        0.9099999999999999
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        1.7579850038461045,
+        22.47,
+        0.47105066208658775
+      ],
+      "b": [
+        1.5761662348876786,
+        22.47,
+        0.9099999999999999
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRailPost",
+      "a": [
+        1.5761662348876786,
+        22.08,
+        0.9099999999999999
+      ],
+      "b": [
+        1.5761662348876786,
+        22.47,
+        0.9099999999999999
+      ],
+      "radius": 0.022,
+      "top_radius": 0.022,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        1.5761662348876786,
+        22.25,
+        0.9099999999999999
+      ],
+      "b": [
+        1.2869343417595167,
+        22.25,
+        1.2869343417595165
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        1.5761662348876786,
+        22.47,
+        0.9099999999999999
+      ],
+      "b": [
+        1.2869343417595167,
+        22.47,
+        1.2869343417595165
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRailPost",
+      "a": [
+        1.2869343417595167,
+        22.08,
+        1.2869343417595165
+      ],
+      "b": [
+        1.2869343417595167,
+        22.47,
+        1.2869343417595165
+      ],
+      "radius": 0.022,
+      "top_radius": 0.022,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        1.2869343417595167,
+        22.25,
+        1.2869343417595165
+      ],
+      "b": [
+        0.9100000000000003,
+        22.25,
+        1.5761662348876784
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        1.2869343417595167,
+        22.47,
+        1.2869343417595165
+      ],
+      "b": [
+        0.9100000000000003,
+        22.47,
+        1.5761662348876784
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "DeckBracket",
+      "a": [
+        0.7000357133746821,
+        21.3,
+        0.700035713374682
+      ],
+      "b": [
+        1.2869343417595167,
+        21.98,
+        1.2869343417595165
+      ],
+      "radius": 0.04,
+      "top_radius": 0.04,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRailPost",
+      "a": [
+        0.9100000000000003,
+        22.08,
+        1.5761662348876784
+      ],
+      "b": [
+        0.9100000000000003,
+        22.47,
+        1.5761662348876784
+      ],
+      "radius": 0.022,
+      "top_radius": 0.022,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        0.9100000000000003,
+        22.25,
+        1.5761662348876784
+      ],
+      "b": [
+        0.47105066208658775,
+        22.25,
+        1.7579850038461045
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        0.9100000000000003,
+        22.47,
+        1.5761662348876784
+      ],
+      "b": [
+        0.47105066208658775,
+        22.47,
+        1.7579850038461045
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRailPost",
+      "a": [
+        0.47105066208658775,
+        22.08,
+        1.7579850038461045
+      ],
+      "b": [
+        0.47105066208658775,
+        22.47,
+        1.7579850038461045
+      ],
+      "radius": 0.022,
+      "top_radius": 0.022,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        0.47105066208658775,
+        22.25,
+        1.7579850038461045
+      ],
+      "b": [
+        1.1144285872240914e-16,
+        22.25,
+        1.82
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        0.47105066208658775,
+        22.47,
+        1.7579850038461045
+      ],
+      "b": [
+        1.1144285872240914e-16,
+        22.47,
+        1.82
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRailPost",
+      "a": [
+        1.1144285872240914e-16,
+        22.08,
+        1.82
+      ],
+      "b": [
+        1.1144285872240914e-16,
+        22.47,
+        1.82
+      ],
+      "radius": 0.022,
+      "top_radius": 0.022,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        1.1144285872240914e-16,
+        22.25,
+        1.82
+      ],
+      "b": [
+        -0.4710506620865876,
+        22.25,
+        1.7579850038461045
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        1.1144285872240914e-16,
+        22.47,
+        1.82
+      ],
+      "b": [
+        -0.4710506620865876,
+        22.47,
+        1.7579850038461045
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "DeckBracket",
+      "a": [
+        6.062001655779399e-17,
+        21.3,
+        0.99
+      ],
+      "b": [
+        1.1144285872240914e-16,
+        21.98,
+        1.82
+      ],
+      "radius": 0.04,
+      "top_radius": 0.04,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRailPost",
+      "a": [
+        -0.4710506620865876,
+        22.08,
+        1.7579850038461045
+      ],
+      "b": [
+        -0.4710506620865876,
+        22.47,
+        1.7579850038461045
+      ],
+      "radius": 0.022,
+      "top_radius": 0.022,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        -0.4710506620865876,
+        22.25,
+        1.7579850038461045
+      ],
+      "b": [
+        -0.9099999999999996,
+        22.25,
+        1.5761662348876786
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        -0.4710506620865876,
+        22.47,
+        1.7579850038461045
+      ],
+      "b": [
+        -0.9099999999999996,
+        22.47,
+        1.5761662348876786
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRailPost",
+      "a": [
+        -0.9099999999999996,
+        22.08,
+        1.5761662348876786
+      ],
+      "b": [
+        -0.9099999999999996,
+        22.47,
+        1.5761662348876786
+      ],
+      "radius": 0.022,
+      "top_radius": 0.022,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        -0.9099999999999996,
+        22.25,
+        1.5761662348876786
+      ],
+      "b": [
+        -1.2869343417595165,
+        22.25,
+        1.2869343417595167
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        -0.9099999999999996,
+        22.47,
+        1.5761662348876786
+      ],
+      "b": [
+        -1.2869343417595165,
+        22.47,
+        1.2869343417595167
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRailPost",
+      "a": [
+        -1.2869343417595165,
+        22.08,
+        1.2869343417595167
+      ],
+      "b": [
+        -1.2869343417595165,
+        22.47,
+        1.2869343417595167
+      ],
+      "radius": 0.022,
+      "top_radius": 0.022,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        -1.2869343417595165,
+        22.25,
+        1.2869343417595167
+      ],
+      "b": [
+        -1.5761662348876786,
+        22.25,
+        0.9099999999999999
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        -1.2869343417595165,
+        22.47,
+        1.2869343417595167
+      ],
+      "b": [
+        -1.5761662348876786,
+        22.47,
+        0.9099999999999999
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "DeckBracket",
+      "a": [
+        -0.700035713374682,
+        21.3,
+        0.7000357133746821
+      ],
+      "b": [
+        -1.2869343417595165,
+        21.98,
+        1.2869343417595167
+      ],
+      "radius": 0.04,
+      "top_radius": 0.04,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRailPost",
+      "a": [
+        -1.5761662348876786,
+        22.08,
+        0.9099999999999999
+      ],
+      "b": [
+        -1.5761662348876786,
+        22.47,
+        0.9099999999999999
+      ],
+      "radius": 0.022,
+      "top_radius": 0.022,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        -1.5761662348876786,
+        22.25,
+        0.9099999999999999
+      ],
+      "b": [
+        -1.7579850038461042,
+        22.25,
+        0.47105066208658825
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        -1.5761662348876786,
+        22.47,
+        0.9099999999999999
+      ],
+      "b": [
+        -1.7579850038461042,
+        22.47,
+        0.47105066208658825
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRailPost",
+      "a": [
+        -1.7579850038461042,
+        22.08,
+        0.47105066208658825
+      ],
+      "b": [
+        -1.7579850038461042,
+        22.47,
+        0.47105066208658825
+      ],
+      "radius": 0.022,
+      "top_radius": 0.022,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        -1.7579850038461042,
+        22.25,
+        0.47105066208658825
+      ],
+      "b": [
+        -1.82,
+        22.25,
+        2.228857174448183e-16
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        -1.7579850038461042,
+        22.47,
+        0.47105066208658825
+      ],
+      "b": [
+        -1.82,
+        22.47,
+        2.228857174448183e-16
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRailPost",
+      "a": [
+        -1.82,
+        22.08,
+        2.228857174448183e-16
+      ],
+      "b": [
+        -1.82,
+        22.47,
+        2.228857174448183e-16
+      ],
+      "radius": 0.022,
+      "top_radius": 0.022,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        -1.82,
+        22.25,
+        2.228857174448183e-16
+      ],
+      "b": [
+        -1.7579850038461045,
+        22.25,
+        -0.47105066208658786
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        -1.82,
+        22.47,
+        2.228857174448183e-16
+      ],
+      "b": [
+        -1.7579850038461045,
+        22.47,
+        -0.47105066208658786
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "DeckBracket",
+      "a": [
+        -0.99,
+        21.3,
+        1.2124003311558797e-16
+      ],
+      "b": [
+        -1.82,
+        21.98,
+        2.228857174448183e-16
+      ],
+      "radius": 0.04,
+      "top_radius": 0.04,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRailPost",
+      "a": [
+        -1.7579850038461045,
+        22.08,
+        -0.47105066208658786
+      ],
+      "b": [
+        -1.7579850038461045,
+        22.47,
+        -0.47105066208658786
+      ],
+      "radius": 0.022,
+      "top_radius": 0.022,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        -1.7579850038461045,
+        22.25,
+        -0.47105066208658786
+      ],
+      "b": [
+        -1.5761662348876786,
+        22.25,
+        -0.9099999999999995
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        -1.7579850038461045,
+        22.47,
+        -0.47105066208658786
+      ],
+      "b": [
+        -1.5761662348876786,
+        22.47,
+        -0.9099999999999995
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRailPost",
+      "a": [
+        -1.5761662348876786,
+        22.08,
+        -0.9099999999999995
+      ],
+      "b": [
+        -1.5761662348876786,
+        22.47,
+        -0.9099999999999995
+      ],
+      "radius": 0.022,
+      "top_radius": 0.022,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        -1.5761662348876786,
+        22.25,
+        -0.9099999999999995
+      ],
+      "b": [
+        -1.2869343417595172,
+        22.25,
+        -1.2869343417595158
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        -1.5761662348876786,
+        22.47,
+        -0.9099999999999995
+      ],
+      "b": [
+        -1.2869343417595172,
+        22.47,
+        -1.2869343417595158
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRailPost",
+      "a": [
+        -1.2869343417595172,
+        22.08,
+        -1.2869343417595158
+      ],
+      "b": [
+        -1.2869343417595172,
+        22.47,
+        -1.2869343417595158
+      ],
+      "radius": 0.022,
+      "top_radius": 0.022,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        -1.2869343417595172,
+        22.25,
+        -1.2869343417595158
+      ],
+      "b": [
+        -0.9100000000000008,
+        22.25,
+        -1.576166234887678
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        -1.2869343417595172,
+        22.47,
+        -1.2869343417595158
+      ],
+      "b": [
+        -0.9100000000000008,
+        22.47,
+        -1.576166234887678
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "DeckBracket",
+      "a": [
+        -0.7000357133746824,
+        21.3,
+        -0.7000357133746816
+      ],
+      "b": [
+        -1.2869343417595172,
+        21.98,
+        -1.2869343417595158
+      ],
+      "radius": 0.04,
+      "top_radius": 0.04,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRailPost",
+      "a": [
+        -0.9100000000000008,
+        22.08,
+        -1.576166234887678
+      ],
+      "b": [
+        -0.9100000000000008,
+        22.47,
+        -1.576166234887678
+      ],
+      "radius": 0.022,
+      "top_radius": 0.022,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        -0.9100000000000008,
+        22.25,
+        -1.576166234887678
+      ],
+      "b": [
+        -0.4710506620865876,
+        22.25,
+        -1.7579850038461045
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        -0.9100000000000008,
+        22.47,
+        -1.576166234887678
+      ],
+      "b": [
+        -0.4710506620865876,
+        22.47,
+        -1.7579850038461045
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRailPost",
+      "a": [
+        -0.4710506620865876,
+        22.08,
+        -1.7579850038461045
+      ],
+      "b": [
+        -0.4710506620865876,
+        22.47,
+        -1.7579850038461045
+      ],
+      "radius": 0.022,
+      "top_radius": 0.022,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        -0.4710506620865876,
+        22.25,
+        -1.7579850038461045
+      ],
+      "b": [
+        -3.343285761672274e-16,
+        22.25,
+        -1.82
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        -0.4710506620865876,
+        22.47,
+        -1.7579850038461045
+      ],
+      "b": [
+        -3.343285761672274e-16,
+        22.47,
+        -1.82
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRailPost",
+      "a": [
+        -3.343285761672274e-16,
+        22.08,
+        -1.82
+      ],
+      "b": [
+        -3.343285761672274e-16,
+        22.47,
+        -1.82
+      ],
+      "radius": 0.022,
+      "top_radius": 0.022,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        -3.343285761672274e-16,
+        22.25,
+        -1.82
+      ],
+      "b": [
+        0.47105066208658697,
+        22.25,
+        -1.7579850038461047
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        -3.343285761672274e-16,
+        22.47,
+        -1.82
+      ],
+      "b": [
+        0.47105066208658697,
+        22.47,
+        -1.7579850038461047
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "DeckBracket",
+      "a": [
+        -1.8186004967338193e-16,
+        21.3,
+        -0.99
+      ],
+      "b": [
+        -3.343285761672274e-16,
+        21.98,
+        -1.82
+      ],
+      "radius": 0.04,
+      "top_radius": 0.04,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRailPost",
+      "a": [
+        0.47105066208658697,
+        22.08,
+        -1.7579850038461047
+      ],
+      "b": [
+        0.47105066208658697,
+        22.47,
+        -1.7579850038461047
+      ],
+      "radius": 0.022,
+      "top_radius": 0.022,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        0.47105066208658697,
+        22.25,
+        -1.7579850038461047
+      ],
+      "b": [
+        0.9100000000000003,
+        22.25,
+        -1.5761662348876784
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        0.47105066208658697,
+        22.47,
+        -1.7579850038461047
+      ],
+      "b": [
+        0.9100000000000003,
+        22.47,
+        -1.5761662348876784
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRailPost",
+      "a": [
+        0.9100000000000003,
+        22.08,
+        -1.5761662348876784
+      ],
+      "b": [
+        0.9100000000000003,
+        22.47,
+        -1.5761662348876784
+      ],
+      "radius": 0.022,
+      "top_radius": 0.022,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        0.9100000000000003,
+        22.25,
+        -1.5761662348876784
+      ],
+      "b": [
+        1.2869343417595163,
+        22.25,
+        -1.286934341759517
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        0.9100000000000003,
+        22.47,
+        -1.5761662348876784
+      ],
+      "b": [
+        1.2869343417595163,
+        22.47,
+        -1.286934341759517
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRailPost",
+      "a": [
+        1.2869343417595163,
+        22.08,
+        -1.286934341759517
+      ],
+      "b": [
+        1.2869343417595163,
+        22.47,
+        -1.286934341759517
+      ],
+      "radius": 0.022,
+      "top_radius": 0.022,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        1.2869343417595163,
+        22.25,
+        -1.286934341759517
+      ],
+      "b": [
+        1.576166234887678,
+        22.25,
+        -0.9100000000000008
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        1.2869343417595163,
+        22.47,
+        -1.286934341759517
+      ],
+      "b": [
+        1.576166234887678,
+        22.47,
+        -0.9100000000000008
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "DeckBracket",
+      "a": [
+        0.7000357133746818,
+        21.3,
+        -0.7000357133746822
+      ],
+      "b": [
+        1.2869343417595163,
+        21.98,
+        -1.286934341759517
+      ],
+      "radius": 0.04,
+      "top_radius": 0.04,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRailPost",
+      "a": [
+        1.576166234887678,
+        22.08,
+        -0.9100000000000008
+      ],
+      "b": [
+        1.576166234887678,
+        22.47,
+        -0.9100000000000008
+      ],
+      "radius": 0.022,
+      "top_radius": 0.022,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        1.576166234887678,
+        22.25,
+        -0.9100000000000008
+      ],
+      "b": [
+        1.757985003846104,
+        22.25,
+        -0.4710506620865893
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        1.576166234887678,
+        22.47,
+        -0.9100000000000008
+      ],
+      "b": [
+        1.757985003846104,
+        22.47,
+        -0.4710506620865893
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRailPost",
+      "a": [
+        1.757985003846104,
+        22.08,
+        -0.4710506620865893
+      ],
+      "b": [
+        1.757985003846104,
+        22.47,
+        -0.4710506620865893
+      ],
+      "radius": 0.022,
+      "top_radius": 0.022,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        1.757985003846104,
+        22.25,
+        -0.4710506620865893
+      ],
+      "b": [
+        1.82,
+        22.25,
+        -4.457714348896366e-16
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "MaintenanceRail",
+      "a": [
+        1.757985003846104,
+        22.47,
+        -0.4710506620865893
+      ],
+      "b": [
+        1.82,
+        22.47,
+        -4.457714348896366e-16
+      ],
+      "radius": 0.018,
+      "top_radius": 0.018,
+      "segments": 6,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "InsulatedSaltRiser",
+      "a": [
+        -0.24,
+        0.5,
+        1.69
+      ],
+      "b": [
+        -0.24,
+        21.8,
+        1.1
+      ],
+      "radius": 0.075,
+      "top_radius": 0.075,
+      "segments": 10,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "InsulatedSaltRiser",
+      "a": [
+        0.24,
+        0.5,
+        1.69
+      ],
+      "b": [
+        0.24,
+        21.8,
+        1.1
+      ],
+      "radius": 0.075,
+      "top_radius": 0.075,
+      "segments": 10,
+      "material": "steel"
+    },
+    {
+      "type": "box",
+      "name": "PipeBracket",
+      "pos": [
+        0,
+        2,
+        1.648450704225352
+      ],
+      "size": [
+        0.72,
+        0.08,
+        0.16
+      ],
+      "material": "steel"
+    },
+    {
+      "type": "box",
+      "name": "PipeBracket",
+      "pos": [
+        0,
+        5,
+        1.5653521126760563
+      ],
+      "size": [
+        0.72,
+        0.08,
+        0.16
+      ],
+      "material": "steel"
+    },
+    {
+      "type": "box",
+      "name": "PipeBracket",
+      "pos": [
+        0,
+        8,
+        1.4822535211267605
+      ],
+      "size": [
+        0.72,
+        0.08,
+        0.16
+      ],
+      "material": "steel"
+    },
+    {
+      "type": "box",
+      "name": "PipeBracket",
+      "pos": [
+        0,
+        11,
+        1.3991549295774648
+      ],
+      "size": [
+        0.72,
+        0.08,
+        0.16
+      ],
+      "material": "steel"
+    },
+    {
+      "type": "box",
+      "name": "PipeBracket",
+      "pos": [
+        0,
+        14,
+        1.316056338028169
+      ],
+      "size": [
+        0.72,
+        0.08,
+        0.16
+      ],
+      "material": "steel"
+    },
+    {
+      "type": "box",
+      "name": "PipeBracket",
+      "pos": [
+        0,
+        17,
+        1.2329577464788732
+      ],
+      "size": [
+        0.72,
+        0.08,
+        0.16
+      ],
+      "material": "steel"
+    },
+    {
+      "type": "box",
+      "name": "PipeBracket",
+      "pos": [
+        0,
+        20,
+        1.1498591549295774
+      ],
+      "size": [
+        0.72,
+        0.08,
+        0.16
+      ],
+      "material": "steel"
+    },
+    {
+      "type": "box",
+      "name": "TowerServiceCabinet",
+      "pos": [
+        2.25,
+        0.8,
+        1.7
+      ],
+      "size": [
+        0.8,
+        0.8,
+        0.6
+      ],
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "BaseSaltService",
+      "a": [
+        -0.24,
+        0.5,
+        1.69
+      ],
+      "b": [
+        -0.24,
+        0.5,
+        2.65
+      ],
+      "radius": 0.075,
+      "top_radius": 0.075,
+      "segments": 10,
+      "material": "steel"
+    },
+    {
+      "type": "cylinder",
+      "name": "BaseSaltService",
+      "a": [
+        0.24,
+        0.5,
+        1.69
+      ],
+      "b": [
+        0.24,
+        0.5,
+        2.65
+      ],
+      "radius": 0.075,
+      "top_radius": 0.075,
+      "segments": 10,
+      "material": "steel"
+    },
+    {
+      "type": "box",
+      "name": "FootingSafetyStripe",
+      "pos": [
+        0,
+        0.405,
+        -2.5
+      ],
+      "size": [
+        4.4,
+        0.014,
+        0.12
+      ],
+      "material": "ochre"
+    },
+    {
+      "type": "box",
+      "name": "FootingSafetyStripe",
+      "pos": [
+        0,
+        0.405,
+        2.5
+      ],
+      "size": [
+        4.4,
+        0.014,
+        0.12
+      ],
+      "material": "ochre"
+    }
+  ],
+  "materials": {
+    "concrete": {
+      "color": [
+        0.5600000023841858,
+        0.550000011920929,
+        0.49000000953674316
+      ],
+      "metallic": 0.0,
+      "roughness": 0.9200000166893005
+    },
+    "steel": {
+      "color": [
+        0.36000001430511475,
+        0.41999998688697815,
+        0.4399999976158142
+      ],
+      "metallic": 0.699999988079071,
+      "roughness": 0.3799999952316284
+    },
+    "dark": {
+      "color": [
+        0.026000000536441803,
+        0.03200000151991844,
+        0.035999998450279236
+      ],
+      "metallic": 0.20000000298023224,
+      "roughness": 0.7200000286102295
+    },
+    "joint": {
+      "color": [
+        0.4300000071525574,
+        0.4300000071525574,
+        0.38999998569488525
+      ],
+      "metallic": 0.0,
+      "roughness": 0.949999988079071
+    },
+    "receiver_seam": {
+      "color": [
+        0.08500000089406967,
+        0.09300000220537186,
+        0.10000000149011612
+      ],
+      "metallic": 0.3499999940395355,
+      "roughness": 0.6000000238418579
+    },
+    "ochre": {
+      "color": [
+        0.6399999856948853,
+        0.4000000059604645,
+        0.10000000149011612
+      ],
+      "metallic": 0.10000000149011612,
+      "roughness": 0.699999988079071
+    }
+  }
+}

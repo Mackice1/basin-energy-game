@@ -1659,20 +1659,8 @@ static func _tower_preview_geometry(item: EquipmentNode, p: Dictionary, interior
 	var tower := Node3D.new()
 	tower.name = "ReceiverTower25m"
 	working.add_child(tower)
-	_metric_box(item, tower, "TowerFooting", Vector3(8,.30,8), Vector3(0,.25,0), p.concrete)
-	for x in [-1.0,1.0]:
-		for z in [-1.0,1.0]: _metric_rod(item, tower, "TaperedTowerLeg", Vector3(x*2.8,.4,z*2.8), Vector3(x,22.5,z), .17, p.metal)
-	for level in 5:
-		var y0 := .4 + level * 4.4
-		var y1 := .4 + (level + 1) * 4.4
-		var w0 := 2.8 - (y0-.4) * 1.8 / 22.1
-		var w1 := 2.8 - (y1-.4) * 1.8 / 22.1
-		for side in [-1.0,1.0]:
-			for swap in [-1.0,1.0]:
-				_metric_rod(item, tower, "TowerCrossBrace", Vector3(side*w0,y0,swap*w0), Vector3(side*w1,y1,-swap*w1), .055, p.metal)
-				_metric_rod(item, tower, "TowerCrossBrace", Vector3(swap*w0,y0,side*w0), Vector3(-swap*w1,y1,side*w1), .055, p.metal)
-	_metric_rod(item, tower, "DarkReceiver", Vector3(0,22.5,0), Vector3(0,25,0), 1.3, p.dark)
-	_metric_rod(item, tower, "ReceiverCasing", Vector3(0,22.4,0), Vector3(0,22.5,0), 1.5, p.heat_primary)
+	preload("res://scripts/tower_visual.gd").build(tower)
+	_register_asset_meshes(item, tower)
 	_metric_box(item, working, "FutureServiceBuilding", Vector3(14,4.5,8), Vector3(48,2.35,48), p.ivory)
 	_metric_box(item, working, "FutureServiceRoof", Vector3(14.2,.10,8.2), Vector3(48,4.65,48), p.metal)
 	_metric_box(item, working, "UncommissionedPreviewPlaque", Vector3(8,1.2,.04), Vector3(48,2.4,43.96), p.heat_secondary)
