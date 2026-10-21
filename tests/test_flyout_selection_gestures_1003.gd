@@ -50,7 +50,7 @@ func run():
 	escape();check(not game.build_tray_open and game.mode=="link","Esc closes tray before active map action")
 	escape();check(game.mode=="link","closing animation cannot leak second rapid Esc")
 	await create_timer(0.2).timeout;escape();check(game.mode=="select","subsequent Esc cancels underlying map action")
-	game.toggle_build_category("power");game.start_build("wind");check(not game.build_tray.visible and game.mode=="build","choosing equipment dismisses tray without canceling placement");escape()
+	game.dimension_profile="metric_v1";game.toggle_build_category("power");game.start_build("wind");check(not game.build_tray.visible and game.mode=="build","choosing equipment dismisses tray without canceling placement");escape()
 	root.size=Vector2i(1180,812);await settle()
 	game.devices=[]
 	for index in 20:game.devices.append({"id":10+index*10,"kind":"wind","x":float(index)*30,"z":0.0,"params":game.model.defaults("wind")})

@@ -15,6 +15,24 @@ class AuditController:
 	func rebuild_equipment(): pass
 	func update_status(): pass
 
+
+	# Explicit historical data setup, NOT a replacement for the production build
+	# API. Legacy UI construction is now rejected; these fixtures retain their
+	# old ratings/coordinates and no site_geometry_profile for ledger/save tests.
+	func append_legacy_device(kind:String, at:Vector2, record:bool=true, parent_id:int=-1)->bool:
+		if record: checkpoint()
+		var id:int=next_id
+		while not station(id).is_empty() or not device(id).is_empty(): id+=1
+		var values:Dictionary=templates[kind].duplicate(true)
+		var item:Dictionary={"id":id,"kind":kind,"x":at.x,"z":at.y,"params":values,"state":Catalog.initial_state(kind,values)}
+		if kind in THERMAL_KINDS:item.model_profile=Catalog.model_profile(kind)
+		if parent_id>=0:
+			var parent:Dictionary=station(parent_id)
+			item.x=parent.x;item.z=parent.z;item.parent_station_id=parent_id
+			item.interior_x=at.x;item.interior_z=at.y
+		devices.append(item);selected_id=id;next_id=id+1;normalize_id_cursors();refresh()
+		return true
+
 var checks := 0
 var failures: Array[String] = []
 func check(ok: bool, label: String) -> void:
@@ -246,7 +264,8 @@ func _test_state_and_form() -> void:
 	game.param_target.select(0)
 	game.apply_parameters()
 	near(game.devices[0].params.power_curve_kw[0].power_kw, 100.0, "template application does not retroactively alter existing curve")
-	check(game.add_equipment("wind", Vector2(25.0, 0.0)), "new wind device is created from edited template")
+	check(not game.add_equipment("wind", Vector2(25.0, 0.0)), "legacy scene rejects new wind construction until migration")
+	check(game.append_legacy_device("wind", Vector2(25.0, 0.0)), "historical fixture copies edited template curve")
 	near(game.devices[1].params.power_curve_kw[0].power_kw, 80.0, "new instance inherits edited template curve")
 	game.templates.wind.power_curve_kw[0].power_kw = 60.0
 	near(game.devices[1].params.power_curve_kw[0].power_kw, 80.0, "new instance curve does not alias template")

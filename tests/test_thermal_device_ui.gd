@@ -26,6 +26,7 @@ func _initialize() -> void:
 
 func _run() -> void:
 	_test_geometry()
+	_test_reference_geometry()
 	_test_legacy_endpoints()
 	await _test_forms()
 	if failures.is_empty() and "--capture-thermal-ui" in OS.get_cmdline_user_args():
@@ -37,6 +38,7 @@ func _test_geometry() -> void:
 	var representations: Array[String] = []
 	for kind in KINDS:
 		var params: Dictionary = Model.defaults(kind)
+		params.visual_site_geometry_profile = "" # Historical illustrated geometry contract.
 		var original := params.duplicate(true)
 		var item = Visual.create(kind, params, false)
 		root.add_child(item)
@@ -77,7 +79,7 @@ func _test_geometry() -> void:
 			for corner in 8:
 				var point: Vector3 = surface.global_transform * surface.mesh.get_aabb().get_endpoint(corner)
 				check(point.y >= -0.00001, kind + ": geometry above ground")
-				check(Vector2(point.x, point.z).length() <= Visual.footprint(kind), kind + ": geometry within advertised footprint")
+				check(Vector2(point.x, point.z).length() <= Visual.footprint(kind, params), kind + ": geometry within advertised footprint")
 		item.set_highlight(true)
 		check(item.selection_ring.visible, kind + ": selection ring visible")
 		for valid in [true, false]:
@@ -113,6 +115,35 @@ func _test_geometry() -> void:
 		for j in range(i + 1, representations.size()):
 			check(representations[i] != representations[j], "thermal silhouettes are distinct")
 
+func _test_reference_geometry() -> void:
+	for prefer_imported in [false, true]:
+		var params: Dictionary = Model.defaults("thermal_store")
+		params.visual_dimension_profile = "metric_v1"
+		var original := params.duplicate(true)
+		var item = Visual.create("thermal_store", params, prefer_imported)
+		root.add_child(item)
+		check(item.get_meta("site_geometry_profile","") == "reference_size_v1", "new water store defaults to reference geometry")
+		check(item.get_meta("visual_backend","") == "metric_reference_water_store", "new water store is not the legacy illustrated or GLB vessel")
+		check(item.has_node("ReferenceStratifiedWaterTank0") and item.has_node("ReferenceStratifiedWaterTank1"), "new water store contains both physical parallel tanks")
+		check(item.surfaces.size() > 0 and item.surfaces.size() < 100, "new material-batched water store stays lightweight")
+		check(item.named_port_locals.size() == 2 and item.has_named_port("heat_in") and item.has_named_port("heat_out"), "new water store retains exactly two logical ports")
+		check(item.get_named_port_position("heat_in").distance_to(item.get_named_port_position("heat_out")) > 0.1, "new metric water-store endpoints remain spatially distinct")
+		check(not item.get_meta("soc_changes_temperature") and item.get_meta("capacity_added") == 0.0, "new geometry adds neither temperature evolution nor inventory")
+		var transforms: Array = []
+		var meshes: Array = []
+		var materials: Array = []
+		for surface in item.surfaces:
+			transforms.append(surface.transform); meshes.append(surface.mesh); materials.append(surface.material_override)
+		for soc in [0.0,0.25,1.0]:
+			item.set_thermal_soc(soc)
+			check(item.thermal_soc_label.text == "库存 SOC %.1f%%" % (soc*100.0), "new water-store SOC is a separate inventory annotation")
+			for index in item.surfaces.size():
+				check(item.surfaces[index].transform == transforms[index] and item.surfaces[index].mesh == meshes[index] and item.surfaces[index].material_override == materials[index], "new water-store SOC cannot resize or recolor physical geometry")
+		item.set_thermal_soc(NAN)
+		check(item.thermal_soc_label.text == "库存 SOC —", "new water store does not fabricate missing inventory")
+		check(params == original, "new reference visualization never changes model parameters")
+		item.free()
+
 func _test_legacy_endpoints() -> void:
 	var expected := {
 		"wind": [Vector3(1.15, 0.65, -0.37), 7.0, ["out"]],
@@ -122,9 +153,10 @@ func _test_legacy_endpoints() -> void:
 		"battery": [Vector3(-2.55, 0.57, -1.56), 4.0, ["ac"]]
 	}
 	for kind in expected:
-		var item = Visual.create(kind)
+		var legacy_params := {"visual_site_geometry_profile":""}
+		var item = Visual.create(kind, legacy_params)
 		check(item.port_local.is_equal_approx(expected[kind][0]), kind + ": unchanged legacy endpoint")
-		check(Visual.footprint(kind) == expected[kind][1], kind + ": unchanged legacy footprint")
+		check(Visual.footprint(kind, legacy_params) == expected[kind][1], kind + ": unchanged legacy footprint")
 		check(item.has_node("ElectricityPort"), kind + ": unchanged legacy terminal")
 		for port_id in expected[kind][2]:
 			check(item.get_named_port_position(port_id).is_equal_approx(item.get_port_position()), kind + ": named AC alias shares original endpoint")

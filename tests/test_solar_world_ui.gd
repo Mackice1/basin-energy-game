@@ -1,4 +1,6 @@
 extends SceneTree
+const CurrentWorldVersion = preload("res://scripts/world_game.gd")
+const SiteSupport = preload("res://scripts/site_layout_support.gd")
 var game
 var checks:=0
 var failures:Array[String]=[]
@@ -12,7 +14,7 @@ func run():
  game.solar_example()
  check(game.device(3).kind=="solar_thermal","collector in example")
  check(game.result.get("valid",false),"example dispatch valid")
- check(game.state().schema == 13 and game.state().model_version == 22,"new version")
+ check(game.state().schema == CurrentWorldVersion.CURRENT_SAVE_SCHEMA and game.state().model_version == CurrentWorldVersion.CURRENT_MODEL_VERSION,"new version")
  check(game.state().solar_energy.size()==7,"separate solar energy")
  check(game.connection_candidate(2,3).to==3,"aux input topology")
  check(game.connection_candidate(3,4).from_port=="heat_out","storage topology")
@@ -26,8 +28,16 @@ func run():
  form.set_parameters("solar_thermal",game.device(3).params,true)
  check(form.get_validation_errors().is_empty(),"solar form valid")
  check(not form._fields.supply_temp_c.editable and not form._fields.return_temp_c.editable,"fixed temperatures read-only")
- for pair in [["absorber_area_m2","0 < 值 ≤ 3030"],["optical_efficiency","0 < 值 ≤ 1"],["heat_loss_w_m2k","0 ≤ 值 ≤ 20"],["heat_loss_quadratic_w_m2k2","0 ≤ 值 ≤ 0.2"],["auxiliary_electric_ratio","0.001 ≤ 值 ≤ 0.2"]]:
+ for pair in [["optical_efficiency","0 < 值 ≤ 1"],["heat_loss_w_m2k","0 ≤ 值 ≤ 20"],["heat_loss_quadratic_w_m2k2","0 ≤ 值 ≤ 0.2"],["auxiliary_electric_ratio","0.001 ≤ 值 ≤ 0.2"]]:
   check(form._fields[pair[0]].get_meta("parameter_range")==pair[1],"solar UI range "+pair[0])
+ var area_bound:Dictionary=SiteSupport.parameter_limits("solar_thermal").absorber_area_m2
+ var area_range:String="%s %s 值 ≤ %s" % [String.num(float(area_bound.min),6),"<" if area_bound.min_exclusive else "≤",String.num(float(area_bound.max),6)]
+ check(form._fields.absorber_area_m2.get_meta("parameter_range")==area_range,"solar collector range matches the shared installed envelope")
+ var original_area:String=form._fields.absorber_area_m2.text
+ form._fields.absorber_area_m2.text=str(float(area_bound.max)+1.0)
+ check(not form.get_validation_errors().is_empty(),"solar installed-area limit rejects excessive draft")
+ form._fields.absorber_area_m2.text=original_area
+ check(form.get_validation_errors().is_empty(),"original solar parameters remain valid")
  form.queue_free()
  check(game.advance(60),"advance")
  var state:Dictionary=game.state()
@@ -45,7 +55,8 @@ func run():
  check(game.station_interior.size.x<=root.get_visible_rect().size.x and game.station_interior.size.y<=root.get_visible_rect().size.y,"small window fits")
  game.dimension_profile="legacy_illustrative"
  var legacy_before:=var_to_bytes(game.state())
- check(game.can_place_internal(int(game.stations[0].id),"solar_thermal",Vector2.ZERO).contains("米制"),"legacy solar placement rejected")
+ var legacy_reason:String=game.can_place_internal(int(game.stations[0].id),"solar_thermal",Vector2.ZERO)
+ check(legacy_reason.begins_with("旧比例兼容场景") and legacy_reason.contains("先迁移尺寸"),"legacy solar placement rejected specifically for explicit geometry migration")
  game.solar_example()
  check(var_to_bytes(game.state())==legacy_before,"legacy solar example refuses without mutations")
  print("SOLAR_WORLD_UI checks=",checks," failures=",failures.size())

@@ -12,6 +12,7 @@ signal validation_changed(errors: Array[String])
 
 const Catalog = preload("res://scripts/device_catalog.gd")
 const EnergyModel = preload("res://scripts/energy_model.gd")
+const SiteSupport = preload("res://scripts/site_layout_support.gd")
 const INK := Color("edf3f6")
 const MUTED := Color("a5b7c4")
 const BORDER := Color("344b59")
@@ -22,6 +23,40 @@ const ACCENT := Color("69d1bd")
 # Schema describes the existing model only; bounds and default values are shown,
 # not silently clamped. In particular, Cp's exact upper limit is 16/27.
 const GROUPS := {
+	"nitrogen_supply_boundary": [{"title": "有限氮气供给 · 库存与流量", "source": "N2(g)为外部预备物料的有限库存，不是制氮或捕集工厂。不会自动补给，不产生燃料、电量或热量；流量与库存分开计量。", "fields": [["capacity_kg", "N2(g)库存容量", "kg", "0 < 值 ≤ 1000"], ["max_outflow_kg_s", "最大供料流量", "kg/s", "0 ≤ 值 ≤ 0.1"]]}, {"title": "仅新建初始物料", "source": "初始物料作为新建时显式导入记账，仅新建可设置，且不得超过容量。已有设施不能通过单台或批量改参补料。", "fields": [["initial_inventory_kg", "新建初始物料", "kg", "0 ≤ 值 ≤ 容量"]]}],
+	"co2_supply_boundary": [{"title": "有限二氧化碳供给 · 库存与流量", "source": "CO2(g)为外部预备物料的有限库存，不是制氮或捕集工厂。不会自动补给，不产生燃料、电量或热量；流量与库存分开计量。", "fields": [["capacity_kg", "CO2(g)库存容量", "kg", "0 < 值 ≤ 1000"], ["max_outflow_kg_s", "最大供料流量", "kg/s", "0 ≤ 值 ≤ 0.1"]]}, {"title": "仅新建初始物料", "source": "初始物料作为新建时显式导入记账，仅新建可设置，且不得超过容量。已有设施不能通过单台或批量改参补料。", "fields": [["initial_inventory_kg", "新建初始物料", "kg", "0 ≤ 值 ≤ 容量"]]}],
+	"ammonia_synthesis_station": [{"title": "合成氨 · 产品缓冲与产量", "source": "固定profile3，产品为NH3(g)。产品留在本站有限缓冲，缓冲满则停产；无自动外售、清空或返电。反应物与产品不互换。", "fields": [["capacity_kg", "NH3(g)缓冲容量", "kg", "0 < 值 ≤ 200"], ["max_product_kg_s", "最大产品生成流量", "kg/s", "0 ≤ 值 ≤ 0.05"]]}, {"title": "实际辅电与热管理", "source": "辅机和电加热分别消耗实际AC电，排热受有限能力约束；MW电功率与MWth热功率分别计量。固定化学计量、相态、反应焓及工艺系数不可编辑，不模拟压力、催化剂、循环吹扫、启停或反应动力学。", "fields": [["rated_electric_mw", "工艺辅机电上限", "MW", "0 ≤ 值 ≤ 0.2"], ["heater_electric_mw", "工艺电加热上限", "MW", "0 ≤ 值 ≤ 0.15"], ["heat_rejection_mwth", "环境排热上限", "MWth", "0 ≤ 值 ≤ 0.4"]]}, {"title": "固定初始产品条件", "source": "新建设备不赠送产品，初始产品固定为0；已有产品只能通过真实生产积累，不提供补产物或清空按钮。", "fields": [["initial_inventory_kg", "新建初始产品", "kg", "固定0"]]}],
+	"methanol_synthesis_station": [{"title": "合成甲醇 · 产品缓冲与产量", "source": "固定profile3，产品为CH3OH(l)。产品留在本站有限缓冲，缓冲满则停产；无自动外售、清空或返电。反应物与产品不互换。", "fields": [["capacity_kg", "CH3OH(l)缓冲容量", "kg", "0 < 值 ≤ 1000"], ["max_product_kg_s", "最大产品生成流量", "kg/s", "0 ≤ 值 ≤ 0.05"]]}, {"title": "实际辅电与热管理", "source": "辅机和电加热分别消耗实际AC电，排热受有限能力约束；MW电功率与MWth热功率分别计量。固定化学计量、相态、反应焓及工艺系数不可编辑，不模拟压力、催化剂、循环吹扫、启停或反应动力学。", "fields": [["rated_electric_mw", "工艺辅机电上限", "MW", "0 ≤ 值 ≤ 0.2"], ["heater_electric_mw", "工艺电加热上限", "MW", "0 ≤ 值 ≤ 0.15"], ["heat_rejection_mwth", "环境排热上限", "MWth", "0 ≤ 值 ≤ 0.4"]]}, {"title": "固定初始产品条件", "source": "新建设备不赠送产品，初始产品固定为0；已有产品只能通过真实生产积累，不提供补产物或清空按钮。", "fields": [["initial_inventory_kg", "新建初始产品", "kg", "固定0"]]}],
+	"hydrogen_liquid_store": [
+		{"title":"液氢储罐 · 库存与流量", "source":"气态氢在本站液化为液氢库存，出库经环境汽化后供气。容量与流量均为硬上限，不可切换相态或储氢技术。初始氢固定为0；没有充氢过程就没有可用库存。", "fields":[
+			["capacity_kg","液氢库存容量","kg","0 < 值 ≤ 1000"],
+			["charge_kg_s","最大充氢流量","kg/s","0 ≤ 值 ≤ 0.05"],
+			["discharge_kg_s","最大供氢流量","kg/s","0 ≤ 值 ≤ 0.05"]]},
+		{"title":"液化与汽化设备上限", "source":"各项均为独立设备硬上限。固定 profile：液化净电耗12 kWh/kg、出库辅电0.02 kWh/kg、气液相态焓差1.24 kWh/kg、每日蒸发0.1%。排热与环境吸热分别计量，不能作为免费返电或有用供热。", "fields":[
+			["liquefier_electric_mw","液化用电上限","MW","0 ≤ 值 ≤ 1"],
+			["discharge_aux_electric_mw","出库辅电上限","MW","0 ≤ 值 ≤ 0.02"],
+			["heat_rejection_mwth","环境排热上限","MWth","0 ≤ 值 ≤ 1"],
+			["ambient_vaporizer_mwth","环境汽化吸热上限","MWth","0 ≤ 值 ≤ 0.1"]]},
+		{"title":"固定初始条件", "source":"不提供初始补氢或技术切换。现有液氢kg库存由实际运行独立保存。", "fields":[
+			["initial_inventory_kg","新建初始氢库存","kg","固定0"]]}
+	],
+	"hydrogen_metal_hydride_store": [
+		{"title":"LaNi5 固态储氢 · 宿主与流量", "source":"绑定 LaNi5 金属氢化物 profile，不可切换材料或相态。宿主干质量只在新建时选择；建成后锁定并独立保存。储氢容量由材料 profile 和干质量派生，默认10000 kg宿主对应120 kg氢容量；不提供独立容量旋钮。", "fields":[
+			["dry_host_mass_kg","新建宿主干质量","kg","0 < 值 ≤ 10000"],
+			["charge_kg_s","最大吸氢流量","kg/s","0 ≤ 值 ≤ 0.02"],
+			["discharge_kg_s","最大释氢流量","kg/s","0 ≤ 值 ≤ 0.02"]]},
+		{"title":"辅机与热管理上限", "source":"吸氢放热必须满足有限排热能力，释氢加热必须消耗实际AC电。固定材料与反应焓 profile 不可编辑；不模拟实际吸放氢动力学；热不是额外赠送的可用热库存。", "fields":[
+			["charge_aux_electric_mw","吸氢辅电上限","MW","0 ≤ 值 ≤ 0.02"],
+			["discharge_heater_electric_mw","释氢电加热上限","MW","0 ≤ 值 ≤ 0.4"],
+			["heat_rejection_mwth","环境排热上限","MWth","0 ≤ 值 ≤ 0.4"]]},
+		{"title":"固定初始条件", "source":"新建氢库存固定为0；宿主质量不是氢库存。编辑已有参数不能改变宿主、补氢或删除氢。", "fields":[
+			["initial_inventory_kg","新建初始氢库存","kg","固定0"]]}
+	],
+"co2_liquid_cycle_store":[{"title": "闭式CO₂成套站 · 容量与功率", "source": "闭式CO₂压缩—液化—气化—膨胀成套站，含内部蓄热。工质总质量未标定，SOC=0不代表气仓无CO₂；不赠独立热库存/热输出。默认794.24MWh为内部等效库存。146MW×6.8h与100MW×6.14h来自河北院2026-10-09公开设计工况；净毛边界未核实，992.8→614MWh仅教学算术参考，非同循环实测性能。净转换系数0.8和614/794.24为教学拆分，不是压缩机/透平实测效率。默认自损0是理想化边界，可设置正值；未模拟温压/相平衡/启停。", "fields": [["capacity_mwh", "内部等效库存容量", "MWh", "0 < 值 ≤ 794.24"], ["charge_mw", "AC最大充电功率", "MW", "0 ≤ 值 ≤ 146"], ["discharge_mw", "AC最大放电功率", "MW", "0 ≤ 值 ≤ 100"]]}, {"title": "教学净转换与静置损失", "source": "同一步充放互斥。内部蓄热已在净系数内，不再次获得热量。参数不是工程保证值。", "fields": [["charge_efficiency", "净充电转换系数", "比例", "0 < 值 ≤ 1"], ["discharge_efficiency", "净返电转换系数", "比例", "0 < 值 ≤ 1"], ["self_discharge_per_h", "连续自损常数", "1/h", "0 ≤ 值 ≤ 1"]]}, {"title": "仅新建初始条件", "source": "默认能量库存为0，闭式CO₂工质仍存在。已有设备不因改参补能。", "fields": [["initial_soc", "新建初始能量比例", "比例", "0 ≤ 值 ≤ 1"]]}],
+	"water_supply_boundary": [{"title": "有限供水库存", "source": "有限液态水边界，不自动补给。供水仅进入电解整站；当前库存以kg保存。教学简化未模拟水处理或水压。", "fields": [["capacity_kg", "水库存容量", "kg", "0 < 值 ≤ 1000000000"], ["max_outflow_kg_s", "最大供水流量", "kg/s", "0 ≤ 值 ≤ 1000"], ["initial_inventory_kg", "新建初始水库存", "kg", "0 ≤ 值 ≤ 容量"]]}],
+	"electrolyzer_station": [{"title": "电解制氢整站", "source": "液态水+实际AC用电生成气态氢；氧排向环境。净用电包含本站辅机但不含独立储氢压缩。教学固定参数不代表品牌保证性能。电耗不得低于液水反应焓，排热不是可用供热端口。", "fields": [["rated_electric_mw", "电解净用电上限", "MW", "0 < 值 ≤ 10000"], ["max_hydrogen_kg_s", "产氢流量上限", "kg/s", "0 ≤ 值 ≤ 1000"], ["electricity_kwh_per_kg", "单位产氢净电耗", "kWh/kg", "液水反应焓下限 ≤ 值 ≤ 1000"]]}],
+	"hydrogen_gas_store": [{"title": "气态储氢与压缩", "source": "独立气态氢kg库存；入库必须消耗实际压缩用电。不得用旧完整氢储能系统MWh重复计量。同一步充放互斥；气压/温度动态暂不求解。", "fields": [["capacity_kg", "气态氢容量", "kg", "0 < 值 ≤ 1000000000"], ["charge_kg_s", "最大入库流量", "kg/s", "0 ≤ 值 ≤ 1000"], ["discharge_kg_s", "最大出库流量", "kg/s", "0 ≤ 值 ≤ 1000"], ["compressor_electric_mw", "压缩机用电上限", "MW", "0 < 值 ≤ 10000"], ["compression_kwh_per_kg", "压缩单位电耗", "kWh/kg", "0 < 值 ≤ 1000"], ["leak_per_h", "连续泄漏常数", "1/h", "0 ≤ 值 ≤ 1"]]}, {"title": "仅新建初始库存", "source": "已有设备只读取运行库存，修改参数不能补氢或删除已有氢。", "fields": [["initial_inventory_kg", "新建初始氢库存", "kg", "0 ≤ 值 ≤ 容量"]]}],
+	"fuel_cell_station": [{"title": "燃料电池返电整站", "source": "从气态储氢站取氢，空气氧作为显式环境边界；产生净AC电、液态产水和环境排热。效率基于氢LHV，反应焓与产水相态独立守恒。无氢不能返电。", "fields": [["rated_electric_mw", "净电出力上限", "MW", "0 < 值 ≤ 10000"], ["max_hydrogen_kg_s", "耗氢流量上限", "kg/s", "0 ≤ 值 ≤ 1000"], ["net_efficiency_lhv", "净返电效率LHV", "比例", "0 < 值 ≤ 1"]]}],
 	"battery_sodium": [{"title": "钠离子电池储能 · 容量与功率", "source": "钠离子电池箱 + 双向PCS。聚合电能库存；不计算电芯化学、温度、老化或循环寿命。充放效率为可编辑教学假设，包含PCS，不重复扣逆变损耗。 同一步充放互斥；新建设备默认为空，当前库存独立保存。", "fields": [["capacity_mwh", "等效库存容量", "MWh", "0 < 值 ≤ 100000"], ["charge_mw", "AC最大充电功率", "MW", "0 ≤ 值 ≤ 10000"], ["discharge_mw", "AC最大放电功率", "MW", "0 ≤ 值 ≤ 10000"]]}, {"title": "净效率与静置损耗", "source": "充×放为不含静置自损的往返效率；辅机是否已合并按本技术边界。连续自损按库存×exp(−λ×小时)衰减，断线仍自损，暂停冻结。", "fields": [["charge_efficiency", "净充电效率", "比例", "0 < 值 ≤ 1"], ["discharge_efficiency", "净放电效率", "比例", "0 < 值 ≤ 1"], ["self_discharge_per_h", "连续自损率常数", "1/h", "0 ≤ 值 ≤ 1"]]}, {"title": "仅新建设备的初始状态", "source": "默认空库存；只用于新建初始化。已有设备的运行库存独立保存，编辑参数不能补充电量/热量，缩小容量不得抹除库存。", "fields": [["initial_soc", "新建初始库存比例", "比例", "0 ≤ 值 ≤ 1"]]}],
 	"battery_flow": [{"title": "液流电池储能 · 容量与功率", "source": "正/负电解液罐 + 电堆 + 泵组 + 双向PCS。容量与功率分别约束；泵耗与PCS损耗已并入净充放效率，不额外生成电或热。未计算浓度、液位或膜传质。 同一步充放互斥；新建设备默认为空，当前库存独立保存。", "fields": [["capacity_mwh", "等效库存容量", "MWh", "0 < 值 ≤ 100000"], ["charge_mw", "AC最大充电功率", "MW", "0 ≤ 值 ≤ 10000"], ["discharge_mw", "AC最大放电功率", "MW", "0 ≤ 值 ≤ 10000"]]}, {"title": "净效率与静置损耗", "source": "充×放为不含静置自损的往返效率；辅机是否已合并按本技术边界。连续自损按库存×exp(−λ×小时)衰减，断线仍自损，暂停冻结。", "fields": [["charge_efficiency", "净充电效率", "比例", "0 < 值 ≤ 1"], ["discharge_efficiency", "净放电效率", "比例", "0 < 值 ≤ 1"], ["self_discharge_per_h", "连续自损率常数", "1/h", "0 ≤ 值 ≤ 1"]]}, {"title": "仅新建设备的初始状态", "source": "默认空库存；只用于新建初始化。已有设备的运行库存独立保存，编辑参数不能补充电量/热量，缩小容量不得抹除库存。", "fields": [["initial_soc", "新建初始库存比例", "比例", "0 ≤ 值 ≤ 1"]]}],
 	"caes_aboveground": [{"title": "地上压缩空气储能 · 容量与功率", "source": "地上承压容器组 + 电驱压缩机 + 膨胀发电机。不是地下洞穴。净效率覆盖压缩、储气热管理及发电的教学损失；没有免费外部燃料或热源。聚合库存不是压力/气体质量，未计算压力、温度、流量或动态热力循环。 同一步充放互斥；新建设备默认为空，当前库存独立保存。", "fields": [["capacity_mwh", "等效库存容量", "MWh", "0 < 值 ≤ 10"], ["charge_mw", "AC最大充电功率", "MW", "0 ≤ 值 ≤ 2"], ["discharge_mw", "AC最大放电功率", "MW", "0 ≤ 值 ≤ 2"]]}, {"title": "净效率与静置损耗", "source": "充×放为不含静置自损的往返效率；辅机是否已合并按本技术边界。连续自损按库存×exp(−λ×小时)衰减，断线仍自损，暂停冻结。", "fields": [["charge_efficiency", "净充电效率", "比例", "0 < 值 ≤ 1"], ["discharge_efficiency", "净放电效率", "比例", "0 < 值 ≤ 1"], ["self_discharge_per_h", "连续自损率常数", "1/h", "0 ≤ 值 ≤ 1"]]}, {"title": "仅新建设备的初始状态", "source": "默认空库存；只用于新建初始化。已有设备的运行库存独立保存，编辑参数不能补充电量/热量，缩小容量不得抹除库存。", "fields": [["initial_soc", "新建初始库存比例", "比例", "0 ≤ 值 ≤ 1"]]}],
@@ -104,6 +139,11 @@ const GROUPS := {
 			["faiman_u0", "静态散热系数 U₀", "W/(m²·K)", "0 < 值 ≤ 500"],
 			["faiman_u1", "风冷散热系数 U₁", "W·s/(m³·K)", "0 ≤ 值 ≤ 100"],
 			["cell_delta_c_at_1000", "电池片温差 ΔT", "°C", "0 ≤ 值 ≤ 30"]]}
+	],
+	"collector_substation": [
+		{"title":"基地汇集容量与损耗", "source":"教学整站：固定100×102 m占地；200 MW吞吐非120 MVA直接换算。一个星形汇集节点，不模拟电压/无功或站间级联。", "fields":[
+			["capacity_mw", "接收端容量", "MW", "0 < 值 ≤ 200"],
+			["loss_fraction", "站内有功损耗", "比例", "0 ≤ 值 < 1"]]}
 	],
 	"station": [
 		{"title": "变电站容量与损耗", "source": "场景假设：容量限制作用于接收端；损耗只在通过变电站时计入一次。", "fields": [
@@ -230,7 +270,29 @@ const THERMAL_FIELD_NOTES := {
 	}
 }
 
+static func construction_only(key:String)->bool:
+	return key in ["initial_soc","initial_inventory_kg","dry_host_mass_kg"]
+
+static func fixed_field(kind:String,key:String)->bool:
+	for group in GROUPS.get(kind,[]):
+		for field in group.fields:
+			if field[0]==key:return str(field[3]).begins_with("固定")
+	return false
+
 func _field_note(key: String) -> String:
+	if _kind in Catalog.Materials.CHEMICAL_KINDS:
+		if key=="initial_inventory_kg":return "产品固定0，不赠送或补充产品。" if _kind in Catalog.Materials.SYNTHESIS_KINDS else "仅新建可设置，作为有限外部物料导入记账；已有设备不可改。"
+		if key=="capacity_kg":return "kg为本站物料/产品库存容量，不是流量或能量；缩容不能抹除现有库存。"
+		if key.ends_with("kg_s"):return "kg/s是实际供料或产品生成流量上限，不是kg库存；受剩余库存、缓冲容量与实际能源约束。"
+		if key=="heat_rejection_mwth":return "MWth是环境排热硬上限，不是电功率，也不是可外送有用热。"
+		return "有限实际AC设备功率；固定工艺和反应profile不可编辑，不额外创造物料或能量。"
+	if _kind in ["hydrogen_liquid_store","hydrogen_metal_hydride_store"]:
+		if key=="initial_inventory_kg":return "固定0 kg，仅从实际接入氢流积累库存；没有初始补氢入口。"
+		if key=="dry_host_mass_kg":return "仅新建可设置的 LaNi5 宿主干质量；建成后与保存的宿主质量一致，不可单改或批改。氢容量由固定材料 profile 派生。"
+		if key in ["charge_kg_s","discharge_kg_s"]:return "kg/s为实际氢流量上限，不是kg库存或MW功率；同时受AC辅电和有限热管理能力约束。"
+		if key=="capacity_kg":return "液氢库存kg硬上限；缩容不得抹除当前实际氢库存。"
+		if key in ["heat_rejection_mwth","ambient_vaporizer_mwth"]:return "MWth为有限环境换热硬上限，与MW电功率分开；不是可外送热端口。"
+		return "本站设备的MW电功率硬上限，不改变固定profile单位电耗、相态或材料。"
 	if _kind == "solid_thermal_store":
 		return str(THERMAL_FIELD_NOTES.thermal_store.get(key, ""))
 	if Catalog.is_electric_storage(_kind):
@@ -261,6 +323,7 @@ var _scroll: ScrollContainer
 var _groups: VBoxContainer
 var _status: Label
 var _summary: Label
+var _derived_capacity: Label
 var _loading := false
 var _curve_editor: TextEdit
 var _curve_status: Label
@@ -308,6 +371,7 @@ func set_parameters(kind: String, values: Dictionary, construction_context: bool
 	_fields.clear()
 	_displayed.clear()
 	_labels.clear()
+	_derived_capacity = null
 	_curve_editor = null
 	_curve_status = null
 	_curve_displayed_text = ""
@@ -321,6 +385,11 @@ func set_parameters(kind: String, values: Dictionary, construction_context: bool
 		_summary.text += " 初始 SOC 只用于新建设备。" if construction_context else " 当前电量独立保存；初始 SOC 在此只读。"
 	elif Catalog.is_thermal_storage(kind):
 		_summary.text += " 初始 SOC 只用于新建设备。" if construction_context else " 当前热库存独立保存；初始 SOC 在此只读。"
+	if kind in ["hydrogen_liquid_store","hydrogen_metal_hydride_store"]:
+		_summary.text+=" 初始氢固定0 kg；固定技术profile不可更换。"
+		if kind=="hydrogen_metal_hydride_store":_summary.text+=" 宿主质量仅新建可改。" if construction_context else " 现有LaNi5宿主质量锁定，氢容量派生。"
+	if kind in Catalog.Materials.SYNTHESIS_KINDS:_summary.text+=" 初始产品固定0；有限缓冲满则停产，无自动外售或清空。"
+	elif kind in Catalog.Materials.FEED_KINDS:_summary.text+=" 有限物料，初始导入仅新建可设；已有设备不补料。"
 	if THERMAL_FIELD_NOTES.has(kind):
 		_summary.text += " MWth 表示热功率，MWhth 表示热量；温区固定。"
 	for group_index in GROUPS.get(kind, []).size():
@@ -338,7 +407,7 @@ func get_parameters() -> Dictionary:
 	for key in _fields:
 		# Construction-only values cannot be changed through an existing-device
 		# draft, including programmatic text changes to its read-only editor.
-		if key == "initial_soc" and not _construction_context:
+		if (construction_only(key) and not _construction_context) or (key=="initial_inventory_kg" and fixed_field(_kind,key)):
 			continue
 		var raw: String = (_fields[key] as LineEdit).text.strip_edges()
 		# Preserve untouched original numeric precision and integer types.
@@ -352,7 +421,45 @@ func get_validation_errors() -> Array[String]:
 	var result: Array[String] = []
 	for error in EnergyModel.validate(_kind, get_parameters()):
 		result.append(_humanize_error(error))
+	for error in _site_validation_errors().values():
+		if not str(error) in result: result.append(str(error))
 	return result
+
+func _field_range(key: String, fallback: String) -> String:
+	var limits: Dictionary = SiteSupport.parameter_limits(_kind)
+	if not limits.has(key): return fallback
+	var bound: Dictionary = limits[key]
+	var minimum := float(bound.min)
+	var maximum := float(bound.max)
+	if minimum == maximum: return "固定安装规格 " + String.num(maximum, 6)
+	# Fixed process/profile values remain fixed even when the site envelope is looser.
+	if fallback.begins_with("固定"): return fallback
+	var exclusive: bool = bool(bound.get("min_exclusive", false)) or (minimum==0.0 and fallback.begins_with("0 <"))
+	return "%s %s 值 ≤ %s" % [String.num(minimum,6), "<" if exclusive else "≤", String.num(maximum,6)]
+
+func _field_range_note(key: String) -> String:
+	var note := _field_note(key)
+	if SiteSupport.parameter_limits(_kind).has(key):
+		note += "\n本设施支持范围来自统一安装规格；旧存档原值只显示、不自动截断，应用参数必须满足当前范围。"
+		if key.begins_with("capacity_"):
+			note += "当前库存不得因缩容丢弃；若库存超过目标容量，须先消耗库存。"
+	return note
+
+func _site_validation_errors() -> Dictionary:
+	var errors: Dictionary = {}
+	var complete: Dictionary = Catalog.defaults(_kind)
+	complete.merge(get_parameters(), true)
+	var limits: Dictionary = SiteSupport.parameter_limits(_kind)
+	for key in limits:
+		var bound: Dictionary = limits[key]
+		var value: Variant = complete.get(key)
+		if not (value is int or value is float) or not is_finite(float(value)):
+			errors[key] = str(_labels.get(key,key)) + "须填写有效且有限的数值。"
+		elif float(value)<float(bound.min) or float(value)>float(bound.max) or (bool(bound.get("min_exclusive",false)) and float(value)==float(bound.min)):
+			var allowed := _field_range(str(key), "")
+			errors[key] = "%s超出本设施支持范围：%s %s。旧值未自动修改。" % [_labels.get(key,key), allowed, bound.get("unit","")]
+			if str(key).begins_with("capacity_"): errors[key] += "若当前库存超过目标容量，须先消耗库存，不可丢弃。"
+	return errors
 
 func _add_group(group: Dictionary, defaults: Dictionary) -> void:
 	var panel := PanelContainer.new()
@@ -403,6 +510,21 @@ func _add_group(group: Dictionary, defaults: Dictionary) -> void:
 			explanation.text = "模型与损耗说明" + ("  ▾" if show else "  ▸"))
 	if group.fields.is_empty():
 		return
+	if _kind == "hydrogen_metal_hydride_store" and group.fields.any(func(field): return field[0] == "dry_host_mass_kg"):
+		var capacity_row := HBoxContainer.new()
+		capacity_row.add_theme_constant_override("separation", 10)
+		content.add_child(capacity_row)
+		var caption := _label("派生氢容量", 14, MUTED)
+		caption.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		caption.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		capacity_row.add_child(caption)
+		_derived_capacity = _label("—", 22, INK)
+		_derived_capacity.name = "DerivedHydrogenCapacity"
+		capacity_row.add_child(_derived_capacity)
+		var unit := _label("kg H₂", 13, MUTED)
+		unit.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		capacity_row.add_child(unit)
+		capacity_row.tooltip_text = "由已绑定LaNi5材料profile与宿主干质量计算；不是独立可编辑字段，也不是当前氢库存。"
 	var grid := GridContainer.new()
 	grid.columns = 4
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -413,23 +535,25 @@ func _add_group(group: Dictionary, defaults: Dictionary) -> void:
 		grid.add_child(_label(caption, 14, MUTED))
 	for field in group.fields:
 		var key: String = field[0]
+		var range_text := _field_range(key, str(field[3]))
+		var range_note := _field_range_note(key)
 		_labels[key] = str(field[1])
 		var title := _label(str(field[1]), 16, INK)
 		title.custom_minimum_size.x = 154
 		title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		title.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		title.tooltip_text = key + "\n" + _field_note(key)
+		title.tooltip_text = key + "\n" + range_note + "\n允许范围：" + range_text
 		grid.add_child(title)
 		var editor := LineEdit.new()
 		editor.name = key
 		editor.set_meta("parameter_key", key)
 		editor.set_meta("parameter_label", str(field[1]))
 		editor.set_meta("parameter_unit", str(field[2]))
-		editor.set_meta("parameter_range", str(field[3]))
+		editor.set_meta("parameter_range", range_text)
 		editor.set_meta("parameter_default", defaults.get(key, ""))
-		editor.set_meta("parameter_note", _field_note(key))
-		editor.set_meta("construction_only", key == "initial_soc")
-		editor.editable = (key != "initial_soc" or _construction_context) and not str(field[3]).begins_with("固定")
+		editor.set_meta("parameter_note", range_note)
+		editor.set_meta("construction_only", construction_only(key))
+		editor.editable = (not construction_only(key) or _construction_context) and not fixed_field(_kind,key)
 		editor.custom_minimum_size = Vector2(125, 40)
 		editor.alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		editor.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -446,7 +570,7 @@ func _add_group(group: Dictionary, defaults: Dictionary) -> void:
 		editor.add_theme_stylebox_override("normal", _style(FIELD_COLOR, BORDER, 7, 7))
 		editor.add_theme_stylebox_override("read_only", _style(Color("101c26"), BORDER, 7, 7))
 		editor.add_theme_stylebox_override("focus", _style(Color(0, 0, 0, 0), ACCENT, 7, 7, 2))
-		editor.tooltip_text = _field_note(key) + "\n允许范围：" + str(field[3])
+		editor.tooltip_text = range_note + "\n允许范围：" + range_text
 		if not editor.editable:
 			editor.tooltip_text = "只读参数 · 此处不可修改\n" + editor.tooltip_text
 		editor.text_changed.connect(func(_text: String): _on_field_changed())
@@ -456,14 +580,14 @@ func _add_group(group: Dictionary, defaults: Dictionary) -> void:
 		unit.custom_minimum_size.x = 75
 		unit.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		unit.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		unit.tooltip_text = _field_note(key)
+		unit.tooltip_text = range_note
 		grid.add_child(unit)
-		var reference := _label(str(field[3]) + "\n默认 " + str(defaults.get(key, "—")), 14, MUTED)
+		var reference := _label(range_text + "\n默认 " + str(defaults.get(key, "—")), 14, MUTED)
 		reference.custom_minimum_size.x = 145
 		reference.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		reference.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		reference.add_theme_constant_override("line_spacing", 3)
-		reference.tooltip_text = _field_note(key)
+		reference.tooltip_text = range_note
 		grid.add_child(reference)
 
 ## Curves are AC electrical power, not rotor/mechanical power. The controller
@@ -575,12 +699,18 @@ func _refresh_validation() -> void:
 	if is_instance_valid(_curve_status):
 		var curve: Variant = get_parameters().get("power_curve_kw", [])
 		_curve_status.text = ("留空 · 默认三次式" if curve.is_empty() else "%d 个点 · 自定义电功率" % curve.size()) if curve is Array else "曲线格式待修正"
+	if is_instance_valid(_derived_capacity):
+		var draft := get_parameters()
+		var mass: Variant = draft.get("dry_host_mass_kg")
+		var valid_mass: bool = (mass is float or mass is int) and is_finite(float(mass)) and float(mass) > 0.0
+		_derived_capacity.text = String.num(Catalog.inventory_capacity(_kind, draft), 3) if valid_mass else "—"
 	var errors: Array[String] = get_validation_errors()
 	# Highlight only fields named by the authoritative validator. This is
 	# presentation feedback, never a repair, clamp or separate validation rule.
 	var raw_errors: Array = EnergyModel.validate(_kind, get_parameters())
+	var site_errors := _site_validation_errors()
 	for key in _fields:
-		var invalid := false
+		var invalid := site_errors.has(key)
 		for error in raw_errors:
 			if str(error).begins_with(str(key) + " "):
 				invalid = true
@@ -609,6 +739,8 @@ func _humanize_error(error: String) -> String:
 			return str(_labels[key]) + "须填写有效且有限的数值。"
 		if error.begins_with(str(key) + " must be an integer"):
 			return str(_labels[key]) + "须填写允许范围内的整数。"
+		if error.begins_with(str(key) + " exceeds fixed facility maximum"):
+			return str(_labels[key]) + "超过固定设施硬上限，请按右侧范围修改。"
 		if error.begins_with(str(key) + " must be "):
 			return str(_labels[key]) + "超出允许范围，请按右侧范围修改。"
 	if error == "Wind speeds must satisfy cut-in < rated < cut-out":

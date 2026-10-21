@@ -8,8 +8,21 @@ const StationDetail = preload("res://scripts/station_detail_sample.gd")
 const PVDetail = preload("res://scripts/pv_detail_sample.gd")
 const Form = preload("res://scripts/parameter_form.gd")
 const UITheme = preload("res://scripts/ui_theme.gd")
-const NAMES := {"battery_sodium":"钠离子电池储能", "battery_flow":"液流电池储能", "caes_aboveground":"地上压缩空气储能", "liquid_air_store":"液态空气储能", "hydrogen_storage_system":"氢储能完整系统", "solid_thermal_store":"固体介质储热", "wind":"风机", "pv":"光伏", "station":"变电站", "load":"用电需求", "battery":"锂离子电池储能", "electric_boiler":"电热水锅炉", "thermal_store":"储热罐", "heat_exchanger":"隔离换热器", "heat_demand":"热需求", "fuel_boiler":"燃气热水锅炉", "solar_thermal":"太阳能集热器", "parabolic_trough":"槽式聚光集热器", "high_temp_store":"高温导热油储热", "oil_water_exchanger":"油水换热器", "steam_generator":"蒸汽发生器", "steam_turbine":"汽轮发电机", "steam_condenser":"蒸汽冷凝器", "feedwater_pump":"给水泵", "solar_tower_receiver":"塔式熔盐接收器", "molten_salt_store":"双罐熔盐储热", "salt_steam_generator":"熔盐蒸汽发生器"}
+const SaveGeometry=preload("res://scripts/save_validator.gd")
+const NAMES := {"nitrogen_supply_boundary":"有限氮气供料站","co2_supply_boundary":"有限CO₂供料站","ammonia_synthesis_station":"合成氨成套站","methanol_synthesis_station":"甲醇合成成套站","hydrogen_liquid_store":"液氢储存成套站","hydrogen_metal_hydride_store":"LaNi₅固态储氢站","collector_substation":"基地汇集升压站","co2_liquid_cycle_store":"压缩液化CO₂储能站","water_supply_boundary":"有限供水站","electrolyzer_station":"电解制氢站","hydrogen_gas_store":"气态储氢站","fuel_cell_station":"燃料电池电站","battery_sodium":"钠离子电池储能", "battery_flow":"液流电池储能", "caes_aboveground":"地上压缩空气储能", "liquid_air_store":"液态空气储能", "hydrogen_storage_system":"氢储能完整系统", "solid_thermal_store":"固体介质储热", "wind":"风机", "pv":"光伏", "station":"中压变配电单元", "load":"用电需求", "battery":"锂离子电池储能", "electric_boiler":"电热水锅炉", "thermal_store":"储热罐", "heat_exchanger":"隔离换热器", "heat_demand":"热需求", "fuel_boiler":"燃气热水锅炉", "solar_thermal":"太阳能集热器", "parabolic_trough":"槽式聚光集热器", "high_temp_store":"高温导热油储热", "oil_water_exchanger":"油水换热器", "steam_generator":"蒸汽发生器", "steam_turbine":"汽轮发电机", "steam_condenser":"蒸汽冷凝器", "feedwater_pump":"给水泵", "solar_tower_receiver":"塔式熔盐接收器", "molten_salt_store":"双罐熔盐储热", "salt_steam_generator":"熔盐蒸汽发生器"}
 const LIMITS := {
+"nitrogen_supply_boundary":"25°C气态N₂有限预制原料，初始导入明确记账；不模拟空分与物流补给，不可当免费空气源。",
+"co2_supply_boundary":"25°C气态CO₂有限预制碳源，以低压气囊作教学边界；不是液CO₂罐，不宣称已模拟捕集、液化或运输。不可直接与闭式CO₂储能库存相连。",
+"ammonia_synthesis_station":"N₂+3H₂→2NH₃，25°C气态产品有限缓冲；电驱工艺与电热、环境排热均入账。无液氨相变、销售或产品清空入口。缺原料/功率/冷却或满库停产；不模拟实际压力、催化动力学和安全控制。",
+"methanol_synthesis_station":"CO₂+3H₂→CH₃OH+H₂O，25°C液态甲醇有限缓冲，副产液水计入环境边界。无碳源不能生产；整站电热、排热和产水显式守恒，无产品销售、消费或清空入口。教学固定单耗非实际装置性能。",
+"hydrogen_liquid_store":"物种H₂内部为约20.27K富仲液氢，进出均为25°C气氢；相对焓−1.24kWh/kg不是可发电库存，也不是12kWh/kg液化用电。液化排热、有限环境气化器吸热和实际出氢辅机分别记账。固定蒸发0.1%/天为教学假设，新建0kg。只有风光或有限电储能能供出氢辅机，禁止燃料电池自举；未模拟压力、低温动态、安全或厂商性能。",
+"hydrogen_metal_hydride_store":"物种H₂结合于LaNi₅，不是冻结的纯氢。干宿主可逆H₂容量=1.2%是教学假设；已建宿主质量固定，不能改参数变出材料。结合态相对焓−4.275kWh/kg，吸氢排热/电热解吸均有真实有限功率。内部工艺热不另算储电SOC；新建0kg。未模拟材料循环衰减、压力平台或安全控制。",
+"collector_substation":"默认与上限200 MW为教学吞吐，1%为教学损耗，非特定120 MVA主变性能换算。固定100×102 m教学占地，参照公开AIS厂站分区；照片不作精确尺寸测量。支持一个汇集节点的星形网络，不支持变电站级联。未建模电压层级、无功、交流潮流和主变暂态；AC_BUS不是实际高压电压等级。",
+"co2_liquid_cycle_store":"闭式CO₂压缩—液化—气化—膨胀成套站，含内部蓄热。工质总质量未标定，SOC=0不代表气仓无CO₂；不赠独立热库存/热输出。默认794.24MWh为内部等效库存。146MW×6.8h与100MW×6.14h来自河北院2026-10-09公开设计工况；净毛边界未核实，992.8→614MWh仅教学算术参考，非同循环实测性能。净转换系数0.8和614/794.24为教学拆分，不是压缩机/透平实测效率。默认自损0是理想化边界，可设置正值；未模拟温压/相平衡/启停。",
+"water_supply_boundary":"显式物种、相态与kg库存；固定教学工况，不模拟压力容器应力、气体动态或安全控制。排向环境的氧、液水、热均记账，不等于可销售或可连接的产品端口。原完整氢储能系统另为封装模型，不与本站共用或重复计库存。",
+"electrolyzer_station":"显式物种、相态与kg库存；固定教学工况，不模拟压力容器应力、气体动态或安全控制。排向环境的氧、液水、热均记账，不等于可销售或可连接的产品端口。原完整氢储能系统另为封装模型，不与本站共用或重复计库存。",
+"hydrogen_gas_store":"显式物种、相态与kg库存；固定教学工况，不模拟压力容器应力、气体动态或安全控制。排向环境的氧、液水、热均记账，不等于可销售或可连接的产品端口。原完整氢储能系统另为封装模型，不与本站共用或重复计库存。",
+"fuel_cell_station":"显式物种、相态与kg库存；固定教学工况，不模拟压力容器应力、气体动态或安全控制。排向环境的氧、液水、热均记账，不等于可销售或可连接的产品端口。原完整氢储能系统另为封装模型，不与本站共用或重复计库存。",
  "battery_sodium":"钠离子电池箱 + 双向PCS。聚合电能库存；不计算电芯化学、温度、老化或循环寿命。充放效率为可编辑教学假设，包含PCS，不重复扣逆变损耗。",
  "battery_flow":"正/负电解液罐 + 电堆 + 泵组 + 双向PCS。容量与功率分别约束；泵耗与PCS损耗已并入净充放效率，不额外生成电或热。未计算浓度、液位或膜传质。",
  "caes_aboveground":"地上承压容器组 + 电驱压缩机 + 膨胀发电机。不是地下洞穴。净效率覆盖压缩、储气热管理及发电的教学损失；没有免费外部燃料或热源。聚合库存不是压力/气体质量，未计算压力、温度、流量或动态热力循环。",
@@ -37,7 +50,7 @@ const LIMITS := {
  "solar_tower_receiver":"未建模：逐镜光线追迹、冷启动、融盐与防冻能耗。",
  "molten_salt_store":"未建模：冻结、融盐与动态罐温；SOC是预热基线以上库存。",
  "salt_steam_generator":"未建模：冷启动、动态沸腾与滑压；熔盐直接换热，不经导热油。"}
-const METRICS := {"mw":"可用功率 [MW]", "generated_mw":"发电功率", "sent_mw":"送出功率", "received_mw":"接收功率", "input_mw":"输入功率", "output_mw":"输出功率", "curtailed_mw":"弃电功率", "loss_mw":"损耗功率", "served_mw":"已供电", "unserved_mw":"缺电", "soc":"库存比例 [0–1]", "energy_mwh":"电库存", "energy_mwhth":"热库存", "status_reason":"运行说明", "connected":"已连接", "valid":"数据有效", "operating":"运行中", "heat_sent_mwth":"送热功率", "heat_output_mwth":"产热功率", "mass_flow_kg_s":"质量流量", "module_temp_c":"组件温度", "cell_temp_c":"电池片温度", "wind_speed_mps":"风速"}
+const METRICS := {"nitrogen_in_kg_s":"氮气输入","nitrogen_out_kg_s":"有限氮气输出","co2_in_kg_s":"CO₂碳源输入","co2_out_kg_s":"有限CO₂输出","product_produced_kg_s":"实际产品生成","ammonia_produced_kg_s":"气态氨生成","methanol_produced_kg_s":"液态甲醇生成","chemical_electric_mw":"化工整站用电","water_in_kg_s":"液水输入","water_out_kg_s":"供水输出","hydrogen_in_kg_s":"氢输入","hydrogen_out_kg_s":"氢输出","electric_output_mw":"净电输出","oxygen_vented_kg_s":"氧排向环境","oxygen_from_air_kg_s":"从空气取氧","water_released_kg_s":"液态产水排出","heat_rejected_mwth":"环境排热（不可供热）","inventory_before_kg":"时步前物料库存","inventory_after_leak_kg":"泄漏后库存","next_inventory_kg":"预计时步末库存","leaked_kg":"本步泄漏质量","material_inventory_kg":"已提交物料库存","species_id":"物种","phase_id":"相态","mw":"可用功率 [MW]", "generated_mw":"发电功率", "sent_mw":"送出功率", "received_mw":"接收功率", "input_mw":"输入功率", "output_mw":"输出功率", "curtailed_mw":"弃电功率", "loss_mw":"损耗功率", "served_mw":"已供电", "unserved_mw":"缺电", "soc":"库存比例 [0–1]", "energy_mwh":"电库存", "energy_mwhth":"热库存", "status_reason":"运行说明", "connected":"已连接", "valid":"数据有效", "operating":"运行中", "heat_sent_mwth":"送热功率", "heat_output_mwth":"产热功率", "mass_flow_kg_s":"质量流量", "module_temp_c":"组件温度", "cell_temp_c":"电池片温度", "wind_speed_mps":"风速"}
 const EXTRA_METRICS := {"hydrogen_mass_kg":"等效氢质量 [kg · LHV换算]", "hydrogen_produced_mw_lhv":"制氢能流 [MW(LHV)]", "hydrogen_consumed_mw_lhv":"耗氢能流 [MW(LHV)]", "hydrogen_energy_basis":"氢能量口径", "hydrogen_charge_loss_mw":"制氢/压缩净损失", "hydrogen_discharge_loss_mw":"燃料电池/逆变净损失", "charge_conversion_loss_mw":"充能净转换损失", "discharge_conversion_loss_mw":"放能净转换损失", "nameplate_clipped_mw":"额定容量削顶", "air_density_kgm3":"空气密度 [kg/m³]", "kinetic_mw":"风能功率", "reference_air_density_kgm3":"参考空气密度 [kg/m³]", "cp_aero":"气动功率系数 Cp", "curve_mode":"功率曲线模式", "input_mwth": "输入热功率", "output_mwth": "输出热功率", "loss_mwth": "热损耗", "heat_connected": "热端已连接", "electric_connected": "电端已连接", "cycle_complete": "蒸汽回路闭合", "steam_heat_mwth": "蒸汽增焓功率", "oil_input_mwth": "热油输入", "salt_input_mwth": "热盐输入", "gross_electric_mw": "毛发电", "generator_loss_mw": "发电机损耗", "condenser_rejection_mwth": "实际排热", "available_rejection_mwth": "可用排热能力", "pump_electric_mw": "给水泵用电", "pump_hydraulic_mw": "给水水力增焓", "pump_motor_loss_mw": "泵电机损耗", "auxiliary_electric_mw": "辅机用电", "auxiliary_electric_loss_mw": "辅机电损耗", "available_mwth": "可用热功率", "curtailed_mwth": "弃热功率", "hot_input_mwth": "热侧输入", "warm_output_mwth": "温侧输出", "incident_mw": "入射功率", "optical_rejection_mw": "光学未捕获", "potential_thermal_loss_mw": "潜在散热", "thermal_loss_mw": "实际散热", "dni_wm2": "直接法向辐照 DNI", "cos_incidence": "入射余弦", "electric_input_mw": "电输入", "conversion_loss_mw": "转换损耗", "fuel_input_mw": "燃料输入 [LHV]", "fuel_volume_nm3_per_h": "燃气量 [Nm³/h]", "fuel_cost_per_h": "教学燃料费 [元/h]", "demand_mw": "用电需求", "demand_mwth": "用热需求", "served_mwth": "已供热", "unserved_mwth": "缺热", "delivered_mw": "送达功率", "charge_mw": "充电功率", "discharge_mw": "放电功率", "charge_mwth": "充热功率", "discharge_mwth": "放热功率", "capacity_mwh": "电容量", "capacity_mwhth": "热容量", "capacity_mw": "线路额定容量", "mass_flow_capacity_kg_s": "质量流量上限", "mode": "储能模式", "soc_before": "时步前库存比例 [0–1]", "next_energy_mwh": "时步结束预计电库存", "next_energy_mwhth": "时步结束预计热库存", "storage_loss_mw": "储能损耗", "storage_conversion_loss_mw": "充放电转换损耗", "storage_conversion_loss_mwth": "充放热转换损耗", "self_discharge_mwh": "自损电量", "self_discharge_mwhth": "自损热量", "storage_balance_error_mwh": "电库存守恒差", "storage_balance_error_mwhth": "热库存守恒差", "priority": "调度优先级", "utilization": "利用率 [0–1]", "loss_fraction": "线路损耗比例 [0–1]", "carrier": "能量载体", "grade_id": "温度品质", "rated_mw": "额定功率", "gross_dc_mw": "毛直流功率", "dc_mw": "直流功率", "dc_loss_mw": "直流损耗", "ac_mw": "交流功率", "inverter_loss_mw": "逆变损耗", "clipping_mw": "逆变削顶", "irradiance_wm2": "面上辐照", "model_profile": "模型配置", "model_profile_version": "模型版本", "errors": "数据错误", "source": "输入来源"}
 var host: Node
 var device_id := -1
@@ -204,6 +217,15 @@ func _build_ui() -> void:
  add_child(timer)
  timer.start()
 
+func _device_visual_params(item: Dictionary) -> Dictionary:
+ var params: Dictionary = item.get("params", {})
+ # Keep one-argument host compatibility, then overwrite construction defaults
+ # with this actual device's version, including absent legacy markers.
+ var vp: Dictionary = host.visual_params(params) if is_instance_valid(host) and host.has_method("visual_params") else params.duplicate(true)
+ vp.visual_site_geometry_profile = str(item.get("site_geometry_profile", ""))
+ if item.get("kind") == "battery_flow": vp.visual_geometry_profile = SaveGeometry.geometry_profile_for_device(item)
+ return vp
+
 func refresh() -> void:
  if not _built or device_id < 0: return
  var item: Dictionary = host.device(device_id) if is_instance_valid(host) else {}
@@ -220,7 +242,7 @@ func refresh() -> void:
  title_label.text = "%s #%d" % [NAMES.get(kind, kind), device_id]
  status_label.text = "实时只读 · 与主场景同一设备、同一计算结果 · 参数编辑请返回主场景"
  var params: Dictionary = item.get("params", {})
- var vp: Dictionary = host.visual_params(params) if host.has_method("visual_params") else params.duplicate(true)
+ var vp: Dictionary = _device_visual_params(item)
  var signature := str([kind, vp])
  if signature != _signature:
   if is_instance_valid(model_node): model_node.free()
@@ -240,13 +262,18 @@ func refresh() -> void:
   model_label.text = "完整设施教学外观 · %s\n%s" % [NAMES.get(kind, kind), str(model_node.get_meta("storage_stages", "库存与端口以右侧当前设备数据为准"))]
   if model_node.get_meta("representative_lod", false):
    model_label.text += "\n大规模布局抽样显示 %d / %d 模块；全场容量、占地与库存不变。" % [int(model_node.get_meta("display_module_count", 0)), int(model_node.get_meta("module_count", 0))]
+ if kind=="battery_flow":
+  model_label.text += "\n旧版图标化尺度 · 单模块14×10m工艺图标 / 18×14m安装区；保留原布局，不代表10MWh真实工艺尺寸。" if SaveGeometry.geometry_profile_for_device(item)==SaveGeometry.FLOW_ICON_GEOMETRY else "\n参考工艺米制尺寸 · 单模块38×15m / 安装区42×19m；检修预留为教学假设，非厂家CAD。"
  var results: Dictionary = host.get("result") if host.get("result") is Dictionary else {}
  var report: Dictionary = results.get("devices", {}).get(str(device_id), {})
  texts["运行"].text = "主场景最新计算结果\n\n" + (_rows(report) if not report.is_empty() else "尚无本设备计算结果；本页不会独立求解。") + "\n\n持久运行状态\n" + (_rows(item.get("state", {})) if not item.get("state", {}).is_empty() else "无独立持久状态")
+ if Catalog.is_material(kind):
+  texts["运行"].text = _material_summary(item, report) + "\n\n完整计算与持久状态\n物料与电能按实际已提交事务计量；下方预计库存只属下一计算步，不会因打开本页推进。\n\n" + texts["运行"].text
  if Catalog.is_storage(kind):
   texts["运行"].text = _storage_summary(item, report) + "\n\n" + texts["运行"].text
  var lines: Array[String] = []
  var boundaries: Array[String] = ["已建模 / 计算口径"]
+ if Catalog.is_material(kind):boundaries.append("显式物种、相态和品位端口；流量单位kg/s，实际库存单位kg。电能与环境热另行计量，不将物料或参考焓直接当电量。")
  var known: Array[String] = []
  for group in Form.GROUPS.get(kind, []):
   lines.append(str(group.title))
@@ -259,6 +286,8 @@ func refresh() -> void:
  for key in params:
   if not str(key) in known: lines.append("%s：%s" % [_metric_name(str(key)), _value(params[key])])
  texts["参数"].text = "设备当前参数（非模板）\n\n" + "\n".join(lines)
+ if kind=="battery_flow":
+  boundaries.append("几何兼容：旧版图标化设备保留原坐标和旧占地；新建采用参考工艺尺寸。两者使用完全相同的容量参数、库存与单AC端口。本页不迁移尺寸、不移动设备。")
  boundaries.append("\n未建模与技术边界：" + str(LIMITS.get(kind, "仅展示现有模型；不新增求解。")))
  boundaries.append("\n3D视角、缩放、窗口开关不会改变设备参数、库存、线路或模拟时钟。")
  texts["边界"].text = "\n\n".join(boundaries)
@@ -304,6 +333,47 @@ func _fit_studio_ground() -> void:
   PVDetail.box(studio_ground, Vector3(0.001, 0.006, 1), Vector3(coordinate, 0.502, 0), joint)
   PVDetail.box(studio_ground, Vector3(1, 0.006, 0.001), Vector3(0, 0.502, coordinate), joint)
 
+func _material_summary(item: Dictionary, report: Dictionary) -> String:
+ var kind := str(item.get("kind", ""))
+ var lines: Array[String] = ["已提交库存"]
+ if kind in Catalog.Materials.INVENTORY_KINDS:
+  var species: String = Catalog.Materials.species(kind)
+  var phase_name: String = {"water_supply_boundary":"H2O(l)", "nitrogen_supply_boundary":"N2(g)", "co2_supply_boundary":"CO2(g)", "ammonia_synthesis_station":"NH3(g)", "methanol_synthesis_station":"CH3OH(l)", "hydrogen_gas_store":"H2(g)", "hydrogen_liquid_store":"H2(l)", "hydrogen_metal_hydride_store":"H2 · LaNi5结合态"}.get(kind, species)
+  var inventory: Variant = item.get("state", {}).get("material_inventory_kg", {}).get(species)
+  var capacity: float = Catalog.inventory_capacity(kind, item.get("params", {}))
+  if _material_finite(inventory) and is_finite(capacity) and capacity > 0.0:
+   lines.append("%s  %s / %s kg · 库存占容 %.2f%%" % [phase_name, _value(inventory), _value(capacity), float(inventory) / capacity * 100.0])
+  else: lines.append("%s 库存尚无有效已提交数据，不以预计值替代。" % phase_name)
+ else: lines.append("本站无独立物料库存；进出料由实际计算流量计量。")
+ lines.append("\n实际流量 · 主场景当前计算步")
+ var flow_keys: Array = []
+ match kind:
+  "water_supply_boundary": flow_keys = ["water_out_kg_s"]
+  "nitrogen_supply_boundary": flow_keys = ["nitrogen_out_kg_s"]
+  "co2_supply_boundary": flow_keys = ["co2_out_kg_s"]
+  "electrolyzer_station": flow_keys = ["hydrogen_out_kg_s", "water_in_kg_s", "oxygen_vented_kg_s"]
+  "hydrogen_gas_store", "hydrogen_liquid_store", "hydrogen_metal_hydride_store": flow_keys = ["hydrogen_in_kg_s", "hydrogen_out_kg_s"]
+  "fuel_cell_station": flow_keys = ["hydrogen_in_kg_s", "oxygen_from_air_kg_s", "water_released_kg_s"]
+  "ammonia_synthesis_station": flow_keys = ["product_produced_kg_s", "hydrogen_in_kg_s", "nitrogen_in_kg_s"]
+  "methanol_synthesis_station": flow_keys = ["product_produced_kg_s", "hydrogen_in_kg_s", "co2_in_kg_s", "water_released_kg_s"]
+ var flows: Array[String] = []
+ for key in flow_keys:
+  if _material_finite(report.get(key)): flows.append("%s：%s kg/s" % [METRICS.get(key, key), _value(report[key])])
+ lines.append("\n".join(flows) if not flows.is_empty() else "尚无有效流量结果；不显示虚构零值。")
+ var powers: Array[String] = []
+ if not kind in ["water_supply_boundary", "nitrogen_supply_boundary", "co2_supply_boundary"]:
+  for spec in [["electric_input_mw", "实际用电", "MW"], ["electric_output_mw", "实际净出电", "MW"], ["heat_rejected_mwth", "环境排热", "MWth"], ["environment_heat_in_mwth", "环境吸热", "MWth"]]:
+   if spec[0] == "electric_output_mw" and kind != "fuel_cell_station": continue
+   if spec[0] == "environment_heat_in_mwth" and kind != "hydrogen_liquid_store": continue
+   if _material_finite(report.get(spec[0])): powers.append("%s：%s %s" % [spec[1], _value(report[spec[0]]), spec[2]])
+  lines.append("\n实际用电与排热 · 主场景当前计算步")
+  lines.append("\n".join(powers) if not powers.is_empty() else "尚无有效电热结果；不显示虚构零值。")
+ lines.append("\n库存读取已提交状态；流量与电热读取最新计算，不因浏览而推进。")
+ return "\n".join(lines)
+
+func _material_finite(value: Variant) -> bool:
+ return (value is int or value is float) and is_finite(float(value))
+
 func _value(value: Variant) -> String:
  if value is bool: return "是" if value else "否"
  if value is float: return String.num(value, 6)
@@ -323,9 +393,9 @@ func _metric_name(key: String) -> String:
   var caption := "容量" if key == "capacity_mwh" else ("时步结束预计库存" if key == "next_energy_mwh" else "库存")
   return basis + caption + (" [MWh(LHV)]" if kind == "hydrogen_storage_system" else " [MWh]")
  var unit := ""
- for suffix in ["_mwhth", "_mwth", "_mwh", "_mw", "_kg_s", "_temp_c", "_mps", "_wm2", "_kpa", "_kj_kg"]:
+ for suffix in ["_mwhth", "_mwth", "_mwh", "_mw", "_kg_s", "_kg", "_temp_c", "_mps", "_wm2", "_kpa", "_kj_kg"]:
   if key.ends_with(suffix):
-   unit = {"_mwhth":"MWhth", "_mwth":"MWth", "_mwh":"MWh", "_mw":"MW", "_kg_s":"kg/s", "_temp_c":"°C", "_mps":"m/s", "_wm2":"W/m²", "_kpa":"kPa", "_kj_kg":"kJ/kg"}[suffix]
+   unit = {"_mwhth":"MWhth", "_mwth":"MWth", "_mwh":"MWh", "_mw":"MW", "_kg_s":"kg/s", "_kg":"kg", "_temp_c":"°C", "_mps":"m/s", "_wm2":"W/m²", "_kpa":"kPa", "_kj_kg":"kJ/kg"}[suffix]
    break
  return str(METRICS.get(key, EXTRA_METRICS.get(key, key))) + (" [" + unit + "]" if unit != "" else "")
 
@@ -334,6 +404,10 @@ func _rows(values: Dictionary) -> String:
  for key in values:
   if str(key) in ["id", "kind", "model"]: continue
   var value_text := _value(values[key])
+  if str(key)=="material_inventory_kg" and values[key] is Dictionary:
+   var stocks:Array[String]=[]
+   for species in values[key]:stocks.append("%s  %s kg" % [species,_value(values[key][species])])
+   value_text="；".join(stocks)
   if str(key) in ["errors", "warnings"] and values[key] is Array:
    value_text = "无" if values[key].is_empty() else "；".join(values[key].slice(0, 6))
   lines.append("%s：%s" % [_metric_name(str(key)), value_text])

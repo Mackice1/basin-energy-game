@@ -1,4 +1,5 @@
 extends SceneTree
+const CurrentWorldVersion = preload("res://scripts/world_game.gd")
 ## Controller integration for editable station containers. Terrain/rendering are
 ## isolated; all physical reports, inventory transitions and GLPK solves are real.
 const Optimization = preload("res://scripts/optimization_controller.gd")
@@ -21,6 +22,35 @@ class Fixture:
 	func ask(message: String, action: Callable): last_notice = message; confirm_action = action
 	func weather_at(_t: float) -> Dictionary:
 		return {"wind_speed_mps":12.0, "irradiance_wm2":irradiance, "air_temp_c":25.0}
+
+
+	# Explicit historical data setup, NOT a replacement for the production build
+	# API. Legacy UI construction is now rejected; these fixtures retain their
+	# old ratings/coordinates and no site_geometry_profile for ledger/save tests.
+	func append_legacy_device(kind:String, at:Vector2, record:bool=true, parent_id:int=-1)->bool:
+		if record: checkpoint()
+		var id:int=next_id
+		while not station(id).is_empty() or not device(id).is_empty(): id+=1
+		var values:Dictionary=templates[kind].duplicate(true)
+		var item:Dictionary={"id":id,"kind":kind,"x":at.x,"z":at.y,"params":values,"state":Catalog.initial_state(kind,values)}
+		if kind in THERMAL_KINDS:item.model_profile=Catalog.model_profile(kind)
+		if parent_id>=0:
+			var parent:Dictionary=station(parent_id)
+			item.x=parent.x;item.z=parent.z;item.parent_station_id=parent_id
+			item.interior_x=at.x;item.interior_z=at.y
+		devices.append(item);selected_id=id;next_id=id+1;normalize_id_cursors();refresh()
+		return true
+
+	func append_legacy_station(at:Vector2,record:bool=true)->bool:
+		if record:checkpoint()
+		var id:int=next_station_id
+		while not device(id).is_empty() or not station(id).is_empty() or id==next_id:id+=1
+		stations.append({"id":id,"name":"历史测试电热站 %d"%id,"x":at.x,"z":at.y})
+		selected_id=id;next_station_id=id+1;normalize_id_cursors();refresh()
+		return true
+
+	func append_legacy_child(parent_id:int,kind:String,at:Vector2)->bool:
+		return append_legacy_device(kind,at,true,parent_id)
 
 class InteriorProbe:
 	extends Window
@@ -60,10 +90,10 @@ func fixture() -> Fixture:
 func chain() -> Fixture:
 	var game := fixture()
 	for spec in [["pv",Vector2(-60,0)], ["station",Vector2(-30,0)], ["heat_demand",Vector2(65,0)]]:
-		check(game.add_equipment(spec[0], spec[1], false), "fixture places external " + spec[0])
-	check(game.add_station(Vector2(25,0), false), "fixture places station container")
+		check(game.append_legacy_device(spec[0], spec[1], false), "fixture places external " + spec[0])
+	check(game.append_legacy_station(Vector2(25,0), false), "fixture places station container")
 	for spec in [["electric_boiler",Vector2(-12,0)], ["thermal_store",Vector2.ZERO], ["heat_exchanger",Vector2(12,0)]]:
-		check(game.add_internal_device(SITE, spec[0], spec[1]), "fixture places internal " + spec[0])
+		check(game.append_legacy_child(SITE, spec[0], spec[1]), "fixture places internal " + spec[0])
 	game.device(PV).params.merge({"dc_capacity_mw":2.0, "inverter_capacity_mw":2.0,
 		"inverter_efficiency":1.0, "temp_coefficient_per_c":0.0, "dc_loss_fraction":0.0}, true)
 	game.device(AC_STATION).params = {"capacity_mw":10.0,"loss_fraction":0.0}
@@ -130,7 +160,8 @@ func run() -> void:
 
 func test_construction_and_open() -> void:
 	var game := fixture()
-	check(game.add_equipment("thermal_station", Vector2.ZERO), "base catalog constructs a container")
+	check(not game.add_equipment("thermal_station",Vector2.ZERO),"legacy UI rejects new station until migration")
+	check(game.append_legacy_station(Vector2.ZERO), "prepare historical station container")
 	check(game.stations.size() == 1 and game.devices.is_empty(), "container is separate from physical energy devices")
 	check(game.station(SITE).id == SITE and game.next_station_id == SITE + 1 and game.next_id == 0, "station and device IDs have separate counters")
 	check(game.device(SITE).is_empty() and game.station(-1).is_empty(), "station lookup never invents a physical device")
@@ -139,7 +170,7 @@ func test_construction_and_open() -> void:
 	for kind in game.INTERNAL_KINDS:
 		check((kind in game.BUILDABLE_KINDS) == (kind == "molten_salt_store"), "only reusable molten salt is also standalone: " + kind)
 	game.templates.thermal_store.initial_soc = 0.375
-	check(game.add_internal_device(SITE,"thermal_store",Vector2.ZERO), "construct station store")
+	check(game.append_legacy_child(SITE,"thermal_store",Vector2.ZERO), "construct station store")
 	near(game.device(0).state.energy_mwhth,1.5,"construction applies configured initial SOC exactly once")
 	check(game.device(0).model_profile == "thermal_stage1_v1" and game.device(0).parent_station_id == SITE, "internal device retains thermal profile and parent")
 	check(game.device(0).interior_x == 0.0 and game.device(0).interior_z == 0.0, "interior coordinates are explicit")
@@ -161,23 +192,29 @@ func test_construction_and_open() -> void:
 
 func test_interior_placement() -> void:
 	var game := fixture()
-	check(game.add_station(Vector2(-25,0)) and game.add_station(Vector2(25,0)), "place two independent parent sites")
-	check(game.add_internal_device(SITE,"thermal_store",Vector2.ZERO), "place first internal footprint")
-	check(game.add_internal_device(SITE + 1,"thermal_store",Vector2.ZERO), "same interior coordinate allowed in different station")
+	check(game.append_legacy_station(Vector2(-25,0)) and game.append_legacy_station(Vector2(25,0)), "place two independent parent sites")
+	check(game.append_legacy_child(SITE,"thermal_store",Vector2.ZERO), "place first internal footprint")
+	check(game.append_legacy_child(SITE + 1,"thermal_store",Vector2.ZERO), "same interior coordinate allowed in different station")
 	check(not game.same_internal_station(0,1) and game.same_internal_station(0,0), "same-parent lookup uses real child membership")
 	check(not game.same_internal_station(0,9999) and not game.same_internal_station(SITE,SITE), "containers and missing devices are not internal peers")
+	# A historical boiler is the subject of real move-validation dry runs;
+	# new legacy UI construction is tested separately below.
+	check(game.append_legacy_child(SITE,"electric_boiler",Vector2(-12,0)),"prepare historical movement subject")
 	for spec in [[SITE,"electric_boiler",Vector2(8,0)], [SITE,"thermal_store",Vector2(19.01,0)],
 		[SITE,"electric_boiler",Vector2(0,20.01)], [SITE,"electric_boiler",Vector2(NAN,0)],
 		[SITE,"electric_boiler",Vector2(0,INF)], [SITE,"pv",Vector2(-12,0)], [99999,"electric_boiler",Vector2.ZERO]]:
 		var before := frozen(game); var revision := game.scene_revision; var undo_count := game.undo_states.size()
-		check(not game.can_place_internal(spec[0],spec[1],spec[2]).is_empty(), "interior guard gives rejection reason")
-		check(not game.add_internal_device(spec[0],spec[1],spec[2]), "invalid interior placement rejected")
+		check(not game.can_place_internal(spec[0],spec[1],spec[2],0 if spec[1]=="thermal_store" else 2,game.templates.get(spec[1],{})).is_empty(), "interior guard gives rejection reason")
+		check(not game.add_internal_device(spec[0],spec[1],spec[2]), "new internal UI placement in legacy scene rejected")
 		check(frozen(game) == before and game.scene_revision == revision and game.undo_states.size() == undo_count, "invalid placement never checkpoints or mutates")
-	check(game.can_place_internal(SITE,"electric_boiler",Vector2(9,0)).is_empty(), "touching circular footprints are allowed")
-	check(game.can_place_internal(SITE,"thermal_store",Vector2(19,0)).is_empty(), "whole footprint can touch station boundary")
+	game.devices=game.devices.filter(func(d):return int(d.id)!=2)
+	game.next_id=2;game.selected_id=0
+	check(not game.add_internal_device(SITE,"electric_boiler",Vector2(9,0)),"legacy UI cannot add even geometrically clear internal equipment")
+	check(game.can_place_internal(SITE,"thermal_store",Vector2(19,0),0).is_empty(), "whole footprint can touch station boundary")
 	check(game.move_internal_device(0,Vector2(-12,0)), "move internal equipment through controller")
 	check(game.device(0).interior_x == -12.0 and game.device(0).interior_z == 0.0, "internal move updates layout coordinates")
-	check(game.add_internal_device(SITE,"electric_boiler",Vector2(0,0)), "freed interior space reusable")
+	check(game.append_legacy_child(SITE,"electric_boiler",Vector2(0,0)), "historical child fixture occupies freed interior space")
+	check(game.can_place_internal(SITE,"electric_boiler",Vector2(-3,0),2).is_empty(),"existing legacy equipment may move to touching footprints")
 	var before := frozen(game)
 	check(not game.move_internal_device(0,Vector2(-8,0)) and frozen(game) == before, "internal move overlap rejected atomically")
 	check(not game.move_internal_device(0,Vector2(0,24)) and frozen(game) == before, "internal move bounds rejected atomically")
@@ -188,14 +225,14 @@ func test_high_id_cursor_roundtrips() -> void:
 	# Exercise both add paths, then actually write/read the resulting scene.
 	for build_mode in ["base", "internal"]:
 		var source := fixture()
-		check(source.add_station(Vector2(25,0),false),"prepare station-domain cursor fixture")
+		check(source.append_legacy_station(Vector2(25,0),false),"prepare station-domain cursor fixture")
 		source.next_id = SITE - 1
 		var saved: Dictionary = source.state()
 		check(source.validate_state(saved).is_empty(),"high next-device cursor fixture is a valid schema 6 save")
 		var old_path := path_for("high_device_cursor_" + build_mode); write_fixture(old_path,saved)
 		var game := fixture()
 		check(game.read_save(old_path),"read valid high device cursor before " + build_mode + " construction")
-		var built: bool = game.add_equipment("pv",Vector2(-30,0)) if build_mode == "base" else game.add_internal_device(SITE,"thermal_store",Vector2.ZERO)
+		var built: bool = game.append_legacy_device("pv",Vector2(-30,0)) if build_mode == "base" else game.append_legacy_child(SITE,"thermal_store",Vector2.ZERO)
 		check(built and not game.device(SITE - 1).is_empty(),"construction uses last device ID below existing station")
 		check(game.next_id == SITE + 1 and game.station(game.next_id).is_empty(),"post-build next device cursor skips occupied station ID")
 		check(game.next_station_id == SITE + 2 and game.next_station_id != game.next_id,"both ID cursors remain distinct after device increment")
@@ -209,12 +246,12 @@ func test_high_id_cursor_roundtrips() -> void:
 		check(resumed.validate_state(resumed.state()).is_empty(),"resumed normalized high-ID hierarchy validates")
 	# Older scenes can have physical IDs inside the later station ID domain.
 	var source := fixture()
-	check(source.add_equipment("pv",Vector2(-30,0),false),"prepare old high-ID physical equipment")
+	check(source.append_legacy_device("pv",Vector2(-30,0),false),"prepare old high-ID physical equipment")
 	source.devices[0].id = SITE + 1; source.next_id = SITE + 2
 	check(source.validate_state(source.state()).is_empty(),"physical ID above station cursor is a valid old scene")
 	var old_path := path_for("high_legacy_physical_id"); write_fixture(old_path,source.state())
 	var game := fixture(); check(game.read_save(old_path),"read legacy high physical ID scene")
-	check(game.add_station(Vector2(25,0)),"build station just below existing high physical ID")
+	check(game.append_legacy_station(Vector2(25,0)),"build station just below existing high physical ID")
 	check(game.station(SITE).id == SITE and game.device(SITE + 1).kind == "pv","station construction preserves existing high-ID device")
 	check(game.next_id == SITE + 2 and game.next_station_id == SITE + 3,"station increment skips occupied physical ID and live device cursor")
 	check(game.validate_state(game.state()).is_empty(),"station increment keeps high-ID hierarchy valid")
@@ -256,9 +293,9 @@ func test_boundary_connections() -> void:
 	for edge in game.links: check(int(edge.from) != SITE and int(edge.to) != SITE, "container never becomes an energy topology endpoint")
 	check(game.connection_candidate(AC_STATION,SITE).is_empty(), "container ID cannot silently become AC device")
 	check(game.connection_candidate(SITE,DEMAND).is_empty(), "container ID cannot silently become heat source")
-	check(game.add_station(Vector2(25,35)), "place second station for isolation regression")
+	check(game.append_legacy_station(Vector2(25,35)), "place second station for isolation regression")
 	var other_store := game.next_id
-	check(game.add_internal_device(SITE + 1,"thermal_store",Vector2.ZERO), "place other-station heat sink")
+	check(game.append_legacy_child(SITE + 1,"thermal_store",Vector2.ZERO), "place other-station heat sink")
 	before = frozen(game)
 	check(not game.connect_internal_devices(BOILER,other_store) and frozen(game) == before, "interior API blocks cross-parent heat")
 	check(game.connection_candidate(BOILER,other_store).is_empty(), "base candidate blocks cross-parent primary heat")
@@ -328,12 +365,12 @@ func test_movement_and_base_collision() -> void:
 	check(game.station(SITE).x == 25.0 and game.station(SITE).z == 30.0, "parent world location changes")
 	check(var_to_bytes(game.devices) == children, "parent movement preserves every child including inventory and interior coordinates")
 	check(var_to_bytes(game.links) == edges and var_to_bytes(game.result) == report, "parent movement preserves topology and physical result")
-	check(game.can_place("pv",Vector2(25,0)).is_empty(), "base collision ignores stale world coordinates of parented children")
-	check(not game.can_place("pv",Vector2(25,30)).is_empty(), "base collision includes station facade footprint")
-	check(not game.can_place("thermal_station",Vector2(-30,0)).is_empty(), "station facade collides with external equipment")
+	check(game.can_place("pv",Vector2(25,0),PV).is_empty(), "base collision ignores stale world coordinates of parented children")
+	check(not game.can_place("pv",Vector2(25,30),PV).is_empty(), "base collision includes station facade footprint")
+	check(not game.can_place("thermal_station",Vector2(-30,0),SITE).is_empty(), "station facade collides with external equipment")
 	check(game.can_place("thermal_station",Vector2(25,30),SITE).is_empty(), "station move guard excludes its own footprint")
 	var moved := frozen(game); var revision := game.scene_revision
-	for position in [Vector2(-30,0),Vector2(90,0),Vector2(0,60),Vector2(NAN,0),Vector2(0,INF)]:
+	for position in [Vector2(-30,0),Vector2(game.WorldDomain.HALF_EXTENTS.x+1,0),Vector2(0,game.WorldDomain.HALF_EXTENTS.y+1),Vector2(NAN,0),Vector2(0,INF)]:
 		check(not game.move_station(SITE,position) and frozen(game) == moved and game.scene_revision == revision, "invalid whole-station move is atomic")
 	game.undo()
 	check(frozen(game) == before,"undo restores exact parent move without inventory change")
@@ -368,7 +405,7 @@ func test_file_roundtrip_and_legacy() -> void:
 	var path := path_for("schema6_resume")
 	check(control.write_save(path),"write actual station file through controller")
 	var disk: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path))
-	check(disk.schema == 13 and disk.model_version == 22 and disk.stations.size() == 1,"persist schema 13/model 22 separate stations")
+	check(disk.schema == CurrentWorldVersion.CURRENT_SAVE_SCHEMA and disk.model_version == CurrentWorldVersion.CURRENT_MODEL_VERSION and disk.stations.size() == 1,"persist schema 15/model 24 separate stations")
 	check(disk.next_station_id >= 1000000 and disk.devices.size() == 6,"save contains real devices once and separate next station ID")
 	var resumed := fixture(); resumed.paused = false; resumed.speed = 60.0; resumed.accumulator = 0.4
 	check(resumed.read_save(path),"restore saved station via FileAccess: " + resumed.last_notice)
@@ -387,7 +424,7 @@ func test_file_roundtrip_and_legacy() -> void:
 	var old := fixture()
 	for spec in [["pv",Vector2(-65,0)],["station",Vector2(-40,0)],["electric_boiler",Vector2(-15,0)],
 		["thermal_store",Vector2(10,-20)],["heat_exchanger",Vector2(10,10)],["heat_demand",Vector2(35,10)]]:
-		check(old.add_equipment(spec[0],spec[1],false),"prepare legacy flat thermal " + spec[0])
+		check(old.append_legacy_device(spec[0],spec[1],false),"prepare legacy flat thermal " + spec[0])
 	for pair in [[0,1],[1,2],[2,3],[2,4],[3,4],[4,5]]: old.links.append(old.connection_candidate(pair[0],pair[1]))
 	old.device(3).state.energy_mwhth = 0.625
 	# Pre-hierarchy world-generated electrical cables carried a blank grade tag.
@@ -395,6 +432,11 @@ func test_file_roundtrip_and_legacy() -> void:
 		if edge.get("carrier", "electricity_ac") == "electricity_ac": edge.grade_id = ""
 	var legacy: Dictionary = old.state(); legacy.schema = 5; legacy.model_version = 14
 	for storage_kind in old.Catalog.NEW_STORAGE_KINDS: legacy.templates.erase(storage_kind)
+	for material_kind in old.Catalog.Materials.KINDS: legacy.templates.erase(material_kind)
+	legacy.erase("material_energy")
+	legacy.templates.erase("co2_liquid_cycle_store")
+	for template_kind in legacy.templates.keys():
+		if not template_kind in old.SaveValidator.PRE_FUEL_KINDS: legacy.templates.erase(template_kind)
 	legacy.erase("stations"); legacy.erase("next_station_id"); legacy.erase("dimension_profile")
 	legacy.erase("tower_energy"); legacy.templates.erase("solar_tower_receiver"); legacy.templates.erase("molten_salt_store"); legacy.templates.erase("salt_steam_generator"); legacy.erase("rankine_energy"); legacy.templates.erase("steam_generator"); legacy.templates.erase("steam_turbine"); legacy.templates.erase("steam_condenser"); legacy.templates.erase("feedwater_pump"); legacy.erase("high_temp_energy"); legacy.templates.erase("parabolic_trough"); legacy.templates.erase("high_temp_store"); legacy.templates.erase("oil_water_exchanger"); legacy.erase("solar_energy"); legacy.templates.erase("solar_thermal"); legacy.erase("fuel_supply"); legacy.erase("fuel_energy"); legacy.templates.erase("fuel_boiler")
 	var legacy_path := path_for("schema5_flat"); write_fixture(legacy_path,legacy)
@@ -403,7 +445,7 @@ func test_file_roundtrip_and_legacy() -> void:
 	check(migrated.stations.is_empty() and migrated.devices.size() == 6,"legacy load does not silently group or duplicate devices")
 	check(migrated.devices.all(func(d): return not d.has("parent_station_id")),"legacy thermal devices remain valid base devices")
 	near(migrated.device(3).state.energy_mwhth,0.625,"legacy actual heat inventory preserved")
-	check(migrated.next_station_id >= 1000000 and migrated.state().schema == 13,"legacy load upgrades future saves and station counter")
+	check(migrated.next_station_id >= 1000000 and migrated.state().schema == CurrentWorldVersion.CURRENT_SAVE_SCHEMA,"legacy load upgrades future saves and station counter")
 	var legacy_frozen := frozen(migrated)
 	var optimizer := Optimization.new(); optimizer.host = migrated
 	var options := {"horizon_hours":1.0,"step_minutes":60.0,"load_multiplier":1.0,"strict_supply":false,"timeout_s":20}
@@ -417,8 +459,9 @@ func test_file_roundtrip_and_legacy() -> void:
 	check(optimizer.snapshot(options).has("error"),"nonempty heat grade on electrical cable remains invalid")
 	migrated.links[0].grade_id = ""
 	optimizer.free()
-	check(migrated.add_station(Vector2(55,-25)),"legacy flat thermal scene accepts new grouped station alongside old devices")
-	check(migrated.add_internal_device(SITE,"electric_boiler",Vector2.ZERO),"legacy and new grouped devices coexist")
+	check(not migrated.add_station(Vector2(55,-25)),"loaded legacy scene rejects new grouped station until migration")
+	check(migrated.append_legacy_station(Vector2(55,-25)),"historical grouped-station fixture coexists with flat old devices")
+	check(migrated.append_legacy_child(SITE,"electric_boiler",Vector2.ZERO),"legacy and new grouped devices coexist")
 	assert_ledgers(migrated,"legacy migration")
 
 func test_invalid_hierarchy_atomicity() -> void:

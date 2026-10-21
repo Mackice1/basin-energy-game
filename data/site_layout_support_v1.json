@@ -1,0 +1,1449 @@
+{
+  "spec_id": "site_layout_support_v1",
+  "spec_version": 1,
+  "site_geometry_profile": "reference_size_v1",
+  "scope_notes": [
+    "Finite implemented layout envelope, not manufacturer certification or engineering approval. Lower operational ratings retain the full installed hardware.",
+    "Pure geometry support only: no change to dispatch, efficiencies, inventory, pressure dynamics or thermal outlet guarantees.",
+    "Migration must preserve IDs, ratings, stocks, links and positions, and independently validate collisions before setting site_geometry_profile."
+  ],
+  "gas_boundary_note": "Full-stock static reference only. No hidden heel or pressure-dependent delivery claim. Stock remains0..capacity. Reference pressure is not a design/safety rating, does not create compression work or change formation enthalpy.",
+  "kinds": {
+    "thermal_store": {
+      "bounds": {
+        "capacity_mwhth": {
+          "min": 0.0,
+          "max": 4,
+          "min_exclusive": true,
+          "unit": "MWhth"
+        },
+        "charge_mwth": {
+          "min": 0.0,
+          "max": 2,
+          "min_exclusive": false,
+          "unit": "MWth"
+        },
+        "discharge_mwth": {
+          "min": 0.0,
+          "max": 2,
+          "min_exclusive": false,
+          "unit": "MWth"
+        }
+      },
+      "geometry": {
+        "method": "sensible",
+        "capacity_key": "capacity_mwhth",
+        "installed_capacity": 4.0,
+        "material": "water_liquid",
+        "density_kg_m3": 965.0,
+        "specific_heat_j_kg_k": 4180.0,
+        "cold_temperature_c": 60.0,
+        "hot_temperature_c": 90.0,
+        "material_volume_fraction": 0.8,
+        "inventory_volume_copies": 1,
+        "hardware": {
+          "shape": "parallel_cylinders",
+          "count": 2,
+          "internal_radius_m": 2.0,
+          "straight_length_m": 6.0
+        }
+      },
+      "notes": [
+        "Two parallel stratified water inventories; neither vessel is assumed to contain the entire system inventory. 20% freeboard is not another cycle loss.",
+        "NIST90C saturated-liquid density965.30; rounded down965. NIST Shomate cp60/90C about4182.17/4206.41; constant4180 is conservative."
+      ],
+      "sources": [
+        "https://www.nist.gov/document/nistir5078-tab1pdf",
+        "https://webbook.nist.gov/cgi/cbook.cgi?ID=C7732185&Mask=2"
+      ]
+    },
+    "high_temp_store": {
+      "bounds": {
+        "capacity_mwhth": {
+          "min": 0.0,
+          "max": 0.2,
+          "min_exclusive": true,
+          "unit": "MWhth"
+        },
+        "charge_mwth": {
+          "min": 0.0,
+          "max": 0.1,
+          "min_exclusive": false,
+          "unit": "MWth"
+        },
+        "discharge_mwth": {
+          "min": 0.0,
+          "max": 0.1,
+          "min_exclusive": false,
+          "unit": "MWth"
+        }
+      },
+      "geometry": {
+        "method": "enthalpy_liquid",
+        "capacity_key": "capacity_mwhth",
+        "installed_capacity": 0.2,
+        "material": "Therminol_66",
+        "density_kg_m3": 809.0,
+        "specific_enthalpy_difference_j_kg": 238000.0,
+        "cold_temperature_c": 200.0,
+        "hot_temperature_c": 300.0,
+        "material_volume_fraction": 0.8,
+        "inventory_volume_copies": 2,
+        "hardware": {
+          "shape": "two_tanks_derived",
+          "count": 2,
+          "height_to_diameter": 1.0
+        }
+      },
+      "notes": [
+        "Each of two tanks accommodates all working inventory, not two separate masses. Existing Therminol66 geometry coefficients retained."
+      ],
+      "sources": [
+        "docs/DIMENSION_REFERENCE_RESEARCH_ZH.md",
+        "docs/HIGH_TEMP_TROUGH_STAGE_V19_ZH.md"
+      ]
+    },
+    "molten_salt_store": {
+      "bounds": {
+        "capacity_mwhth": {
+          "min": 0.0,
+          "max": 0.5,
+          "min_exclusive": true,
+          "unit": "MWhth"
+        },
+        "charge_mwth": {
+          "min": 0.0,
+          "max": 0.8,
+          "min_exclusive": false,
+          "unit": "MWth"
+        },
+        "discharge_mwth": {
+          "min": 0.0,
+          "max": 0.1,
+          "min_exclusive": false,
+          "unit": "MWth"
+        }
+      },
+      "geometry": {
+        "method": "sensible",
+        "capacity_key": "capacity_mwhth",
+        "installed_capacity": 0.5,
+        "material": "Solar_Salt",
+        "density_kg_m3": 1800.0,
+        "specific_heat_j_kg_k": 1500.0,
+        "cold_temperature_c": 290.0,
+        "hot_temperature_c": 565.0,
+        "material_volume_fraction": 0.8,
+        "inventory_volume_copies": 2,
+        "hardware": {
+          "shape": "two_tanks_derived",
+          "count": 2,
+          "height_to_diameter": 1.0
+        }
+      },
+      "notes": [
+        "Existing fixed-grade teaching salt coefficients retained, not a newly certified salt composition. Two full-inventory tanks include20%freeboard each; mass counted once."
+      ],
+      "sources": [
+        "scripts/spatial_dimensions.gd",
+        "docs/TOWER_OPERATION_STAGE_V21_ZH.md"
+      ]
+    },
+    "solid_thermal_store": {
+      "bounds": {
+        "capacity_mwhth": {
+          "min": 0.0,
+          "max": 8,
+          "min_exclusive": true,
+          "unit": "MWhth"
+        },
+        "charge_mwth": {
+          "min": 0.0,
+          "max": 2,
+          "min_exclusive": false,
+          "unit": "MWth"
+        },
+        "discharge_mwth": {
+          "min": 0.0,
+          "max": 1,
+          "min_exclusive": false,
+          "unit": "MWth"
+        }
+      },
+      "geometry": {
+        "method": "sensible",
+        "capacity_key": "capacity_mwhth",
+        "installed_capacity": 8.0,
+        "material": "conventional_carbon_steel",
+        "density_kg_m3": 7850.0,
+        "specific_heat_j_kg_k": 450.0,
+        "cold_temperature_c": 60.0,
+        "hot_temperature_c": 90.0,
+        "material_volume_fraction": 0.8,
+        "inventory_volume_copies": 1,
+        "hardware": {
+          "shape": "solid_blocks",
+          "count": 2,
+          "net_block_dimensions_m": [
+            8.0,
+            5.0,
+            4.5
+          ]
+        }
+      },
+      "notes": [
+        "Specific heat450 and density7850 from LBL material record. Conservatively constant cp across60–90C; no claim that inventory sizing proves90C outlet delivery or heat exchanger duty.",
+        "20% volume reserved for heat-transfer channels and voids, outside insulation/frames additional. Full steel hardware remains at reduced usable ratings."
+      ],
+      "sources": [
+        "https://simulationresearch.lbl.gov/modelica/releases/v10.1.0/help/Buildings_HeatTransfer_Data_Solids.html",
+        "https://www.nrc.gov/reading-rm/doc-collections/nuregs/contract/cr7031/cr7031.pdf"
+      ]
+    },
+    "hydrogen_gas_store": {
+      "bounds": {
+        "capacity_kg": {
+          "min": 0.0,
+          "max": 1000,
+          "min_exclusive": true,
+          "unit": "kg H2"
+        },
+        "charge_kg_s": {
+          "min": 0.0,
+          "max": 0.02,
+          "min_exclusive": false,
+          "unit": "kg/s"
+        },
+        "discharge_kg_s": {
+          "min": 0.0,
+          "max": 0.02,
+          "min_exclusive": false,
+          "unit": "kg/s"
+        },
+        "compressor_electric_mw": {
+          "min": 0.0,
+          "max": 0.25,
+          "min_exclusive": false,
+          "unit": "MW AC"
+        }
+      },
+      "geometry": {
+        "method": "gas",
+        "capacity_key": "capacity_kg",
+        "installed_capacity": 1000,
+        "capacity_to_mass_kg": 1.0,
+        "species": "H2",
+        "reference_temperature_k": 298.15,
+        "reference_pressure_bar_abs": 200,
+        "sizing_density_kg_m3": 14,
+        "untracked_heel_kg": 0.0,
+        "hardware": {
+          "shape": "capsule_bank",
+          "count": 54,
+          "internal_radius_m": 0.4,
+          "straight_length_m": 2.25
+        }
+      },
+      "notes": [
+        "NBS20MPa density at298/300K14.49/14.40kg/m3, rounded down14. Static full-stock accommodation only.",
+        "54 gas cavities of internal diameter0.8m, straight length2.25m and two hemispherical ends; shell thickness/pressure safety not assessed."
+      ],
+      "sources": [
+        "https://www.nist.gov/document/nbs-technical-note-1079-2pdf"
+      ]
+    },
+    "hydrogen_storage_system": {
+      "bounds": {
+        "capacity_mwh": {
+          "min": 0.0,
+          "max": 20,
+          "min_exclusive": true,
+          "unit": "MWh H2 LHV"
+        },
+        "charge_mw": {
+          "min": 0.0,
+          "max": 2,
+          "min_exclusive": false,
+          "unit": "MW AC"
+        },
+        "discharge_mw": {
+          "min": 0.0,
+          "max": 1,
+          "min_exclusive": false,
+          "unit": "MW AC"
+        }
+      },
+      "geometry": {
+        "method": "gas",
+        "capacity_key": "capacity_mwh",
+        "installed_capacity": 20,
+        "capacity_to_mass_kg": 30.003000300030006,
+        "species": "H2",
+        "reference_temperature_k": 298.15,
+        "reference_pressure_bar_abs": 200,
+        "sizing_density_kg_m3": 14,
+        "untracked_heel_kg": 0.0,
+        "hardware": {
+          "shape": "capsule_bank",
+          "count": 5,
+          "internal_radius_m": 0.74,
+          "straight_length_m": 4.2
+        }
+      },
+      "notes": [
+        "Legacy aggregate LHV inventory uses exactly33.33kWh/kg; conversion is geometry metadata only, not a new material ledger or free initial charge.",
+        "Five cavities internal diameter1.48m, straight length4.2m, two hemispherical ends. Process skids must be separately fitted, not squeezed into gas volumes."
+      ],
+      "sources": [
+        "https://www.nist.gov/document/nbs-technical-note-1079-2pdf",
+        "scripts/device_catalog.gd"
+      ]
+    },
+    "nitrogen_supply_boundary": {
+      "bounds": {
+        "capacity_kg": {
+          "min": 0.0,
+          "max": 1000,
+          "min_exclusive": true,
+          "unit": "kg N2"
+        },
+        "max_outflow_kg_s": {
+          "min": 0.0,
+          "max": 0.1,
+          "min_exclusive": false,
+          "unit": "kg/s"
+        }
+      },
+      "geometry": {
+        "method": "gas",
+        "capacity_key": "capacity_kg",
+        "installed_capacity": 1000,
+        "capacity_to_mass_kg": 1.0,
+        "species": "N2",
+        "reference_temperature_k": 298.15,
+        "reference_pressure_bar_abs": 200,
+        "sizing_density_kg_m3": 210,
+        "untracked_heel_kg": 0.0,
+        "hardware": {
+          "shape": "capsule_bank",
+          "count": 120,
+          "internal_radius_m": 0.11,
+          "straight_length_m": 1.05
+        }
+      },
+      "notes": [
+        "NBS20MPa density at298/300K214.3/212.6kg/m3, conservatively rounded down210.",
+        "120 bottle cavities diameter0.22m, straight length1.05m, two hemispherical ends; no untracked residual mass."
+      ],
+      "sources": [
+        "https://www.nist.gov/document/nbs-technical-note-1079-2pdf"
+      ]
+    },
+    "ammonia_synthesis_station": {
+      "bounds": {
+        "capacity_kg": {
+          "min": 0.0,
+          "max": 200,
+          "min_exclusive": true,
+          "unit": "kg NH3 gas"
+        },
+        "max_product_kg_s": {
+          "min": 0.0,
+          "max": 0.05,
+          "min_exclusive": false,
+          "unit": "kg/s"
+        },
+        "rated_electric_mw": {
+          "min": 0.0,
+          "max": 0.2,
+          "min_exclusive": false,
+          "unit": "MW AC"
+        },
+        "heater_electric_mw": {
+          "min": 0.0,
+          "max": 0.15,
+          "min_exclusive": false,
+          "unit": "MW AC"
+        },
+        "heat_rejection_mwth": {
+          "min": 0.0,
+          "max": 0.4,
+          "min_exclusive": false,
+          "unit": "MWth"
+        }
+      },
+      "geometry": {
+        "method": "gas",
+        "capacity_key": "capacity_kg",
+        "installed_capacity": 200,
+        "capacity_to_mass_kg": 1.0,
+        "species": "NH3",
+        "reference_temperature_k": 298.15,
+        "reference_pressure_bar_abs": 5,
+        "sizing_density_kg_m3": 3.3,
+        "untracked_heel_kg": 0.0,
+        "hardware": {
+          "shape": "capsule_bank",
+          "count": 4,
+          "internal_radius_m": 0.8,
+          "straight_length_m": 7
+        }
+      },
+      "notes": [
+        "NIST virial approximation at25C5bar about3.633kg/m3; conservative3.3 sizing allowance, not certified global bound.",
+        "NIST Antoine saturation about9.944bar at25C; reference5bar remains gaseous. Four internal1.6m-diameter vessels, straight height7m plus hemispherical heads. Reaction columns are not product storage."
+      ],
+      "sources": [
+        "https://www.nist.gov/pml/sensor-science/fluid-metrology/database-thermophysical-properties-gases-used-semiconductor-1",
+        "https://webbook.nist.gov/cgi/cbook.cgi?ID=C7664417&Mask=14"
+      ]
+    },
+    "co2_supply_boundary": {
+      "bounds": {
+        "capacity_kg": {
+          "min": 0.0,
+          "max": 1000,
+          "min_exclusive": true,
+          "unit": "kg CO2"
+        },
+        "max_outflow_kg_s": {
+          "min": 0.0,
+          "max": 0.1,
+          "min_exclusive": false,
+          "unit": "kg/s"
+        }
+      },
+      "geometry": {
+        "method": "gas",
+        "capacity_key": "capacity_kg",
+        "installed_capacity": 1000,
+        "capacity_to_mass_kg": 1.0,
+        "species": "CO2",
+        "reference_temperature_k": 298.15,
+        "reference_pressure_bar_abs": 1.01325,
+        "sizing_density_kg_m3": 1.75,
+        "untracked_heel_kg": 0.0,
+        "hardware": {
+          "shape": "ellipsoid",
+          "count": 1,
+          "internal_diameters_m": [
+            17.0,
+            10.0,
+            8.4
+          ],
+          "usable_volume_fraction": 0.8
+        }
+      },
+      "notes": [
+        "Near-atmospheric25C ideal density is1.798kg/m3;1.75 is an explicit conservative teaching density, not high-pressureCO2 or liquidCO2.",
+        "Flexible holder internal ellipsoid17x8.4x10m,80% usable envelope; low-pressure gas feed is not CO2 energy storage."
+      ],
+      "sources": [
+        "docs/phase2/CHEMICAL_PROCESS_SOURCE_REVIEW.md"
+      ]
+    },
+    "battery": {
+      "bounds": {
+        "capacity_mwh": {
+          "min": 0.0,
+          "max": 20.06,
+          "min_exclusive": true,
+          "unit": "MWh"
+        },
+        "charge_mw": {
+          "min": 0.0,
+          "max": 10.0,
+          "min_exclusive": false,
+          "unit": "MW"
+        },
+        "discharge_mw": {
+          "min": 0.0,
+          "max": 10.0,
+          "min_exclusive": false,
+          "unit": "MW"
+        }
+      },
+      "geometry": {
+        "method": "bounded_existing_layout",
+        "scope": "finite_existing_reference_layout",
+        "hardware_module_count_cap": 4,
+        "capacity_proof_complete": false
+      },
+      "notes": [
+        "Only the current implemented finite module combination is supported. This envelope is not manufacturer certification, and does not resolve missing vessel/thermal design evidence.",
+        "Operational efficiency, losses, initial SOC/inventory and demand scheduling retain existing physical validation, without new layout restrictions."
+      ],
+      "sources": [
+        "docs/phase2/GEOMETRY_CAPACITY_AUDIT_39.md",
+        "scripts/spatial_dimensions.gd"
+      ]
+    },
+    "battery_flow": {
+      "bounds": {
+        "capacity_mwh": {
+          "min": 0.0,
+          "max": 12.0,
+          "min_exclusive": true,
+          "unit": "MWh"
+        },
+        "charge_mw": {
+          "min": 0.0,
+          "max": 2.0,
+          "min_exclusive": false,
+          "unit": "MW"
+        },
+        "discharge_mw": {
+          "min": 0.0,
+          "max": 2.0,
+          "min_exclusive": false,
+          "unit": "MW"
+        }
+      },
+      "geometry": {
+        "method": "bounded_existing_layout",
+        "scope": "finite_existing_reference_layout",
+        "hardware_module_count_cap": 2,
+        "capacity_proof_complete": false,
+        "reference_submodules_per_module": 6,
+        "reference_submodule_energy_mwh_ac": 2,
+        "reference_submodule_power_mw_ac": 0.334,
+        "reference_submodule_dimensions_m": [
+          12.192,
+          5.425,
+          4.902
+        ],
+        "dimensions_axis_order": "x,height,z",
+        "reference_plant_energy_mwh_ac": 12,
+        "reference_plant_power_mw_ac": 2,
+        "installed_reference_energy_mwh_ac": 24,
+        "installed_reference_power_mw_ac": 4
+      },
+      "notes": [
+        "Only the current implemented finite module combination is supported. This envelope is not manufacturer certification, and does not resolve missing vessel/thermal design evidence.",
+        "Operational efficiency, losses, initial SOC/inventory and demand scheduling retain existing physical validation, without new layout restrictions.",
+        "Sumitomo 2025.10 catalog: six 2 MWh AC / 334 kW AC forty-foot submodules form a 12 MWh AC / 2 MW reference arrangement. This implementation retains two complete six-submodule sites; manufacturer AC energy is NOT equated with the model internal 12 MWh SOC.",
+        "Each submodule reference dimension is x=12.192, height=5.425, z=4.902 m. Existing finite implementation capacity/power bounds and dispatch efficiencies are unchanged."
+      ],
+      "sources": [
+        "docs/phase2/GEOMETRY_CAPACITY_AUDIT_39.md",
+        "scripts/spatial_dimensions.gd",
+        "https://sumitomoelectric.com/sites/default/files/2025-09/download_documents/RFB_Catalog_EN.pdf"
+      ]
+    },
+    "battery_sodium": {
+      "bounds": {
+        "capacity_mwh": {
+          "min": 0.0,
+          "max": 6.0,
+          "min_exclusive": true,
+          "unit": "MWh"
+        },
+        "charge_mw": {
+          "min": 0.0,
+          "max": 2.0,
+          "min_exclusive": false,
+          "unit": "MW"
+        },
+        "discharge_mw": {
+          "min": 0.0,
+          "max": 2.0,
+          "min_exclusive": false,
+          "unit": "MW"
+        }
+      },
+      "geometry": {
+        "method": "bounded_existing_layout",
+        "scope": "finite_existing_reference_layout",
+        "hardware_module_count_cap": 3,
+        "capacity_proof_complete": false,
+        "reference_module_energy_mwh": 2.5,
+        "reference_module_power_mw": 1.25,
+        "reference_container_dimensions_m": [
+          7.12,
+          2.896,
+          2.8
+        ],
+        "reference_unit_dimensions_m": [
+          9,
+          3.5,
+          4
+        ],
+        "dimensions_axis_order": "x,height,z",
+        "installed_reference_energy_mwh": 7.5,
+        "installed_reference_power_mw": 3.75,
+        "usable_energy_allocation_fraction": 0.8
+      },
+      "notes": [
+        "Only the current implemented finite module combination is supported. This envelope is not manufacturer certification, and does not resolve missing vessel/thermal design evidence.",
+        "Operational efficiency, losses, initial SOC/inventory and demand scheduling retain existing physical validation, without new layout restrictions.",
+        "Quantum N2.5 manufacturer PDF supplies nominal 2.5 MWh / 1.25 MW and 7.120 x 2.896 x 2.800 m container dimensions. Three complete units provide 7.5 MWh / 3.75 MW nameplate reference; this implementation allocates 6 MWh internal and 2 MW AC, not a reproduction of the vendor control or performance.",
+        "9 x 3.5 x 4 m unit envelope includes original auxiliary/base allowances; capacity reduction does not remove a physical container."
+      ],
+      "sources": [
+        "docs/phase2/GEOMETRY_CAPACITY_AUDIT_39.md",
+        "scripts/spatial_dimensions.gd",
+        "https://zttek.tech/wp-content/uploads/2018/10/Datasheet_Quantum-N2.5.pdf"
+      ]
+    },
+    "caes_aboveground": {
+      "bounds": {
+        "capacity_mwh": {
+          "min": 0.0,
+          "max": 0.25,
+          "min_exclusive": true,
+          "unit": "MWh"
+        },
+        "charge_mw": {
+          "min": 0.0,
+          "max": 0.1,
+          "min_exclusive": false,
+          "unit": "MW"
+        },
+        "discharge_mw": {
+          "min": 0.0,
+          "max": 0.1,
+          "min_exclusive": false,
+          "unit": "MW"
+        },
+        "discharge_efficiency": {
+          "min": 0.0,
+          "max": 1.0,
+          "min_exclusive": true,
+          "unit": "fraction"
+        }
+      },
+      "geometry": {
+        "method": "compressed_air_static_screen",
+        "scope": "necessary_static_energy_volume_screen",
+        "capacity_key": "capacity_mwh",
+        "installed_capacity": 0.25,
+        "screening_reference_discharge_efficiency": 0.7,
+        "hardware_module_count_cap": 1,
+        "capacity_proof_complete": false,
+        "pressure_is_simulated": false,
+        "soc_is_pressure_or_liquid_level": false,
+        "external_heat_credit_mwh": 0.0,
+        "hardware": {
+          "shape": "parallel_cylinders",
+          "count": 4,
+          "internal_radius_m": 0.8,
+          "straight_length_m": 13.0,
+          "end_head_volume_counted": false
+        },
+        "reference_pressure_bar_abs": 50.0,
+        "reference_temperature_k": 298.15,
+        "ambient_pressure_bar_abs": 1.0,
+        "air_heat_capacity_ratio": 1.4,
+        "ideal_air_gas_constant_j_kg_k": 287.05,
+        "material_volume_fraction": 1.0,
+        "outer_radius_m": 0.9,
+        "outer_total_length_m": 15.0
+      },
+      "notes": [
+        "Four net straight-cylinder cavities of radius0.80m and length13m fit the existing outer radius0.90m / total length15m shells. No head volume is credited; these allowances are not pressure-wall or safety design.",
+        "50bar absolute / 298.15K is a fixed teaching reference ceiling, not actual SOC pressure, guaranteed working pressure, a calibrated EOS or a new mass inventory. Aboveground studies use tens-to-hundreds of bar, but do not certify this authored tank.",
+        "The coupled screen compares capacity_mwh times actual discharge_efficiency with ideal adiabatic rigid-tank blowdown through a reversible expander to1bar, without reheat. Isothermal closed-system availability is reported separately and is not used as guaranteed electric yield. No heat recovery or external fuel credit is added.",
+        "Passing is a necessary static plausibility check, not achievable MW/RTE, expander map, heat-transfer or pressure-vessel certification. Existing aggregate charge/discharge losses remain the only runtime energy law; full-SOC internal MWh is not the physical exergy of the entire bank filled at reference pressure."
+      ],
+      "sources": [
+        "https://www.grc.nasa.gov/www/k-12/airplane/isentrop.html",
+        "https://www.grc.nasa.gov/www/k-12/airplane/specheat.html",
+        "https://doi.org/10.1016/j.enconman.2024.119073",
+        "https://www.sciencedirect.com/science/article/pii/S0196890421007123",
+        "https://pmc.ncbi.nlm.nih.gov/articles/PMC8111675/"
+      ]
+    },
+    "co2_liquid_cycle_store": {
+      "bounds": {
+        "capacity_mwh": {
+          "min": 0.0,
+          "max": 794.24,
+          "min_exclusive": true,
+          "unit": "MWh"
+        },
+        "charge_mw": {
+          "min": 0.0,
+          "max": 146.0,
+          "min_exclusive": false,
+          "unit": "MW"
+        },
+        "discharge_mw": {
+          "min": 0.0,
+          "max": 100.0,
+          "min_exclusive": false,
+          "unit": "MW"
+        }
+      },
+      "geometry": {
+        "method": "bounded_existing_layout",
+        "scope": "finite_existing_reference_layout",
+        "hardware_module_count_cap": 1,
+        "capacity_proof_complete": false
+      },
+      "notes": [
+        "Only the current implemented finite module combination is supported. This envelope is not manufacturer certification, and does not resolve missing vessel/thermal design evidence.",
+        "Operational efficiency, losses, initial SOC/inventory and demand scheduling retain existing physical validation, without new layout restrictions."
+      ],
+      "sources": [
+        "docs/phase2/GEOMETRY_CAPACITY_AUDIT_39.md",
+        "scripts/spatial_dimensions.gd"
+      ]
+    },
+    "collector_substation": {
+      "bounds": {
+        "capacity_mw": {
+          "min": 0.0,
+          "max": 200.0,
+          "min_exclusive": false,
+          "unit": "MW"
+        }
+      },
+      "geometry": {
+        "method": "bounded_existing_layout",
+        "scope": "finite_existing_reference_layout",
+        "hardware_module_count_cap": 1,
+        "capacity_proof_complete": false
+      },
+      "notes": [
+        "Only the current implemented finite module combination is supported. This envelope is not manufacturer certification, and does not resolve missing vessel/thermal design evidence.",
+        "Operational efficiency, losses, initial SOC/inventory and demand scheduling retain existing physical validation, without new layout restrictions."
+      ],
+      "sources": [
+        "docs/phase2/GEOMETRY_CAPACITY_AUDIT_39.md",
+        "scripts/spatial_dimensions.gd"
+      ]
+    },
+    "electric_boiler": {
+      "bounds": {
+        "rated_electric_mw": {
+          "min": 0.0,
+          "max": 2.0,
+          "min_exclusive": false,
+          "unit": "MW"
+        }
+      },
+      "geometry": {
+        "method": "bounded_existing_layout",
+        "scope": "finite_existing_reference_layout",
+        "hardware_module_count_cap": 1,
+        "capacity_proof_complete": false
+      },
+      "notes": [
+        "Only the current implemented finite module combination is supported. This envelope is not manufacturer certification, and does not resolve missing vessel/thermal design evidence.",
+        "Operational efficiency, losses, initial SOC/inventory and demand scheduling retain existing physical validation, without new layout restrictions."
+      ],
+      "sources": [
+        "docs/phase2/GEOMETRY_CAPACITY_AUDIT_39.md",
+        "scripts/spatial_dimensions.gd"
+      ]
+    },
+    "electrolyzer_station": {
+      "bounds": {
+        "rated_electric_mw": {
+          "min": 0.0,
+          "max": 2.0,
+          "min_exclusive": false,
+          "unit": "MW"
+        },
+        "max_hydrogen_kg_s": {
+          "min": 0.0,
+          "max": 0.02,
+          "min_exclusive": false,
+          "unit": "kg/s"
+        }
+      },
+      "geometry": {
+        "method": "bounded_existing_layout",
+        "scope": "finite_existing_reference_layout",
+        "hardware_module_count_cap": 1,
+        "capacity_proof_complete": false
+      },
+      "notes": [
+        "Only the current implemented finite module combination is supported. This envelope is not manufacturer certification, and does not resolve missing vessel/thermal design evidence.",
+        "Operational efficiency, losses, initial SOC/inventory and demand scheduling retain existing physical validation, without new layout restrictions."
+      ],
+      "sources": [
+        "docs/phase2/GEOMETRY_CAPACITY_AUDIT_39.md",
+        "scripts/spatial_dimensions.gd"
+      ]
+    },
+    "feedwater_pump": {
+      "bounds": {
+        "mass_flow_capacity_kg_s": {
+          "min": 0.0,
+          "max": 0.05,
+          "min_exclusive": false,
+          "unit": "kg/s"
+        }
+      },
+      "geometry": {
+        "method": "bounded_existing_layout",
+        "scope": "finite_existing_reference_layout",
+        "hardware_module_count_cap": 1,
+        "capacity_proof_complete": false
+      },
+      "notes": [
+        "Only the current implemented finite module combination is supported. This envelope is not manufacturer certification, and does not resolve missing vessel/thermal design evidence.",
+        "Operational efficiency, losses, initial SOC/inventory and demand scheduling retain existing physical validation, without new layout restrictions."
+      ],
+      "sources": [
+        "docs/phase2/GEOMETRY_CAPACITY_AUDIT_39.md",
+        "scripts/spatial_dimensions.gd"
+      ]
+    },
+    "fuel_boiler": {
+      "bounds": {
+        "rated_fuel_mw": {
+          "min": 0.0,
+          "max": 2.0,
+          "min_exclusive": false,
+          "unit": "MW"
+        }
+      },
+      "geometry": {
+        "method": "bounded_existing_layout",
+        "scope": "finite_existing_reference_layout",
+        "hardware_module_count_cap": 1,
+        "capacity_proof_complete": false
+      },
+      "notes": [
+        "Only the current implemented finite module combination is supported. This envelope is not manufacturer certification, and does not resolve missing vessel/thermal design evidence.",
+        "Operational efficiency, losses, initial SOC/inventory and demand scheduling retain existing physical validation, without new layout restrictions."
+      ],
+      "sources": [
+        "docs/phase2/GEOMETRY_CAPACITY_AUDIT_39.md",
+        "scripts/spatial_dimensions.gd"
+      ]
+    },
+    "fuel_cell_station": {
+      "bounds": {
+        "rated_electric_mw": {
+          "min": 0.0,
+          "max": 1.0,
+          "min_exclusive": false,
+          "unit": "MW"
+        },
+        "max_hydrogen_kg_s": {
+          "min": 0.0,
+          "max": 0.02,
+          "min_exclusive": false,
+          "unit": "kg/s"
+        }
+      },
+      "geometry": {
+        "method": "bounded_existing_layout",
+        "scope": "finite_existing_reference_layout",
+        "hardware_module_count_cap": 1,
+        "capacity_proof_complete": false
+      },
+      "notes": [
+        "Only the current implemented finite module combination is supported. This envelope is not manufacturer certification, and does not resolve missing vessel/thermal design evidence.",
+        "Operational efficiency, losses, initial SOC/inventory and demand scheduling retain existing physical validation, without new layout restrictions."
+      ],
+      "sources": [
+        "docs/phase2/GEOMETRY_CAPACITY_AUDIT_39.md",
+        "scripts/spatial_dimensions.gd"
+      ]
+    },
+    "heat_demand": {
+      "bounds": {},
+      "geometry": {
+        "method": "bounded_existing_layout",
+        "scope": "external_service_marker",
+        "hardware_module_count_cap": 0,
+        "capacity_proof_complete": false
+      },
+      "notes": [
+        "Only the current implemented finite module combination is supported. This envelope is not manufacturer certification, and does not resolve missing vessel/thermal design evidence.",
+        "Operational efficiency, losses, initial SOC/inventory and demand scheduling retain existing physical validation, without new layout restrictions."
+      ],
+      "sources": [
+        "docs/phase2/GEOMETRY_CAPACITY_AUDIT_39.md",
+        "scripts/spatial_dimensions.gd"
+      ]
+    },
+    "heat_exchanger": {
+      "bounds": {
+        "capacity_mwth": {
+          "min": 0.0,
+          "max": 2.0,
+          "min_exclusive": false,
+          "unit": "MWth"
+        }
+      },
+      "geometry": {
+        "method": "bounded_existing_layout",
+        "scope": "finite_existing_reference_layout",
+        "hardware_module_count_cap": 1,
+        "capacity_proof_complete": false
+      },
+      "notes": [
+        "Only the current implemented finite module combination is supported. This envelope is not manufacturer certification, and does not resolve missing vessel/thermal design evidence.",
+        "Operational efficiency, losses, initial SOC/inventory and demand scheduling retain existing physical validation, without new layout restrictions."
+      ],
+      "sources": [
+        "docs/phase2/GEOMETRY_CAPACITY_AUDIT_39.md",
+        "scripts/spatial_dimensions.gd"
+      ]
+    },
+    "hydrogen_liquid_store": {
+      "bounds": {
+        "capacity_kg": {
+          "min": 0.0,
+          "max": 1000.0,
+          "min_exclusive": true,
+          "unit": "kg"
+        },
+        "charge_kg_s": {
+          "min": 0.0,
+          "max": 0.05,
+          "min_exclusive": false,
+          "unit": "kg/s"
+        },
+        "discharge_kg_s": {
+          "min": 0.0,
+          "max": 0.05,
+          "min_exclusive": false,
+          "unit": "kg/s"
+        },
+        "liquefier_electric_mw": {
+          "min": 0.0,
+          "max": 1.0,
+          "min_exclusive": false,
+          "unit": "MW"
+        },
+        "discharge_aux_electric_mw": {
+          "min": 0.0,
+          "max": 0.02,
+          "min_exclusive": false,
+          "unit": "MW"
+        },
+        "heat_rejection_mwth": {
+          "min": 0.0,
+          "max": 1.0,
+          "min_exclusive": false,
+          "unit": "MWth"
+        },
+        "ambient_vaporizer_mwth": {
+          "min": 0.0,
+          "max": 0.1,
+          "min_exclusive": false,
+          "unit": "MWth"
+        }
+      },
+      "geometry": {
+        "method": "bounded_existing_layout",
+        "scope": "finite_existing_reference_layout",
+        "hardware_module_count_cap": 1,
+        "capacity_proof_complete": false
+      },
+      "notes": [
+        "Only the current implemented finite module combination is supported. This envelope is not manufacturer certification, and does not resolve missing vessel/thermal design evidence.",
+        "Operational efficiency, losses, initial SOC/inventory and demand scheduling retain existing physical validation, without new layout restrictions."
+      ],
+      "sources": [
+        "docs/phase2/GEOMETRY_CAPACITY_AUDIT_39.md",
+        "scripts/spatial_dimensions.gd"
+      ]
+    },
+    "hydrogen_metal_hydride_store": {
+      "bounds": {
+        "dry_host_mass_kg": {
+          "min": 0.0,
+          "max": 10000.0,
+          "min_exclusive": true,
+          "unit": "kg"
+        },
+        "charge_kg_s": {
+          "min": 0.0,
+          "max": 0.02,
+          "min_exclusive": false,
+          "unit": "kg/s"
+        },
+        "discharge_kg_s": {
+          "min": 0.0,
+          "max": 0.02,
+          "min_exclusive": false,
+          "unit": "kg/s"
+        },
+        "charge_aux_electric_mw": {
+          "min": 0.0,
+          "max": 0.02,
+          "min_exclusive": false,
+          "unit": "MW"
+        },
+        "discharge_heater_electric_mw": {
+          "min": 0.0,
+          "max": 0.4,
+          "min_exclusive": false,
+          "unit": "MW"
+        },
+        "heat_rejection_mwth": {
+          "min": 0.0,
+          "max": 0.4,
+          "min_exclusive": false,
+          "unit": "MWth"
+        }
+      },
+      "geometry": {
+        "method": "bounded_existing_layout",
+        "scope": "finite_existing_reference_layout",
+        "hardware_module_count_cap": 1,
+        "capacity_proof_complete": false
+      },
+      "notes": [
+        "Only the current implemented finite module combination is supported. This envelope is not manufacturer certification, and does not resolve missing vessel/thermal design evidence.",
+        "Operational efficiency, losses, initial SOC/inventory and demand scheduling retain existing physical validation, without new layout restrictions."
+      ],
+      "sources": [
+        "docs/phase2/GEOMETRY_CAPACITY_AUDIT_39.md",
+        "scripts/spatial_dimensions.gd"
+      ]
+    },
+    "liquid_air_store": {
+      "bounds": {
+        "capacity_mwh": {
+          "min": 0.0,
+          "max": 8.0,
+          "min_exclusive": true,
+          "unit": "MWh"
+        },
+        "charge_mw": {
+          "min": 0.0,
+          "max": 2.0,
+          "min_exclusive": false,
+          "unit": "MW"
+        },
+        "discharge_mw": {
+          "min": 0.0,
+          "max": 1.0,
+          "min_exclusive": false,
+          "unit": "MW"
+        },
+        "discharge_efficiency": {
+          "min": 0.0,
+          "max": 1.0,
+          "min_exclusive": true,
+          "unit": "fraction"
+        }
+      },
+      "geometry": {
+        "method": "liquid_air_static_screen",
+        "scope": "necessary_static_energy_volume_screen",
+        "capacity_key": "capacity_mwh",
+        "installed_capacity": 8.0,
+        "screening_reference_discharge_efficiency": 0.65,
+        "hardware_module_count_cap": 1,
+        "capacity_proof_complete": false,
+        "pressure_is_simulated": false,
+        "soc_is_pressure_or_liquid_level": false,
+        "external_heat_credit_mwh": 0.0,
+        "hardware": {
+          "shape": "parallel_cylinders",
+          "count": 2,
+          "internal_radius_m": 1.7,
+          "straight_length_m": 7.0,
+          "end_head_volume_counted": false
+        },
+        "reference_pressure_bar_abs": 1.0,
+        "reference_temperature_k": 78.74,
+        "density_kg_m3": 872.08,
+        "material_volume_fraction": 0.8,
+        "net_specific_output_screen_kj_kg": 300.0,
+        "literature_modeled_net_output_kj_kg": 390.0,
+        "outer_radius_m": 2.0,
+        "outer_total_height_m": 9.6
+      },
+      "notes": [
+        "Two internal straight cylinders radius1.70m / height7m, no head-volume credit,80% fill. Existing radius2m / height9.6m outer shells provide0.30m radial and2.60m total axial allowance; no claim of certified insulation or pressure design.",
+        "Guizzi et al.2015 standalone internally heat/cold-recovered LAES model: Table3 point1R gives78.74K,0.100MPa absolute,872.08kg/m3. Section3.3 estimates390kJ/kg effective net discharge work. This is modeled system work, not liquid exergy or observed OEM yield.",
+        "300kJ/kg net AC is an explicit lower teaching screening assumption,23.1% below that modeled estimate. It is NOT a proven conservative performance floor. It relies on internal charge-derived heat/cold recovery and excludes external waste heat.",
+        "Compare capacity_mwh times actual discharge_efficiency with filled liquid mass times300kJ/kg. Internal SOC MWh is not AC output or measured liquid level. No new runtime liquid mass, free heat or second energy inventory is introduced.",
+        "Passing only establishes finite liquid-volume plausibility. Compression/liquefier/expander power, regenerator and hot/cold-store mass, insulation, boiloff and detailed plant performance remain uncalibrated. Existing aggregate efficiencies and standing losses are unchanged."
+      ],
+      "sources": [
+        "https://doi.org/10.1016/j.energy.2015.10.030",
+        "https://www.researchgate.net/publication/284251709_Thermodynamic_analysis_of_a_liquid_air_energy_storage_system",
+        "https://art.torvergata.it/handle/2108/127241"
+      ]
+    },
+    "load": {
+      "bounds": {},
+      "geometry": {
+        "method": "bounded_existing_layout",
+        "scope": "external_service_marker",
+        "hardware_module_count_cap": 0,
+        "capacity_proof_complete": false
+      },
+      "notes": [
+        "Only the current implemented finite module combination is supported. This envelope is not manufacturer certification, and does not resolve missing vessel/thermal design evidence.",
+        "Operational efficiency, losses, initial SOC/inventory and demand scheduling retain existing physical validation, without new layout restrictions."
+      ],
+      "sources": [
+        "docs/phase2/GEOMETRY_CAPACITY_AUDIT_39.md",
+        "scripts/spatial_dimensions.gd"
+      ]
+    },
+    "methanol_synthesis_station": {
+      "bounds": {
+        "capacity_kg": {
+          "min": 0.0,
+          "max": 1000.0,
+          "min_exclusive": true,
+          "unit": "kg"
+        },
+        "max_product_kg_s": {
+          "min": 0.0,
+          "max": 0.05,
+          "min_exclusive": false,
+          "unit": "kg/s"
+        },
+        "rated_electric_mw": {
+          "min": 0.0,
+          "max": 0.2,
+          "min_exclusive": false,
+          "unit": "MW"
+        },
+        "heater_electric_mw": {
+          "min": 0.0,
+          "max": 0.15,
+          "min_exclusive": false,
+          "unit": "MW"
+        },
+        "heat_rejection_mwth": {
+          "min": 0.0,
+          "max": 0.4,
+          "min_exclusive": false,
+          "unit": "MWth"
+        }
+      },
+      "geometry": {
+        "method": "bounded_existing_layout",
+        "scope": "finite_existing_reference_layout",
+        "hardware_module_count_cap": 1,
+        "capacity_proof_complete": false
+      },
+      "notes": [
+        "Only the current implemented finite module combination is supported. This envelope is not manufacturer certification, and does not resolve missing vessel/thermal design evidence.",
+        "Operational efficiency, losses, initial SOC/inventory and demand scheduling retain existing physical validation, without new layout restrictions."
+      ],
+      "sources": [
+        "docs/phase2/GEOMETRY_CAPACITY_AUDIT_39.md",
+        "scripts/spatial_dimensions.gd"
+      ]
+    },
+    "oil_water_exchanger": {
+      "bounds": {
+        "capacity_mwth": {
+          "min": 0.0,
+          "max": 0.1,
+          "min_exclusive": false,
+          "unit": "MWth"
+        }
+      },
+      "geometry": {
+        "method": "bounded_existing_layout",
+        "scope": "finite_existing_reference_layout",
+        "hardware_module_count_cap": 1,
+        "capacity_proof_complete": false
+      },
+      "notes": [
+        "Only the current implemented finite module combination is supported. This envelope is not manufacturer certification, and does not resolve missing vessel/thermal design evidence.",
+        "Operational efficiency, losses, initial SOC/inventory and demand scheduling retain existing physical validation, without new layout restrictions."
+      ],
+      "sources": [
+        "docs/phase2/GEOMETRY_CAPACITY_AUDIT_39.md",
+        "scripts/spatial_dimensions.gd"
+      ]
+    },
+    "parabolic_trough": {
+      "bounds": {
+        "aperture_area_m2": {
+          "min": 0.0,
+          "max": 69.24,
+          "min_exclusive": true,
+          "unit": "m2"
+        }
+      },
+      "geometry": {
+        "method": "bounded_existing_layout",
+        "scope": "finite_existing_reference_layout",
+        "hardware_module_count_cap": 1,
+        "capacity_proof_complete": false
+      },
+      "notes": [
+        "Only the current implemented finite module combination is supported. This envelope is not manufacturer certification, and does not resolve missing vessel/thermal design evidence.",
+        "Operational efficiency, losses, initial SOC/inventory and demand scheduling retain existing physical validation, without new layout restrictions."
+      ],
+      "sources": [
+        "docs/phase2/GEOMETRY_CAPACITY_AUDIT_39.md",
+        "scripts/spatial_dimensions.gd"
+      ]
+    },
+    "pv": {
+      "bounds": {
+        "dc_capacity_mw": {
+          "min": 0.0,
+          "max": 1.2,
+          "min_exclusive": true,
+          "unit": "MW"
+        },
+        "inverter_capacity_mw": {
+          "min": 0.0,
+          "max": 1.0,
+          "min_exclusive": false,
+          "unit": "MW"
+        }
+      },
+      "geometry": {
+        "method": "bounded_existing_layout",
+        "scope": "finite_existing_reference_layout",
+        "hardware_module_count_cap": 1,
+        "capacity_proof_complete": false
+      },
+      "notes": [
+        "Only the current implemented finite module combination is supported. This envelope is not manufacturer certification, and does not resolve missing vessel/thermal design evidence.",
+        "Operational efficiency, losses, initial SOC/inventory and demand scheduling retain existing physical validation, without new layout restrictions."
+      ],
+      "sources": [
+        "docs/phase2/GEOMETRY_CAPACITY_AUDIT_39.md",
+        "scripts/spatial_dimensions.gd"
+      ]
+    },
+    "salt_steam_generator": {
+      "bounds": {
+        "capacity_mwth": {
+          "min": 0.0,
+          "max": 0.1,
+          "min_exclusive": false,
+          "unit": "MWth"
+        }
+      },
+      "geometry": {
+        "method": "bounded_existing_layout",
+        "scope": "finite_existing_reference_layout",
+        "hardware_module_count_cap": 1,
+        "capacity_proof_complete": false
+      },
+      "notes": [
+        "Only the current implemented finite module combination is supported. This envelope is not manufacturer certification, and does not resolve missing vessel/thermal design evidence.",
+        "Operational efficiency, losses, initial SOC/inventory and demand scheduling retain existing physical validation, without new layout restrictions."
+      ],
+      "sources": [
+        "docs/phase2/GEOMETRY_CAPACITY_AUDIT_39.md",
+        "scripts/spatial_dimensions.gd"
+      ]
+    },
+    "solar_thermal": {
+      "bounds": {
+        "absorber_area_m2": {
+          "min": 0.0,
+          "max": 30.3,
+          "min_exclusive": true,
+          "unit": "m2"
+        }
+      },
+      "geometry": {
+        "method": "bounded_existing_layout",
+        "scope": "finite_existing_reference_layout",
+        "hardware_module_count_cap": 1,
+        "capacity_proof_complete": false
+      },
+      "notes": [
+        "Only the current implemented finite module combination is supported. This envelope is not manufacturer certification, and does not resolve missing vessel/thermal design evidence.",
+        "Operational efficiency, losses, initial SOC/inventory and demand scheduling retain existing physical validation, without new layout restrictions."
+      ],
+      "sources": [
+        "docs/phase2/GEOMETRY_CAPACITY_AUDIT_39.md",
+        "scripts/spatial_dimensions.gd"
+      ]
+    },
+    "solar_tower_receiver": {
+      "bounds": {
+        "mirror_area_m2": {
+          "min": 0.0,
+          "max": 1600.0,
+          "min_exclusive": false,
+          "unit": "m2"
+        }
+      },
+      "geometry": {
+        "method": "bounded_existing_layout",
+        "scope": "finite_existing_reference_layout",
+        "hardware_module_count_cap": 1,
+        "capacity_proof_complete": false
+      },
+      "notes": [
+        "Only the current implemented finite module combination is supported. This envelope is not manufacturer certification, and does not resolve missing vessel/thermal design evidence.",
+        "Operational efficiency, losses, initial SOC/inventory and demand scheduling retain existing physical validation, without new layout restrictions."
+      ],
+      "sources": [
+        "docs/phase2/GEOMETRY_CAPACITY_AUDIT_39.md",
+        "scripts/spatial_dimensions.gd"
+      ]
+    },
+    "station": {
+      "bounds": {
+        "capacity_mw": {
+          "min": 0.0,
+          "max": 16.0,
+          "min_exclusive": false,
+          "unit": "MW"
+        }
+      },
+      "geometry": {
+        "method": "bounded_existing_layout",
+        "scope": "finite_existing_reference_layout",
+        "hardware_module_count_cap": 8,
+        "capacity_proof_complete": false
+      },
+      "notes": [
+        "Only the current implemented finite module combination is supported. This envelope is not manufacturer certification, and does not resolve missing vessel/thermal design evidence.",
+        "Operational efficiency, losses, initial SOC/inventory and demand scheduling retain existing physical validation, without new layout restrictions."
+      ],
+      "sources": [
+        "docs/phase2/GEOMETRY_CAPACITY_AUDIT_39.md",
+        "scripts/spatial_dimensions.gd"
+      ]
+    },
+    "steam_condenser": {
+      "bounds": {
+        "capacity_mwth": {
+          "min": 0.0,
+          "max": 0.08,
+          "min_exclusive": false,
+          "unit": "MWth"
+        }
+      },
+      "geometry": {
+        "method": "bounded_existing_layout",
+        "scope": "finite_existing_reference_layout",
+        "hardware_module_count_cap": 1,
+        "capacity_proof_complete": false
+      },
+      "notes": [
+        "Only the current implemented finite module combination is supported. This envelope is not manufacturer certification, and does not resolve missing vessel/thermal design evidence.",
+        "Operational efficiency, losses, initial SOC/inventory and demand scheduling retain existing physical validation, without new layout restrictions."
+      ],
+      "sources": [
+        "docs/phase2/GEOMETRY_CAPACITY_AUDIT_39.md",
+        "scripts/spatial_dimensions.gd"
+      ]
+    },
+    "steam_generator": {
+      "bounds": {
+        "capacity_mwth": {
+          "min": 0.0,
+          "max": 0.1,
+          "min_exclusive": false,
+          "unit": "MWth"
+        }
+      },
+      "geometry": {
+        "method": "bounded_existing_layout",
+        "scope": "finite_existing_reference_layout",
+        "hardware_module_count_cap": 1,
+        "capacity_proof_complete": false
+      },
+      "notes": [
+        "Only the current implemented finite module combination is supported. This envelope is not manufacturer certification, and does not resolve missing vessel/thermal design evidence.",
+        "Operational efficiency, losses, initial SOC/inventory and demand scheduling retain existing physical validation, without new layout restrictions."
+      ],
+      "sources": [
+        "docs/phase2/GEOMETRY_CAPACITY_AUDIT_39.md",
+        "scripts/spatial_dimensions.gd"
+      ]
+    },
+    "steam_turbine": {
+      "bounds": {
+        "mass_flow_capacity_kg_s": {
+          "min": 0.0,
+          "max": 0.05,
+          "min_exclusive": false,
+          "unit": "kg/s"
+        }
+      },
+      "geometry": {
+        "method": "bounded_existing_layout",
+        "scope": "finite_existing_reference_layout",
+        "hardware_module_count_cap": 1,
+        "capacity_proof_complete": false
+      },
+      "notes": [
+        "Only the current implemented finite module combination is supported. This envelope is not manufacturer certification, and does not resolve missing vessel/thermal design evidence.",
+        "Operational efficiency, losses, initial SOC/inventory and demand scheduling retain existing physical validation, without new layout restrictions."
+      ],
+      "sources": [
+        "docs/phase2/GEOMETRY_CAPACITY_AUDIT_39.md",
+        "scripts/spatial_dimensions.gd"
+      ]
+    },
+    "water_supply_boundary": {
+      "bounds": {
+        "capacity_kg": {
+          "min": 0.0,
+          "max": 10000.0,
+          "min_exclusive": true,
+          "unit": "kg"
+        },
+        "max_outflow_kg_s": {
+          "min": 0.0,
+          "max": 1.0,
+          "min_exclusive": false,
+          "unit": "kg/s"
+        }
+      },
+      "geometry": {
+        "method": "bounded_existing_layout",
+        "scope": "finite_existing_reference_layout",
+        "hardware_module_count_cap": 1,
+        "capacity_proof_complete": false
+      },
+      "notes": [
+        "Only the current implemented finite module combination is supported. This envelope is not manufacturer certification, and does not resolve missing vessel/thermal design evidence.",
+        "Operational efficiency, losses, initial SOC/inventory and demand scheduling retain existing physical validation, without new layout restrictions."
+      ],
+      "sources": [
+        "docs/phase2/GEOMETRY_CAPACITY_AUDIT_39.md",
+        "scripts/spatial_dimensions.gd"
+      ]
+    },
+    "wind": {
+      "bounds": {
+        "rated_mw": {
+          "min": 0.0,
+          "max": 5.0,
+          "min_exclusive": false,
+          "unit": "MW"
+        },
+        "rotor_diameter_m": {
+          "min": 126.0,
+          "max": 126.0,
+          "min_exclusive": false,
+          "unit": "m"
+        },
+        "hub_height_m": {
+          "min": 90.0,
+          "max": 90.0,
+          "min_exclusive": false,
+          "unit": "m"
+        }
+      },
+      "geometry": {
+        "method": "bounded_existing_layout",
+        "scope": "finite_existing_reference_layout",
+        "hardware_module_count_cap": 1,
+        "capacity_proof_complete": false
+      },
+      "notes": [
+        "Only the current implemented finite module combination is supported. This envelope is not manufacturer certification, and does not resolve missing vessel/thermal design evidence.",
+        "Operational efficiency, losses, initial SOC/inventory and demand scheduling retain existing physical validation, without new layout restrictions."
+      ],
+      "sources": [
+        "docs/phase2/GEOMETRY_CAPACITY_AUDIT_39.md",
+        "scripts/spatial_dimensions.gd"
+      ]
+    }
+  },
+  "dimension_order": "x,height,z"
+}

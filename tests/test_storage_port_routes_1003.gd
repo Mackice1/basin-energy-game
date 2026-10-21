@@ -19,7 +19,7 @@ func _initialize():call_deferred("run")
 func run():
 	var world:=World.new()
 	for kind in Catalog.NEW_STORAGE_KINDS+["molten_salt_store"]:
-		check(world.can_place(kind,Vector2.ZERO).contains("米制"),kind+" blocked before placing in legacy save")
+		check(world.can_place(kind,Vector2.ZERO).contains("旧比例兼容场景"),kind+" blocked before placing in legacy save")
 		check(not world.add_equipment(kind,Vector2.ZERO),kind+" legacy add rejects")
 		check(world.devices.is_empty() and world.undo_states.is_empty() and world.next_id==0,kind+" legacy reject is before mutation")
 	for kind in Catalog.ELECTRIC_STORAGE_KINDS:

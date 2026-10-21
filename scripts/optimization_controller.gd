@@ -38,6 +38,7 @@ func open() -> void:
 	host.paused = true
 	host.update_status()
 	panel.set_thermal_context(_has_thermal_devices(host.devices))
+	panel.set_material_context(host.devices)
 	panel.open()
 
 func _has_thermal_devices(devices: Array) -> bool:
@@ -46,12 +47,19 @@ func _has_thermal_devices(devices: Array) -> bool:
 			return true
 	return false
 
+func _has_material_devices(devices: Array) -> bool:
+	return devices.any(func(d): return Catalog.is_material(str(d.get("kind", ""))))
+
 func _has_fuel_devices(devices: Array) -> bool:
 	for device in devices:
 		if device.get("kind", "") == "fuel_boiler": return true
 	return false
 
 func snapshot(options: Dictionary) -> Dictionary:
+	if host.has_method("layout_mode_error") and host.layout_mode_error()!="":return {"error":host.layout_mode_error()}
+	if host.has_method("is_reference_layout") and host.is_reference_layout():
+		var support_errors: Array = host.reference_layout_errors()
+		if not support_errors.is_empty(): return {"error":"真实规格校验："+"；".join(support_errors)}
 	var fuel: Variant = host.get("fuel_supply")
 	if fuel == null: fuel = FuelSupply.defaults()
 	var fuel_error: String = FuelSupply.validate(fuel)
@@ -86,16 +94,36 @@ func snapshot(options: Dictionary) -> Dictionary:
 		if not validation.is_empty():
 			return {"error": "; ".join(validation)}
 		var item := {"id": int(d.id), "kind": d.kind, "params": params}
+		if host.has_method("is_reference_layout") and host.is_reference_layout():item.site_geometry_profile="reference_size_v1"
 		var state: Variant = d.get("state", Catalog.initial_state(d.kind, params))
 		var state_errors := Catalog.validate_state(d.kind, params, state)
 		if not state_errors.is_empty():
 			return {"error": "设备库存状态无效：" + "; ".join(state_errors)}
-		if d.has("state") or d.kind in ["battery", "battery_sodium", "battery_flow", "caes_aboveground", "liquid_air_store", "hydrogen_storage_system", "thermal_store", "solid_thermal_store", "high_temp_store", "molten_salt_store"]:
+		if d.has("state") or Catalog.is_material_inventory(d.kind) or d.kind in ["battery", "battery_sodium", "battery_flow", "caes_aboveground", "liquid_air_store", "hydrogen_storage_system", "thermal_store", "solid_thermal_store", "high_temp_store", "molten_salt_store"]:
 			item.state = state.duplicate(true)
-		if d.kind in ["electric_boiler", "fuel_boiler", "solar_thermal", "parabolic_trough", "high_temp_store", "oil_water_exchanger", "thermal_store", "solid_thermal_store", "heat_exchanger", "heat_demand","steam_generator","steam_turbine","steam_condenser","feedwater_pump","solar_tower_receiver","molten_salt_store","salt_steam_generator"]:
+		if Catalog.is_material(d.kind) or d.kind in ["co2_liquid_cycle_store","collector_substation"] or d.kind in ["electric_boiler", "fuel_boiler", "solar_thermal", "parabolic_trough", "high_temp_store", "oil_water_exchanger", "thermal_store", "solid_thermal_store", "heat_exchanger", "heat_demand","steam_generator","steam_turbine","steam_condenser","feedwater_pump","solar_tower_receiver","molten_salt_store","salt_steam_generator"]:
 			item.model_profile = d.get("model_profile", Catalog.model_profile(d.kind))
-			item.model_profile_version = d.get("model_profile_version", 1)
+			item.model_profile_version = d.get("model_profile_version", Catalog.model_profile_version(d.kind))
 		frozen.append(item)
+	var hydrogen_target: Variant = options.get("terminal_hydrogen_kg", {})
+	if not hydrogen_target is Dictionary: return {"error":"期末氢库存目标须为气库ID到kg下限的字典。"}
+	for key in hydrogen_target:
+		if not key is String or not key.is_valid_int() or str(key.to_int()) != key: return {"error":"期末氢目标使用规范气库ID。"}
+		var matches: Array = frozen.filter(func(d): return str(int(d.id)) == key and d.kind in Catalog.Materials.HYDROGEN_STORE_KINDS)
+		var value: Variant = hydrogen_target[key]
+		if matches.size() != 1 or not (value is float or value is int) or not is_finite(float(value)) or float(value) < 0.0: return {"error":"期末氢目标引用无效气库或非有限/负值。"}
+		if float(value) > Catalog.inventory_capacity(matches[0].kind,matches[0].params): return {"error":"期末氢目标超过气库容量。"}
+	frozen_options["terminal_hydrogen_kg"] = hydrogen_target.duplicate(true)
+	var product_target: Variant = options.get("terminal_product_kg", {})
+	if not product_target is Dictionary: return {"error":"期末产品目标须为合成站ID到kg下限的字典。"}
+	for key in product_target:
+		if not key is String or not key.is_valid_int() or str(key.to_int()) != key: return {"error":"期末产品目标使用规范合成站ID。"}
+		var matches: Array = frozen.filter(func(d): return str(int(d.id)) == key and d.kind in ["ammonia_synthesis_station","methanol_synthesis_station"])
+		var value: Variant = product_target[key]
+		if matches.size() != 1 or not (value is float or value is int) or not is_finite(float(value)) or float(value) < 0.0: return {"error":"期末产品目标引用无效合成站或非有限/负值。"}
+		if float(value) > Catalog.inventory_capacity(matches[0].kind,matches[0].params): return {"error":"期末产品目标超过产品缓冲容量。"}
+	# Preserve historical schema contracts: do not add a new empty option to old snapshots.
+	if frozen.any(func(d):return d.kind in ["nitrogen_supply_boundary","co2_supply_boundary","ammonia_synthesis_station","methanol_synthesis_station"]):frozen_options["terminal_product_kg"]=product_target.duplicate(true)
 	if frozen.is_empty(): return {"error": "请先建造设备；优化不会新增设备。"}
 	var valid_links: Array = []
 	for line in host.links:
@@ -142,9 +170,17 @@ func snapshot(options: Dictionary) -> Dictionary:
 					source_labels[key] = "CSV气象/未绑定字段内置天气" if not dat.sources.is_empty() or dat.device_weather.has(key) else "内置教学天气"
 		steps.append({"time_s": t, "dt_h": duration / 3600.0, "available_mw": available, "demand_mw": demands, "heat_demand_mwth": heat_demands, "weather": dat.weather.duplicate(true)})
 		t += duration
-	return {"schema_version": 7 if frozen.any(func(d):return d.kind in Catalog.NEW_STORAGE_KINDS) else 6 if frozen.any(func(d):return Catalog.is_tower(d.kind)) else 5 if frozen.any(func(d):return d.kind in ["steam_generator","steam_turbine","steam_condenser","feedwater_pump","solar_tower_receiver","molten_salt_store","salt_steam_generator"]) else 4 if frozen.any(func(d):return Catalog.is_high_temp(d.kind)) else Catalog.SCHEMA_VERSION if _has_fuel_devices(frozen) or frozen.any(func(d):return d.kind in ["solar_thermal","parabolic_trough","high_temp_store","oil_water_exchanger"]) else 2, "devices": frozen, "links": valid_links, "steps": steps, "grid_capacity_mw": Catalog.GRID_CAPACITY_MW,
+	var request_data:Dictionary = {"schema_version": 12 if frozen.any(func(d):return d.kind in ["nitrogen_supply_boundary","co2_supply_boundary","ammonia_synthesis_station","methanol_synthesis_station"]) else 11 if frozen.any(func(d):return d.kind in Catalog.Materials.PHASE_KINDS) else 10 if frozen.any(func(d):return d.kind=="collector_substation") else 9 if frozen.any(func(d):return d.kind=="co2_liquid_cycle_store") else 8 if _has_material_devices(frozen) else 7 if frozen.any(func(d):return d.kind in Catalog.NEW_STORAGE_KINDS) else 6 if frozen.any(func(d):return Catalog.is_tower(d.kind)) else 5 if frozen.any(func(d):return d.kind in ["steam_generator","steam_turbine","steam_condenser","feedwater_pump","solar_tower_receiver","molten_salt_store","salt_steam_generator"]) else 4 if frozen.any(func(d):return Catalog.is_high_temp(d.kind)) else Catalog.SCHEMA_VERSION if _has_fuel_devices(frozen) or frozen.any(func(d):return d.kind in ["solar_thermal","parabolic_trough","high_temp_store","oil_water_exchanger"]) else 2, "devices": frozen, "links": valid_links, "steps": steps, "grid_capacity_mw": Catalog.GRID_CAPACITY_MW,
 		"fuel_supply": frozen_fuel, "options": frozen_options, "metadata": {"request_id": request_id, "scene_revision": host.scene_revision, "start_time_s": host.elapsed_s,"climate_config":host.climate_config.duplicate(true)},
 		"forecast": {"sampling": "left endpoint; piecewise constant; split exactly at every active CSV boundary", "sources": source_labels, "climate": "same deterministic location/calendar and imported/teaching weather sampler as live world; isolated from live visual time", "load": "fixed electric demand multiplied by explicit forecast task factor", "heat_demand": "constant device demand; heat-demand CSV import is not supported", "heat_service_weight": "teaching service weight, not an electricity/heat price or economic equivalence", "capacity_expansion": false, "fuel": "shared bounded LHV input; explicit auxiliary AC consumption; configured CNY/MWh teaching cost, not a market tariff"}}
+
+	if int(request_data.schema_version)>=12:
+		request_data["material_profile"]="material_chemical_2c_v3"
+		request_data["material_profile_version"]=3
+	elif int(request_data.schema_version)>=11:
+		request_data["material_profile"]=Catalog.Materials.PHASE_PROFILE_ID
+		request_data["material_profile_version"]=Catalog.Materials.PHASE_PROFILE_VERSION
+	return request_data
 
 func make_baseline(data: Dictionary) -> Dictionary:
 	var fleet: Array = data.devices.duplicate(true)
@@ -159,6 +195,9 @@ func make_baseline(data: Dictionary) -> Dictionary:
 		if not r.get("valid", false): return {"error": "基准调度未通过校验：" + "; ".join(r.get("errors", [])), "steps": []}
 		var row := {"time_s": step.time_s, "dt_h": step.dt_h, "wind_mw": 0.0, "pv_mw": 0.0, "export_mw": r.delivered_mw, "energy_mwh": 0.0, "soc": 0.0}
 		for k in ["available_mw", "demand_mw", "served_mw", "unserved_mw", "charge_mw", "discharge_mw", "curtailed_mw", "loss_mw"]: row[k] = r.get(k, 0.0)
+		if _has_material_devices(fleet):
+			if not r.get("material") is Dictionary: return {"error":"基准缺少物料账本，不能退回纯电比较。", "steps":[]}
+			row.material = r.material.duplicate(true)
 		if _has_thermal_devices(fleet):
 			if not r.get("thermal") is Dictionary:
 				return {"error": "基准调度缺少热账本，不能退回纯电比较。", "steps": []}
@@ -185,9 +224,14 @@ func make_baseline(data: Dictionary) -> Dictionary:
 				if not r.get("next_states", {}).has(key) or not r.next_states[key].has("energy_mwhth"):
 					return {"error": "基准调度缺少热库存状态。", "steps": []}
 				d.state = r.next_states[key].duplicate(true)
+			elif Catalog.is_material_inventory(d.kind):
+				if not r.get("next_states", {}).get(key) is Dictionary: return {"error":"基准缺少有限物料库存状态。", "steps":[]}
+				var inventory_errors: Array[String] = Catalog.validate_state(d.kind, d.params, r.next_states[key])
+				if not inventory_errors.is_empty(): return {"error":"基准物料库存校验失败：" + "; ".join(inventory_errors), "steps":[]}
+				d.state = r.next_states[key].duplicate(true)
 		row.soc = row.energy_mwh / capacity if capacity > 0 else 0.0
 		rows.append(row)
-	return {"steps": rows, "policy": "realtime priority_then_stable_id; same forecast and initial state; electric and thermal terminal SOC not enforced"}
+	return {"steps": rows, "policy": "realtime priority_then_stable_id; same forecast and initial state; electric/thermal terminal SOC, terminal hydrogen and product targets not enforced by realtime baseline"}
 
 func start(options: Dictionary) -> void:
 	if pid > 0: return
@@ -286,6 +330,12 @@ func _process(_delta: float) -> void:
 	if not solved.get("validation", {}).get("valid", false):
 		panel.show_error("独立守恒/边界复核未通过，拒绝显示为可用方案。")
 		return
+	if _has_material_devices(request.devices) or request.devices.any(func(d):return d.kind in ["co2_liquid_cycle_store","collector_substation"]):
+		if solved.get("schema_version") != request.schema_version:
+			panel.show_error("物料结果版本须与冻结快照匹配。"); return
+		var material_audit: Array[String] = Model.Dispatch.audit_optimization_result(request, solved)
+		if not material_audit.is_empty():
+			panel.show_error("Godot原始输入独立物料审计拒绝结果：" + "; ".join(material_audit)); return
 	if _has_thermal_devices(request.devices):
 		if solved.get("schema_version") != request.schema_version:
 			panel.show_error("求解结果版本须与冻结快照匹配；不能使用旧版结果。")

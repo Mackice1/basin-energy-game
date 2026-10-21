@@ -1,3 +1,32 @@
+# BASIN 02 / 荒原 · 能源大基地 — 1.0.0.4 阶段二
+
+本批为已验收的 **1.0.0.4** 增量，基于 [1.0.0.3 阶段一公开基线](https://github.com/Mackice1/basin-energy-game/tree/56400dde7c7c23c8a8d8705152305c3cf0c9118c)。版本唯一源仍是 `project.godot`；不创建标签或 Release，不改写历史。下方 1.0.0.3 与更早说明仅记录当时范围，其中“后续计划”和未包含项目不能替代本节的当前状态。
+
+## 物料链、真实尺度与界面
+
+- 目录扩展至 39 类，加入独立气态/液态/固态储氢、甲醇与氨化工链、CO₂ 储能整站和相关物料设施。有限库存、物料/能量账本、原料约束、排热与真实 GLPK 优化联动；非零产出来自实际供料和能量，不是展示曲线或免费原料。
+- 参考规格与安装占地分别说明，按米制尺寸进行建设校验；4×4 km 建造域保留原地形核心，外围采用运行时地表扩展与过渡。既有高度场与二进制模型未替换。旧教学比例存档保留显式兼容，采用新规格需迁移预览/确认或新场景，不静默搬移设施或截断库存。
+- 参数分组、窄窗口滚动和输入焦点下 Esc 取消；右侧运行/物料信息及详情返还主场景。真实设备外观为原创简化程序化模型，依据与适用范围见各项参考说明，不是厂家 CAD。
+
+详见 [本批发布说明](docs/phase2/RELEASE_1004.md)、[最终原生验收](docs/phase2/FINAL_NATIVE_ACCEPTANCE_1004.md)、[39 类几何与容量边界](docs/phase2/GEOMETRY_CAPACITY_AUDIT_39.md)及 [物料模型契约](docs/phase2/MATERIAL_MODEL_CONTRACT.md)。
+
+## 验证范围
+
+- **181 个 Godot 测试程序**完成验证，来自基线全库、修复夹具后复跑及最后受影响项目的定向汇总，**不是一次不中断的全库运行**。
+- 最终 Python 完整 discovery **363 项、0 跳过**。另有 **44 组真实 GLPK→Godot 严格独立审计**，含 36 组固定种子边界；专项与 Python 计数重叠，不能相加。
+- 原生 GUI 验证实际启动 Python/GLPK、24 个预测时段返回已证明最优；非零醇氨数据通路由实际化工运行与严格审计覆盖，不把零输入场景的最优解说成非零化工优化结果。实际检查还包括化工实时曲线与详情、640 像素宽参数窗口、输入焦点下 Esc 取消、参考设备放置/重叠拒绝及 4 km 地表过渡。
+- **没有逐一人工遍历全部 39 类的全部组合**。已有批量选择与站内交互沿用此前原生验收及本轮自动回归，不称本轮全部人工重做。公开整理仅做源文件身份、隐私和 Git 树核验，没有重跑游戏或测试。
+
+固定规格、静态气腔/热容筛查与有限物料链属于教学模型，**不是压力容器认证、工程选型或动态压力/液位仿真**。Terrain3D 直接 Image 读取的导出警告仍存在，源码运行已验收，不宣称跨平台打包、稳定 FPS、显存或长期内存稳定性已验证。
+
+## 公开内容与复现
+
+保留执行源码、参数数据、测试与生成器、既有运行资产及第三方许可证；不新增项目许可证。研究参考只保留来源 URL、技术出处和许可边界，未取得再分发许可的研究图片不发布。原始验收日志、截图、玩家存档/备份、进程信息与实时遥测不发布，既有经审查的安全合成夹具保持不变。需要生成的跨语言测试夹具属于本地测试输出，先按随附测试的导出入口生成，再运行相应 Godot 审计，不能把开发环境结果视为干净克隆无需前置步骤的保证。
+
+Version **1.0.0.4** adds bounded material/chemical chains and reference-scale facilities, bringing the catalog to 39 types, alongside the 4 km domain and UI refinements. Acceptance aggregates 181 Godot programs across baseline, fixture repair and final targeted runs, plus 363 Python tests without skips. The 44 real-GLPK cross-language audits overlap that count. Native checks covered a 24-period optimal solve, nonzero chemical runtime data, narrow-window Escape and terrain transitions, not every combination. These educational models are not engineering certification. Publication preparation reran no application tests and excludes private runtime data and third-party research imagery.
+
+## 保留的 1.0.0.3 阶段一及更早历史说明
+
 # BASIN 02 / 荒原 · 能源大基地 — 1.0.0.3 阶段一
 
 本次为已验收的阶段一增量，基于 [1.0.0.2](https://github.com/Mackice1/basin-energy-game/tree/5436b0a97386030eb63551820dcc153f5867d212)，不是全部后续需求完成。版本唯一源为 project.godot；不创建标签或 Release。

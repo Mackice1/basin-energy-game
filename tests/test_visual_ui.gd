@@ -30,6 +30,24 @@ class UIController:
 		last_weather = fixture_weather.duplicate(true)
 		return model.solve(devices, links, fixture_weather)
 
+
+	# Explicit historical data setup, NOT a replacement for the production build
+	# API. Legacy UI construction is now rejected; these fixtures retain their
+	# old ratings/coordinates and no site_geometry_profile for ledger/save tests.
+	func append_legacy_device(kind:String, at:Vector2, record:bool=true, parent_id:int=-1)->bool:
+		if record: checkpoint()
+		var id:int=next_id
+		while not station(id).is_empty() or not device(id).is_empty(): id+=1
+		var values:Dictionary=templates[kind].duplicate(true)
+		var item:Dictionary={"id":id,"kind":kind,"x":at.x,"z":at.y,"params":values,"state":Catalog.initial_state(kind,values)}
+		if kind in THERMAL_KINDS:item.model_profile=Catalog.model_profile(kind)
+		if parent_id>=0:
+			var parent:Dictionary=station(parent_id)
+			item.x=parent.x;item.z=parent.z;item.parent_station_id=parent_id
+			item.interior_x=at.x;item.interior_z=at.y
+		devices.append(item);selected_id=id;next_id=id+1;normalize_id_cursors();refresh()
+		return true
+
 var game: UIController
 var checks := 0
 var failures: Array[String] = []
@@ -191,9 +209,10 @@ func test_parameters() -> void:
 	check(game.state() == original, "restoring defaults alone does not commit changes")
 	edit_parameter("rotor_diameter_m", "1000")
 	edit_parameter("hub_height_m", "600")
-	check(game.parameter_form.get_validation_errors().is_empty(), "oversized fixture is physically valid before site validation")
+	check(game.model.validate("wind",game.parameter_form.get_parameters()).is_empty(), "oversized historical draft remains physically valid before finite-site validation")
+	check(not game.parameter_form.get_validation_errors().is_empty(), "finite-site form rejects unsupported rotor and hub dimensions")
 	game.apply_parameters()
-	check(game.param_errors.text.begins_with("尺寸不适合"), "single apply retains site/footprint validation")
+	check(game.param_errors.text.begins_with("未应用：") and game.param_dialog.visible, "single apply rejects unsupported finite geometry before placement")
 	check(game.state() == original and game.undo_states.size() == undo_before, "site rejection also preserves scene and undo history")
 	game.param_dialog.hide()
 	game.open_parameters(true)
@@ -201,7 +220,8 @@ func test_parameters() -> void:
 	edit_parameter("rated_mw", "4.0")
 	game.apply_parameters()
 	check(game.templates.wind.rated_mw == 4.0 and game.device(0).params.rated_mw == 5.0, "template apply leaves existing equipment unchanged")
-	check(game.add_equipment("wind", Vector2(-45, 0)), "new equipment can be placed using modified template")
+	check(not game.add_equipment("wind", Vector2(-45, 0)), "legacy UI refuses new equipment until explicit size migration")
+	check(game.append_legacy_device("wind", Vector2(-45, 0)), "historical fixture captures modified template without bypassing production build guard")
 	check(game.device(8).params.rated_mw == 4.0, "future equipment receives the committed template")
 	game.undo()
 	check(game.device(8).is_empty() and game.templates.wind.rated_mw == 4.0, "undoing placement preserves its preexisting template")
@@ -219,8 +239,10 @@ func test_parameters() -> void:
 	fixture()
 
 func test_ui_events_and_layout() -> void:
-	var body: VBoxContainer = game.device_picker.get_parent()
-	var scroll: ScrollContainer = body.get_parent()
+	var ancestor: Node = game.device_picker.get_parent()
+	while not ancestor is ScrollContainer: ancestor = ancestor.get_parent()
+	var scroll: ScrollContainer = ancestor
+	var body: VBoxContainer = scroll.get_child(0)
 	var dock = game.find_child("RightDock", true, false)
 	var shell: PanelContainer = dock.panels.energy
 	check(not shell.visible, "energy panel starts collapsed")
@@ -249,7 +271,7 @@ func test_ui_events_and_layout() -> void:
 	check(game.world_clicks == 1, "parameter modal blocks underlying map interaction")
 	game.param_dialog.hide()
 	var previous_size := shell.size
-	for caption in ["功率与能量分项", "技术详情"]:
+	for caption in ["电力分项与守恒", "技术详情"]:
 		press_button(body, caption, true)
 	await process_frame
 	await process_frame

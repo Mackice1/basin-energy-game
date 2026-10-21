@@ -35,6 +35,7 @@ static func _range_error(errors: Array[String], p: Dictionary, key: String, low:
 		errors.append("%s must be %s %s and <= %s" % [key, ">" if exclusive_low else ">=", low, high])
 
 static func validate(kind: String, params: Dictionary) -> Array[String]:
+	if Catalog.is_material(kind): return Catalog.Materials.validate(kind, params)
 	if Catalog.is_thermal(kind):
 		return Catalog.validate_thermal(kind, params)
 	if kind == "load" or Catalog.is_electric_storage(kind):
@@ -47,7 +48,7 @@ static func validate(kind: String, params: Dictionary) -> Array[String]:
 	for key in params:
 		if not defaults(kind).has(key):
 			errors.append("Unknown %s parameter: %s" % [kind, key])
-	match kind:
+	match Catalog.dispatch_role(kind):
 		"wind":
 			_range_error(errors, p, "rated_mw", 0.0, 1000.0, true)
 			_range_error(errors, p, "rotor_diameter_m", 0.0, 1000.0, true)
@@ -88,7 +89,7 @@ static func validate(kind: String, params: Dictionary) -> Array[String]:
 			_range_error(errors, p, "dc_loss_fraction", 0.0, 1.0)
 			_range_error(errors, p, "cell_delta_c_at_1000", 0.0, 30.0)
 		"station":
-			_range_error(errors, p, "capacity_mw", 0.0, 10000.0, true)
+			_range_error(errors, p, "capacity_mw", 0.0, 200.0 if kind == Catalog.COLLECTOR_KIND else 10000.0, true)
 			_range_error(errors, p, "loss_fraction", 0.0, 0.999999)
 	return errors
 
@@ -319,7 +320,8 @@ static func solve(devices: Array, links: Array, weather: Dictionary, direct: Dic
 		detail.merge({"id": int(raw.id), "kind": kind, "sent_mw": 0.0,
 			"received_mw": 0.0, "delivered_mw": 0.0, "curtailed_mw": 0.0, "loss_mw": 0.0,
 			"input_mw": 0.0, "output_mw": 0.0, "connected": false, "utilization": 0.0}, true)
-		if kind == "station" and detail.valid:
+		if Catalog.is_electric_station(kind) and detail.valid:
+			if kind == Catalog.COLLECTOR_KIND: detail.merge({"model_profile":Catalog.COLLECTOR_PROFILE,"model_profile_version":1})
 			detail.capacity_mw = _params(kind, p).capacity_mw
 			detail.loss_fraction = _params(kind, p).loss_fraction
 		nodes[id] = {"kind": kind, "params": _params(kind, p), "valid": detail.valid}
@@ -353,7 +355,7 @@ static func solve(devices: Array, links: Array, weather: Dictionary, direct: Dic
 		if not nodes.has(a) or not nodes[a].valid:
 			line.reason = "Missing or invalid source device"
 			continue
-		var route_ok: bool = (nodes[a].kind in ["wind", "pv"] and nodes.has(b) and nodes[b].kind == "station" and nodes[b].valid) or (nodes[a].kind == "station" and line.to == -1)
+		var route_ok: bool = (nodes[a].kind in ["wind", "pv"] and nodes.has(b) and Catalog.is_electric_station(nodes[b].kind) and nodes[b].valid) or (Catalog.is_electric_station(nodes[a].kind) and line.to == -1)
 		if not route_ok:
 			line.reason = "Only wind/PV -> station -> grid connections are allowed"
 			continue
@@ -378,7 +380,7 @@ static func solve(devices: Array, links: Array, weather: Dictionary, direct: Dic
 	for id in ids:
 		if not nodes[id].valid:
 			continue
-		var cap: float = report.devices[id].mw if nodes[id].kind != "station" else nodes[id].params.capacity_mw
+		var cap: float = report.devices[id].mw if not Catalog.is_electric_station(nodes[id].kind) else nodes[id].params.capacity_mw
 		resource_index["device:" + id] = resources.size()
 		resources.append(cap)
 	for line in report.lines:
@@ -443,7 +445,7 @@ static func solve(devices: Array, links: Array, weather: Dictionary, direct: Dic
 		report.delivered_mw += delivered
 	for id in report.devices:
 		var device: Dictionary = report.devices[id]
-		if device.kind == "station":
+		if Catalog.is_electric_station(device.kind):
 			report.station_loss_mw += device.loss_mw
 			device.utilization = device.input_mw / device.get("capacity_mw", 1.0)
 		else:

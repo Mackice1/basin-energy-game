@@ -1,12 +1,32 @@
 extends SceneTree
-## Real world controller integration. Only terrain, rendering and editor widgets
-## are isolated; every report, inventory transition and audit uses Model.dispatch.
+const CurrentWorldVersion = preload("res://scripts/world_game.gd")
+## Historical controller/energy integration, not current real-size UI construction.
+## Terrain, rendering, widgets and historical data staging are isolated; every
+## report, inventory transition, conservation audit, save and undo uses production.
 
 class Fixture:
 	extends "res://scripts/world_game.gd"
 	var last_notice := ""
 	var irradiance := 1000.0
 	func _ready(): pass
+	func add_equipment(kind: String, point: Vector2, record: bool = true) -> bool:
+		# Build old data explicitly, as a historical saved-scene fixture. The real
+		# UI correctly forbids additions before geometry migration; do not weaken
+		# that guard or silently change the 2 MW PV / 10 MW station energy cases.
+		# No reference_size_v1 marker: these are not current installed-size claims.
+		if not kind in ["wind", "pv", "station", "electric_boiler", "thermal_store", "heat_exchanger", "heat_demand", "load", "battery"] or not templates.has(kind) or not point.is_finite():
+			return false
+		var id := next_id
+		while not station(id).is_empty() or not device(id).is_empty(): id += 1
+		var parameters: Dictionary = templates[kind].duplicate(true)
+		var added := {"id":id, "kind":kind, "x":point.x, "z":point.y,
+			"params":parameters, "state":Catalog.initial_state(kind, parameters)}
+		if kind in THERMAL_KINDS: added.model_profile = Catalog.model_profile(kind)
+		if record: checkpoint()
+		devices.append(added)
+		selected_id = id; next_id = id + 1
+		normalize_id_cursors(); rebuild_equipment(); refresh()
+		return true
 	func tell(message: String): last_notice = message
 	func exclusion(_x: float, _z: float) -> String: return ""
 	func slope_at(_x: float, _z: float) -> float: return 0.0
@@ -127,7 +147,7 @@ func test_construction_and_connections() -> void:
 	var game := fixture()
 	game.templates.thermal_store.initial_soc = 0.375
 	for spec in SPECS:
-		check(game.add_equipment(spec[0], spec[1]), "controller builds " + spec[0])
+		check(game.add_equipment(spec[0], spec[1]), "historical fixture stages " + spec[0])
 	for id in [2,3,4,5]:
 		check(game.device(id).model_profile == "thermal_stage1_v1", "new thermal device has versioned profile")
 		check(game.device(id).params == game.templates[game.device(id).kind], "new thermal parameters copy template")
@@ -286,7 +306,7 @@ func test_save_resume_undo_and_rejection() -> void:
 	var path := path_for("resume")
 	check(control.write_save(path), "write real isolated schema 5 file")
 	var on_disk: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path))
-	check(on_disk.schema == 13 and on_disk.model_version == 22, "controller persists schema 13 model 22")
+	check(on_disk.schema == CurrentWorldVersion.CURRENT_SAVE_SCHEMA and on_disk.model_version == CurrentWorldVersion.CURRENT_MODEL_VERSION, "controller persists schema 14 model 23")
 	for key in HEAT_KEYS: check(on_disk.thermal_energy.has(key), "persisted heat field " + key)
 	check(on_disk.energy.has("boiler_electric") and on_disk.energy.has("boiler_conversion_loss"), "persisted electric boiler ledger fields")
 	var resumed := fixture()
@@ -331,6 +351,9 @@ func test_save_resume_undo_and_rejection() -> void:
 
 func test_parameters_and_legacy() -> void:
 	var game := chain()
+	# Parameter UI now applies the real single-store 4 MWhth support ceiling.
+	# Exercise a valid increase inside it without changing the energy fixtures.
+	game.device(3).params.capacity_mwhth = 2.0
 	game.device(3).state.energy_mwhth = 1.25
 	game.parameter_id = 3; game.param_scope = "device"
 	var editor := ParameterInput.new()
@@ -342,9 +365,13 @@ func test_parameters_and_legacy() -> void:
 	game.apply_parameters()
 	check(var_to_bytes(game.state()) == frozen and game.scene_revision == revision, "capacity cannot shrink below current heat inventory")
 	check(game.param_errors.text.contains("库存"), "capacity rejection explains inventory protection")
-	editor.values.capacity_mwhth = 5.0; editor.values.initial_soc = 0.9
+	editor.values.capacity_mwhth = 5.0
 	game.apply_parameters()
-	near(game.device(3).params.capacity_mwhth, 5.0, "valid capacity increase applied")
+	check(var_to_bytes(game.state()) == frozen and game.scene_revision == revision, "new supported-size ceiling rejects old 5 MWhth UI edit atomically")
+	check(game.param_errors.text.contains("capacity_mwhth"), "unsupported capacity edit identifies its bound")
+	editor.values.capacity_mwhth = 3.0; editor.values.initial_soc = 0.9
+	game.apply_parameters()
+	near(game.device(3).params.capacity_mwhth, 3.0, "valid capacity increase inside supported range applied")
 	near(game.device(3).state.energy_mwhth, 1.25, "editing initial SOC does not refill live heat inventory")
 	check(game.scene_revision > revision, "parameter mutation invalidates old optimization revision")
 	game.undo()
@@ -354,6 +381,11 @@ func test_parameters_and_legacy() -> void:
 		var old: Dictionary = source.state()
 		old.schema = schema; old.model_version = 11 if schema == 3 else 12
 		for storage_kind in source.Catalog.NEW_STORAGE_KINDS: old.templates.erase(storage_kind)
+		for material_kind in source.Catalog.Materials.KINDS: old.templates.erase(material_kind)
+		old.erase("material_energy")
+		old.templates.erase("co2_liquid_cycle_store")
+		for template_kind in old.templates.keys():
+			if not template_kind in (source.SaveValidator.LEGACY_KINDS if schema==3 else source.SaveValidator.ELECTRIC_KINDS): old.templates.erase(template_kind)
 		old.erase("stations");old.erase("next_station_id");old.erase("dimension_profile")
 		old.erase("tower_energy"); old.templates.erase("solar_tower_receiver"); old.templates.erase("molten_salt_store"); old.templates.erase("salt_steam_generator"); old.erase("rankine_energy"); old.templates.erase("steam_generator"); old.templates.erase("steam_turbine"); old.templates.erase("steam_condenser"); old.templates.erase("feedwater_pump"); old.erase("high_temp_energy"); old.templates.erase("parabolic_trough"); old.templates.erase("high_temp_store"); old.templates.erase("oil_water_exchanger"); old.erase("solar_energy"); old.templates.erase("solar_thermal"); old.erase("fuel_supply"); old.erase("fuel_energy")
 		old.devices = old.devices.filter(func(d): return d.kind in (["pv","station"] if schema == 3 else ["pv","station","load","battery"]))
@@ -372,7 +404,7 @@ func test_parameters_and_legacy() -> void:
 		for kind in migrated.KINDS: check(migrated.templates.has(kind), "legacy restore backfills future " + kind + " template")
 		check(migrated.thermal_energy == migrated.THERMAL_ENERGY_ZERO, "legacy restore begins zero heat history")
 		near(migrated.energy.boiler_electric + migrated.energy.boiler_conversion_loss, 0.0, "legacy boiler accounting starts at zero")
-		check(migrated.add_equipment("thermal_store", Vector2(10,-20), false), "thermal construction works after legacy restore")
+		check(migrated.add_equipment("thermal_store", Vector2(10,-20), false), "historical fixture stages thermal data after legacy restore (not current UI construction)")
 		near(migrated.device(old.next_id).state.energy_mwhth, 0.0, "legacy scene new store respects empty default")
 		assert_ledgers(migrated, "migrated schema %d" % schema)
 

@@ -91,17 +91,19 @@ func _initialize() -> void:
 	check(bounds_only.module_origins_m.is_empty() and not bounds_only.origins_complete,"bounds-only query skips instance-origin allocation")
 	check(bounds_only.module_count == pv.module_count and bounds_only.body_dimensions_m == pv.body_dimensions_m and bounds_only.clearance_radius_world == pv.clearance_radius_world,"bounds-only queries preserve exact full-layout geometry")
 	check(Spatial.panel_origin_m(bounds_only,2181) == Spatial.panel_origin_m(pv,2181),"bounds-only query still addresses every panel procedurally")
-	var larger_pv: Dictionary = Spatial.profile("pv",{"dc_capacity_mw":2.4})
+	var larger_pv: Dictionary = Spatial.profile("pv",{"dc_capacity_mw":2.4},true,"flow_process_v2","")
 	check(larger_pv.panel_count == 4364 and larger_pv.unit_dimensions_m == pv.unit_dimensions_m, "doublePVcapacity doublespanels withoutscaling")
 	check(larger_pv.land_area_m2 > pv.land_area_m2 and larger_pv.clearance_radius_world > pv.clearance_radius_world, "PVcapacity growsland andcollision")
-	var large_pv: Dictionary = Spatial.profile("pv",{"dc_capacity_mw":10000.0})
+	var large_pv: Dictionary = Spatial.profile("pv",{"dc_capacity_mw":10000.0},true,"flow_process_v2","")
 	check(large_pv.panel_count == 18181819 and not large_pv.origins_complete, "hugePV analytical count retainedwithoutallocation blowup")
 	check(large_pv.module_origins_m.size() == Spatial.MAX_EXPLICIT_ORIGINS, "hugePVorigin cache explicitlybounded")
 	check(Spatial.panel_origin_m(large_pv,18181818).is_finite(), "hugePVlastpanel still addressable")
 
 	var specs: Dictionary = {"battery":Vector3(6.058,2.896,2.438), "station":Vector3(6.813,2.941,5.538), "electric_boiler":Vector3(4,2.5,2.5), "thermal_store":Vector3(8.5,7.635,5), "heat_exchanger":Vector3(3,1.8,2)}
 	for kind in specs:
-		var p: Dictionary = Spatial.profile(kind)
+		# Only the historical hot-water GLB has been replaced by a sized cavity.
+		var marker: String = "" if kind == "thermal_store" else "reference_size_v1"
+		var p: Dictionary = Spatial.profile(kind,{},true,"flow_process_v2",marker)
 		check(p.valid and p.unit_dimensions_m == specs[kind] and p.module_dimensions_m == p.unit_dimensions_m, kind + " exactreference dimensions andalias")
 		check(p.module_origins_m.size() == p.module_count and p.module_origins_world.size() == p.module_count, kind + " fullmodulegeometry")
 		near(p.body_area_m2,p.module_count*specs[kind].x*specs[kind].z,kind + " bodyarea sumsmodules")
@@ -109,7 +111,7 @@ func _initialize() -> void:
 		near(p.clearance_radius_m,Vector2(p.land_dimensions_m.x,p.land_dimensions_m.z).length()/2.0,kind + " circlecoversrectanglecorners")
 		near(p.land_envelope_area_m2,PI*pow(p.clearance_radius_m,2),kind + " circlearea separatelynamed")
 		near(p.clearance_radius_world,p.clearance_radius_m*0.1,kind + " singlemetricconversion")
-		near(Validator.radius(kind,{},"metric_v1"),p.clearance_radius_world,kind + " validationusesauthoritativeprofile")
+		near(Validator.radius(kind,{},"metric_v1","flow_process_v2",marker),p.clearance_radius_world,kind + " validationusesauthoritativeprofile")
 		var corner: Vector2 = Vector2(p.land_dimensions_m.x,p.land_dimensions_m.z)*0.5
 		for angle in [0.0,PI*0.5]:
 			check(corner.rotated(angle).length() <= p.clearance_radius_m + 0.00001,kind + " conservative envelope contains 0/90-degree corners")
@@ -119,25 +121,35 @@ func _initialize() -> void:
 	check(var_to_bytes(input_params) == input_snapshot,"spatial profile never changes capacity or operating parameters")
 	var battery: Dictionary = Spatial.profile("battery")
 	check(battery.module_count == 2,"10MWh/3MW battery uses2fullcontainers")
-	check(Spatial.profile("battery",{"capacity_mwh":5.015,"charge_mw":2.5,"discharge_mw":2.5}).module_count == 1,"exactbatteryreference boundary")
-	check(Spatial.profile("battery",{"capacity_mwh":5.016,"charge_mw":2.5,"discharge_mw":2.5}).module_count == 2,"energy boundary addsbattery")
+	check(Spatial.profile("battery",{"capacity_mwh":5.015,"charge_mw":2.5,"discharge_mw":2.5},true,"flow_process_v2","").module_count == 1,"exactbatteryreference boundary")
+	check(Spatial.profile("battery",{"capacity_mwh":5.016,"charge_mw":2.5,"discharge_mw":2.5},true,"flow_process_v2","").module_count == 2,"energy boundary addsbattery")
 	check(Spatial.profile("battery",{"capacity_mwh":1.0,"charge_mw":7.51,"discharge_mw":0.0}).module_count == 4,"chargingpower independentlycontrols batterycount")
 	check(Spatial.profile("battery",{"capacity_mwh":1.0,"charge_mw":0.0,"discharge_mw":5.01}).module_count == 3,"dischargingpower independentlycontrols batterycount")
 	check(Spatial.profile("battery",{"capacity_mwh":0.1,"charge_mw":0.0,"discharge_mw":0.0}).unit_dimensions_m == battery.unit_dimensions_m,"deratedbattery doesnotshrink")
 	for entry in [{"kind":"station","field":"capacity_mw","rating":2.0}, {"kind":"electric_boiler","field":"rated_electric_mw","rating":2.0}, {"kind":"thermal_store","field":"capacity_mwhth","rating":4.0}, {"kind":"heat_exchanger","field":"capacity_mwth","rating":2.0}]:
-		var one: Dictionary = Spatial.profile(entry.kind,{entry.field:entry.rating})
-		var three: Dictionary = Spatial.profile(entry.kind,{entry.field:entry.rating*2.01})
+		var one: Dictionary = Spatial.profile(entry.kind,{entry.field:entry.rating},true,"flow_process_v2","")
+		var three: Dictionary = Spatial.profile(entry.kind,{entry.field:entry.rating*2.01},true,"flow_process_v2","")
 		check(one.module_count == 1 and three.module_count == 3,entry.kind + " capacityusesceiling fullmodules")
 		check(one.unit_dimensions_m == three.unit_dimensions_m,entry.kind + " capacitypreserves unitgeometry")
 		check(three.land_area_m2 > one.land_area_m2,entry.kind + " increasedcapacity reserveslargersite")
-		check(Spatial.profile(entry.kind,{entry.field:entry.rating*0.01}).unit_dimensions_m == one.unit_dimensions_m,entry.kind + " deratingdoesnotshrink")
+		check(Spatial.profile(entry.kind,{entry.field:entry.rating*0.01},true,"flow_process_v2","").unit_dimensions_m == one.unit_dimensions_m,entry.kind + " deratingdoesnotshrink")
+
+	# Current finite-reference defaults stay covered independently of old formulas.
+	for entry in [{"kind":"pv","field":"dc_capacity_mw","rating":0.6}, {"kind":"battery","field":"capacity_mwh","rating":1.0}, {"kind":"station","field":"capacity_mw","rating":1.0}, {"kind":"electric_boiler","field":"rated_electric_mw","rating":0.5}, {"kind":"thermal_store","field":"capacity_mwhth","rating":1.0}, {"kind":"heat_exchanger","field":"capacity_mwth","rating":0.5}]:
+		var full: Dictionary = Spatial.profile(entry.kind)
+		var lower: Dictionary = Spatial.profile(entry.kind,{entry.field:entry.rating})
+		check(full.valid and lower.valid and full.site_geometry_profile == "reference_size_v1",entry.kind + " reference default and derating valid")
+		check(lower.module_count == full.module_count and lower.unit_dimensions_m == full.unit_dimensions_m and lower.body_dimensions_m == full.body_dimensions_m and lower.land_dimensions_m == full.land_dimensions_m,entry.kind + " reference derating retains complete default hardware")
+	check(Spatial.profile("thermal_store").unit_dimensions_m == Vector3(11,7.4,6),"new hot-water reference uses volume-supported enclosure rather than old GLB")
+	for entry in [{"kind":"pv","field":"dc_capacity_mw","rating":2.4}, {"kind":"battery","field":"capacity_mwh","rating":20.061}, {"kind":"station","field":"capacity_mw","rating":16.01}, {"kind":"electric_boiler","field":"rated_electric_mw","rating":2.01}, {"kind":"thermal_store","field":"capacity_mwhth","rating":4.01}, {"kind":"heat_exchanger","field":"capacity_mwth","rating":2.01}, {"kind":"wind","field":"rotor_diameter_m","rating":1.0}]:
+		check(not Spatial.profile(entry.kind,{entry.field:entry.rating}).valid,entry.kind + " new reference rejects unsupported historical geometry rating")
 
 	var wind: Dictionary = Spatial.profile("wind")
 	near(wind.body_area_m2,324.0,"windfoundation area")
 	near(wind.rotor_radius_m,63.0,"windrotor radius")
 	near(wind.clearance_radius_m,70.0,"windrotor plus7mavoidance")
 	check(wind.rotor_swept_area_m2 != wind.body_area_m2 and wind.land_envelope_area_m2 != wind.body_area_m2,"windmotionenvelope neverfoundation area")
-	var small_wind: Dictionary = Spatial.profile("wind", {"rotor_diameter_m":1.0})
+	var small_wind: Dictionary = Spatial.profile("wind", {"rotor_diameter_m":1.0},true,"flow_process_v2","")
 	near(small_wind.clearance_radius_m,Vector2(32.0,32.0).length()*0.5,"small rotor still reserves all maintenance-area corners")
 	near(wind.land_area_m2,1024.0,"wind maintenance area excludes swept-motion envelope")
 	var site: Dictionary = Spatial.profile("thermal_station")
@@ -146,7 +158,7 @@ func _initialize() -> void:
 	for kind in ["electric_boiler", "thermal_store", "heat_exchanger", "thermal_station"]:
 		var bounds: Array = manifest.assets[kind].bounds_m
 		var actual := Vector3(float(bounds[1][0])-float(bounds[0][0]),float(bounds[1][1])-float(bounds[0][1]),float(bounds[1][2])-float(bounds[0][2]))
-		var profile: Dictionary = Spatial.profile(kind)
+		var profile: Dictionary = Spatial.profile(kind,{},true,"flow_process_v2","" if kind == "thermal_store" else "reference_size_v1")
 		check(profile.unit_dimensions_m.is_equal_approx(actual),kind + " profile dimensions match authored GLB manifest in Y-up metres")
 		near(profile.body_dimensions_m.y,actual.y,kind + " complete body height includes top fittings")
 	near(site.land_area_m2,4800.0,"sitearea includesinterior")

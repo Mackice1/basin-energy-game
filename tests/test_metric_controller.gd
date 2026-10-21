@@ -40,14 +40,25 @@ func run():
 	check(not game.add_internal_device(sid,"electric_boiler",Vector2(12,0)),"old120m coordinate outside48m interior rejects")
 	check(var_to_bytes(game.state())==frozen,"failed placement atomic")
 	check(not game.can_place_internal(sid,"thermal_store",Vector2(0,0),1,{"capacity_mwhth":400.0}).is_empty(),"capacity uses additional modules and rejects space deficit")
-	var legacy=create("legacy_illustrative");check(legacy.add_station(Vector2.ZERO),"legacy site retained")
-	var oldsid:int=legacy.stations[0].id
-	check(legacy.add_internal_device(oldsid,"thermal_store",Vector2(12,0)),"legacy coordinate retained")
+	var legacy=create("legacy_illustrative")
+	check(not legacy.add_station(Vector2.ZERO),"old-scale UI cannot silently create a reference station")
+	# Restore historical data explicitly; constructing new legacy sites is no longer a UI operation.
+	var oldsid:=1000000
+	legacy.stations=[{"id":oldsid,"name":"Historical station","x":0.0,"z":0.0}]
+	legacy.next_station_id=oldsid+1
+	legacy.devices=[{"id":0,"kind":"thermal_store","x":0.0,"z":0.0,"parent_station_id":oldsid,"interior_x":12.0,"interior_z":0.0,"params":legacy.model.defaults("thermal_store"),"state":legacy.Catalog.initial_state("thermal_store",legacy.model.defaults("thermal_store")),"model_profile":legacy.Catalog.model_profile("thermal_store")}]
+	legacy.next_id=1
+	check(legacy.device(0).interior_x==12.0,"historical coordinate retained without new construction")
 	legacy.device(0).state.energy_mwhth=0.625;var before:=var_to_bytes(legacy.state())
 	legacy.request_metric_migration()
-	check(var_to_bytes(legacy.state())==before and legacy.last_notice.contains("未执行"),"unsafe migration refuses without scaling coordinates or inventory")
+	check(var_to_bytes(legacy.state())==before and legacy.last_notice.contains("不能执行"),"unsafe migration refuses without scaling coordinates or inventory")
 	var oldsave:=legacy.state();oldsave.schema=6;oldsave.model_version=15;oldsave.erase("dimension_profile")
 	for storage_kind in legacy.Catalog.NEW_STORAGE_KINDS: oldsave.templates.erase(storage_kind)
+	for material_kind in legacy.Catalog.Materials.KINDS: oldsave.templates.erase(material_kind)
+	oldsave.erase("material_energy")
+	oldsave.templates.erase("co2_liquid_cycle_store")
+	for template_kind in oldsave.templates.keys():
+		if not template_kind in legacy.SaveValidator.PRE_FUEL_KINDS: oldsave.templates.erase(template_kind)
 	oldsave.erase("tower_energy"); oldsave.templates.erase("solar_tower_receiver"); oldsave.templates.erase("molten_salt_store"); oldsave.templates.erase("salt_steam_generator"); oldsave.erase("rankine_energy"); oldsave.templates.erase("steam_generator"); oldsave.templates.erase("steam_turbine"); oldsave.templates.erase("steam_condenser"); oldsave.templates.erase("feedwater_pump"); oldsave.erase("high_temp_energy"); oldsave.templates.erase("parabolic_trough"); oldsave.templates.erase("high_temp_store"); oldsave.templates.erase("oil_water_exchanger"); oldsave.erase("solar_energy"); oldsave.templates.erase("solar_thermal"); oldsave.erase("fuel_supply");oldsave.erase("fuel_energy");oldsave.templates.erase("fuel_boiler")
 	check(legacy.validate_state(oldsave)=="","actual schema6 still validates")
 	var restored=create();restored.restore(oldsave)

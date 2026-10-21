@@ -1,0 +1,19 @@
+{
+  "profile_id": "material_hydrogen_2a_v1",
+  "profile_version": 1,
+  "reference_temperature_k": 298.15,
+  "atomic_mass_kg_per_kmol": {"H": 1.008, "O": 15.999},
+  "species": {
+    "H2": {"atoms": {"H": 2}, "phase": "gas", "formation_enthalpy_kj_per_kmol": 0.0},
+    "O2": {"atoms": {"O": 2}, "phase": "gas", "formation_enthalpy_kj_per_kmol": 0.0},
+    "H2O": {"atoms": {"H": 2, "O": 1}, "phase": "liquid", "formation_enthalpy_kj_per_kmol": -285830.0, "vapor_formation_enthalpy_kj_per_kmol": -241826.0}
+  },
+  "defaults": {
+    "water_supply_boundary": {"capacity_kg": 10000.0, "initial_inventory_kg": 10000.0, "max_outflow_kg_s": 1.0},
+    "electrolyzer_station": {"rated_electric_mw": 2.0, "max_hydrogen_kg_s": 0.02, "electricity_kwh_per_kg": 50.0},
+    "hydrogen_gas_store": {"capacity_kg": 1000.0, "initial_inventory_kg": 0.0, "charge_kg_s": 0.02, "discharge_kg_s": 0.02, "compressor_electric_mw": 0.25, "compression_kwh_per_kg": 3.0, "leak_per_h": 0.0001},
+    "fuel_cell_station": {"rated_electric_mw": 1.0, "max_hydrogen_kg_s": 0.02, "net_efficiency_lhv": 0.5}
+  },
+  "assumptions": "Fixed-coefficient whole facilities, not pressure, kinetics or temperature transients. Both feed and discharged water are liquid at the reference state. Performance defaults are illustrative net teaching assumptions, not vendor calibration. Electrolysis and compression accept only connected wind/PV electricity; fuel cells serve electric loads only. No water replenishment, oxygen sale, heat recovery or same-step hydrogen store charge/discharge.",
+  "sources": ["https://webbook.nist.gov/cgi/cbook.cgi?ID=C7732185&Mask=1", "https://webbook.nist.gov/cgi/cbook.cgi?ID=C7732185&Mask=2", "https://www.energy.gov/cmei/fuels/hydrogen-production-electrolysis", "https://www.energy.gov/cmei/fuels/fuel-cells"]
+}

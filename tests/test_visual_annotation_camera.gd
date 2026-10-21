@@ -49,7 +49,7 @@ func _run() -> void:
 	map.target = Vector3(500, -90, -200)
 	map.distance = 9999
 	map.update_camera()
-	check(map.target.x == 100.0 and map.target.z == -70.0, "panning target stays within inspectable map")
+	check(map.target.x == 200.0 and map.target.z == -200.0, "panning target stays within inspectable map")
 	check(map.distance == map.MAX_CAMERA_DISTANCE, "zoom out is bounded")
 	var wheel := InputEventMouseButton.new()
 	wheel.button_index = MOUSE_BUTTON_WHEEL_UP
@@ -84,13 +84,19 @@ func _run() -> void:
 	label.free()
 
 	for imported in [false, true]:
-		var equipment = Visual.create("thermal_store", {"visual_dimension_profile": "metric_v1", "capacity_mwhth": 12.0}, imported)
+		var equipment = Visual.create("thermal_store", {"visual_dimension_profile": "metric_v1", "visual_site_geometry_profile": "", "capacity_mwhth": 12.0}, imported)
 		root.add_child(equipment)
 		_check_visual(equipment, "equipment " + ("GLB" if imported else "fallback"))
 		for suppressed in equipment.find_children("*", "Label3D", true, false):
 			if suppressed.get_meta("annotation_suppressed", false):
 				check(not suppressed.visible, "duplicate module annotation remains suppressed")
 		equipment.free()
+		# New default is a distinct, supported installed water-store geometry.
+		var reference = Visual.create("thermal_store", {"visual_dimension_profile":"metric_v1"}, imported)
+		root.add_child(reference)
+		check(reference.get_meta("site_geometry_profile","")=="reference_size_v1", "new default annotation fixture uses reference geometry")
+		_check_visual(reference, "reference water store " + ("import-preferred" if imported else "procedural"))
+		reference.free()
 		var facade := Facade.new()
 		root.add_child(facade)
 		facade.setup({"name": "电热储能站", "visual_dimension_profile": "metric_v1"}, imported)
@@ -106,6 +112,8 @@ func _run() -> void:
 	quit(0 if failures.is_empty() else 1)
 
 func _check_visual(visual: Node3D, title: String) -> void:
+	check(is_instance_valid(visual.selection_ring), title + ": valid visual supplies an interaction ring")
+	if not is_instance_valid(visual.selection_ring): return
 	var transforms: Array[Transform3D] = []
 	var meshes: Array[Mesh] = []
 	for surface in visual.surfaces:

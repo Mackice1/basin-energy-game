@@ -1,4 +1,5 @@
 extends SceneTree
+const CurrentWorldVersion = preload("res://scripts/world_game.gd")
 ## Controller regression: real placement guards, visual nodes, state, save and
 ## undo, with deterministic terrain/picking. Input is dispatched to controller
 ## methods; this does not claim native OS mouse or GPU rendering coverage.
@@ -209,7 +210,7 @@ func test_disk_roundtrip() -> void:
 	var path := "user://interaction_polish_%d.json" % OS.get_process_id()
 	check(game.write_save(path), "writes actual polished-scene save")
 	var on_disk: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path))
-	check(on_disk.schema == 13 and on_disk.model_version == 22, "polish preserves current schema13 and physical model22")
+	check(on_disk.schema == CurrentWorldVersion.CURRENT_SAVE_SCHEMA and on_disk.model_version == CurrentWorldVersion.CURRENT_MODEL_VERSION, "polish preserves current schema14 and physical model23")
 	check(not on_disk.has("drag_active") and not on_disk.has("hovered_id") and not on_disk.has("link_preview"), "transient interaction state is never serialized")
 	check(game.read_save(path), "reloads actual save through validated controller path")
 	check(JSON.parse_string(JSON.stringify(game.state())) == JSON.parse_string(JSON.stringify(before)), "actual file roundtrip preserves complete scene and inventory")

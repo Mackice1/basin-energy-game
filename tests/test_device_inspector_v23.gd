@@ -64,7 +64,7 @@ func run() -> void:
  check(inspector.texts["运行"].text.contains("9.75"), "live report changes")
  host.links.append({"from":0,"to":2,"from_port":"out","to_port":"in","capacity_mw":3.0})
  inspector.refresh()
- check(inspector.texts["连接"].text.contains("变电站 #2"), "actual neighbor and link")
+ check(inspector.texts["连接"].text.contains(Inspector.NAMES.station + " #2"), "actual neighbor and link")
  var old_model = inspector.model_node
  host.devices[0].params.rotor_diameter_m = 150.0
  inspector.refresh()

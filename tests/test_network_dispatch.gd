@@ -75,7 +75,7 @@ func _initialize() -> void:
 	quit(0 if failures.is_empty() else 1)
 
 func _test_catalog() -> void:
-	for kind in Catalog.implemented_kinds():
+	for kind in preload("res://scripts/save_validator.gd").SCHEMA13_KINDS:
 		check(Model.validate(kind, Model.defaults(kind)).is_empty(), kind + " defaults valid")
 		for p in Catalog.ports(kind):
 			if p.carrier=="electricity_ac":

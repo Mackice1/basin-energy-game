@@ -19,19 +19,20 @@ func _run() -> void:
 	check(base.tilt_deg == 30.0 and base.row_pitch_m == 3.6 and base.maintenance_margin_m == 2, "fixed documented teaching installation")
 	check(base.collector_dimensions_m.is_equal_approx(Vector3(2.061,.15,2.241)), "historical collector full-size envelope")
 	for area in [3.03, 3.04, 30.3, 31.0, 303.0, 3030.0]:
-		var d := Spatial.profile("solar_thermal", {"absorber_area_m2":area}, false)
+		# Historical variable-area whole-module layout is preserved explicitly.
+		var d := Spatial.profile("solar_thermal", {"absorber_area_m2":area}, false, "flow_process_v2", "")
 		check(d.valid and d.module_count == int(ceil(area/3.03 - 0.000000001)), "whole-module ceiling %s" % area)
 		check(d.unit_dimensions_m.is_equal_approx(base.unit_dimensions_m), "no compressed module at %s" % area)
 		check(d.module_origins_world.is_empty() and not d.origins_complete, "cheap placement does not allocate modules")
 		check(Spatial.module_origin_m(d, d.module_count-1).is_finite(), "analytical origin remains valid")
-	var partial := Spatial.profile("solar_thermal", {"absorber_area_m2":3.04})
+	var partial := Spatial.profile("solar_thermal", {"absorber_area_m2":3.04}, true, "flow_process_v2", "")
 	check(partial.module_count == 2 and partial.last_module_utilization > 0 and partial.last_module_utilization < .01, "fractional last module honest utilization")
-	var huge := Spatial.profile("solar_thermal", {"absorber_area_m2":3030}, false)
+	var huge := Spatial.profile("solar_thermal", {"absorber_area_m2":3030}, false, "flow_process_v2", "")
 	check(huge.land_dimensions_m.x > 48 and huge.land_dimensions_m.z > 48, "oversized fields cannot fit by scaling")
 	for bad in [0,-1,3030.01,INF,NAN,"bad"]:
 		check(not Spatial.profile("solar_thermal", {"absorber_area_m2":bad}).valid, "invalid absorber geometry rejected")
 	for imported in [false,true]:
-		var params := {"absorber_area_m2":3.04,"visual_dimension_profile":"metric_v1"}
+		var params := {"absorber_area_m2":3.04,"visual_dimension_profile":"metric_v1","visual_site_geometry_profile":""}
 		var unchanged := params.duplicate(true)
 		var item = Visual.create("solar_thermal", params, imported)
 		root.add_child(item)
@@ -64,5 +65,33 @@ func _run() -> void:
 		for i in item.surfaces.size():
 			check(item.surfaces[i].material_override == original_materials[i], "preview restores material")
 		item.free()
+	# New reference installations keep the complete supported ten-module hardware
+	# when derated; the geometry-only floor must not alter operating parameters.
+	for area in [3.03, 3.04, 30.3]:
+		var reference_params := {"absorber_area_m2":area,"visual_dimension_profile":"metric_v1"}
+		var original := reference_params.duplicate(true)
+		var d := Spatial.profile("solar_thermal", reference_params)
+		check(d.valid and d.site_geometry_profile == "reference_size_v1", "new reference default accepted %s" % area)
+		check(d.module_count == 10 and d.tube_count == 240, "derating retains ten full collector modules %s" % area)
+		check(d.unit_dimensions_m.is_equal_approx(base.unit_dimensions_m) and d.body_dimensions_m.is_equal_approx(base.body_dimensions_m) and d.land_dimensions_m.is_equal_approx(base.land_dimensions_m), "derating does not shrink installed hardware or footprint %s" % area)
+		check(is_equal_approx(d.installed_absorber_area_m2, 30.3), "derating retains full installed absorber area %s" % area)
+		var cheap := Spatial.profile("solar_thermal", reference_params, false)
+		check(cheap.valid and cheap.module_count == 10 and cheap.module_origins_world.is_empty() and not cheap.origins_complete, "reference cheap placement preserves full analytical installation %s" % area)
+		check(reference_params == original, "reference spatial query does not modify operating rating")
+		for imported in [false, true]:
+			var item = Visual.create("solar_thermal", reference_params, imported)
+			root.add_child(item)
+			check(item.get_meta("site_geometry_profile") == "reference_size_v1", "new visual defaults to reference site profile")
+			check(item.get_meta("visual_backend") == ("blender_glb" if imported else "metric_procedural_fallback"), "new reference retains both real backends")
+			check(item.get_meta("module_count") == 10 and item.get_meta("tube_count") == 240, "new reference renders full supported installation %s" % area)
+			if imported:
+				check(item.get_node("BlenderAsset").get_child_count() == 10, "reference imported whole-module count")
+			else:
+				check(item.find_children("EvacuatedTube*", "MeshInstance3D", true, false).size() == 240, "reference fallback preserves ten full 24-tube modules")
+			check(item.named_ports.size() == 2 and item.has_named_port("ac_in") and item.has_named_port("heat_out"), "reference retains one aggregate port pair")
+			check(reference_params == original, "reference visual does not modify operating rating")
+			item.free()
+	for unsupported_area in [30.3001, 31.0, 303.0, 3030.0]:
+		check(not Spatial.profile("solar_thermal", {"absorber_area_m2":unsupported_area}).valid, "new reference rejects unsupported absorber area %s" % unsupported_area)
 	print("SOLAR_THERMAL_GEOMETRY checks=",checks," failures=",failures.size())
 	quit(0 if failures.is_empty() else 1)

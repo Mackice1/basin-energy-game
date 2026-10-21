@@ -189,8 +189,12 @@ func run() -> void:
 	click_world(Vector2(24, 24))
 	check(host.devices.size() == 1 and host.mutation_calls == calls, "overlap and bounds rejected before host mutation")
 	check(interior.placement_error("heat_demand", Vector2.ZERO) != "", "demand cannot be injected through placement tools")
-	check(interior.placement_error("thermal_store", Vector2(20, 0)) != "", "store uses radius five, including bounds")
 	interior.tools.thermal_store.pressed.emit()
+	motion_world(Vector2(0, -4))
+	var store_radius: float = interior.preview.get_meta("footprint_radius")
+	var inner_half_width: float = interior._half_extent() * interior.visual_scale
+	check(interior.placement_error("thermal_store", Vector2(inner_half_width - store_radius - 0.01, 0)).is_empty(), "new store preview fits just inside the actual inner boundary")
+	check(not interior.placement_error("thermal_store", Vector2(inner_half_width - store_radius + 0.01, 0)).is_empty(), "new store preview is rejected just outside the actual inner boundary")
 	click_world(Vector2(0, -4))
 	interior.tools.heat_exchanger.pressed.emit()
 	click_world(Vector2(14, -4))

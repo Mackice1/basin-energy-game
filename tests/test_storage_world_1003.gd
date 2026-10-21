@@ -1,5 +1,8 @@
 extends SceneTree
-## End-to-end first-level placement -> AC wiring -> timed state -> save roundtrip.
+const CurrentWorldVersion = preload("res://scripts/world_game.gd")
+## Current first-level placement plus explicit historical teaching energy chains.
+## Reference defaults/derating/rejection remain tested separately from old oversized
+## PV and station parameters used for charging, conservation and save roundtrips.
 ## No scene boot, GUI, terrain, user slot access, or baseline writes.
 const Catalog = preload("res://scripts/device_catalog.gd")
 class Fixture:
@@ -35,6 +38,20 @@ func run():
 		if game.devices.size()!=4:cleanup(game);continue
 		var store:Dictionary=game.devices[3]
 		check(float(store.state.energy_mwh)==0.0,kind+" begins empty")
+		check(game.is_reference_layout() and game.validate_state(game.state()).is_empty(),kind+" all current default facilities use valid finite reference hardware")
+		var dimensions:=game.device_dimensions(store)
+		var derated:Dictionary=store.params.duplicate(true);derated.capacity_mwh=float(derated.capacity_mwh)*.25
+		var low:=game.device_dimensions(store,derated)
+		check(low.valid and low.module_count==dimensions.module_count and low.body_dimensions_m==dimensions.body_dimensions_m and low.land_dimensions_m==dimensions.land_dimensions_m,kind+" current derating does not shrink installed site")
+		var unsupported:Dictionary=store.params.duplicate(true);unsupported.capacity_mwh=float(unsupported.capacity_mwh)*5.0
+		var before:=var_to_bytes(game.state())
+		check(game.can_place(kind,Vector2(80,0),-2,unsupported).contains("支持"),kind+" current unsupported capacity rejected before placement")
+		check(var_to_bytes(game.state())==before,kind+" rejected reference capacity cannot alter parameters, positions or stock")
+		# Recreate the historical metric teaching scene before applying its
+		# original 12MWdc PV / 20MW station data. No current hardware claim and
+		# no production guard override; all original energy/save assertions stay.
+		for item in game.devices:item.erase("site_geometry_profile")
+		check(not game.is_reference_layout() and game.layout_mode_error().is_empty(),kind+" historical energy fixture has no mixed reference markers")
 		game.devices[0].params={"dc_capacity_mw":12.0,"inverter_capacity_mw":10.0}
 		game.devices[1].params={"capacity_mw":20.0,"loss_fraction":0.0}
 		game.devices[2].params={"demand_mw":0.1,"priority":10.0}
@@ -51,7 +68,7 @@ func run():
 		for i in 5:game.refresh();game.solve_at(0)
 		check(float(store.state.energy_mwh)==frozen,kind+" paused inspection cannot alter inventory")
 		var saved:Dictionary=game.state()
-		check(int(saved.schema)==13,kind+" new schema")
+		check(int(saved.schema)==CurrentWorldVersion.CURRENT_SAVE_SCHEMA,kind+" new schema")
 		check(game.validate_state(saved)=="",kind+" save validation: "+game.validate_state(saved))
 		check(game.validate_state(JSON.parse_string(JSON.stringify(saved)))=="",kind+" JSON roundtrip")
 		game.links=game.links.filter(func(l):return int(l.from)!=0)

@@ -31,6 +31,15 @@ func run():
 	var game:=fixture()
 	for spec in [["pv",Vector2(-40,0)],["station",Vector2.ZERO],["load",Vector2(40,0)],["caes_aboveground",Vector2(0,40)]]:
 		check(game.add_equipment(spec[0],spec[1]),"place chart fixture")
+	check(game.devices.all(func(item):return item.get("site_geometry_profile","")=="reference_size_v1"),"normal new construction has reference geometry markers")
+	# The historical 12/10 MW test source exceeds today's finite PV installation.
+	# Use a separate unmarked legacy-data fixture, never an invalid new reference
+	# device, so the real solver can still exercise constrained nonzero dispatch.
+	var historical_devices: Array = game.devices.duplicate(true)
+	for item in historical_devices: item.erase("site_geometry_profile")
+	cleanup(game)
+	game=fixture();game.devices=historical_devices;game.next_id=4
+	check(not game.is_reference_layout() and game.layout_mode_error().is_empty(),"historical high-power fixture is explicitly unmarked and not mixed")
 	game.devices[0].params={"dc_capacity_mw":12.0,"inverter_capacity_mw":10.0}
 	game.devices[1].params={"capacity_mw":20.0,"loss_fraction":0.0}
 	game.devices[2].params={"demand_mw":0.1,"priority":10.0}
@@ -45,6 +54,10 @@ func run():
 	game.paused=false
 	check(game.advance(1.0),"real advancing charge")
 	check(chart.sample_count==1,"world commit hook records")
+	if chart.history().is_empty():
+		cleanup(game)
+		print("RUNTIME_CHART_WORLD_1003 checks=",checks," failures=",failures.size())
+		quit(1);return # A failed commit must fail promptly, not hang on an invalid index.
 	var first:Dictionary=chart.history()[0]
 	check(float(first.values[0])>0.0 and float(first.values[1])==0.0,"chart actual charging not future discharge")
 	var expected:float=float(game.devices[3].state.energy_mwh)/float(game.devices[3].params.capacity_mwh)*100.0
@@ -56,7 +69,7 @@ func run():
 	game.selected_id=0;chart.sync_target();check(chart.sample_count==0,"switch to PV clears CAES curve")
 	game.paused=false;check(game.advance(1.0),"PV actual step")
 	check(chart.sample_count==1 and chart.power_unit=="MW" and not chart.has_soc,"PV curve correct units")
-	check(float(chart.history()[0].values[0])<10.0,"PV constrained real output not 10MW availability")
+	check(chart.sample_count>0 and float(chart.history()[0].values[0])<10.0,"PV constrained real output not 10MW availability")
 	game.checkpoint();check(chart.sample_count==0,"checkpoint reset prevents edited topology history mixing")
 	game.advance(1.0);var state:Dictionary=game.state();game.restore(state)
 	check(chart.sample_count==0,"same-ID same-time restore clears")

@@ -2,6 +2,7 @@ extends Control
 ## Presentation-only ring buffer. Feed ONLY successfully committed simulation steps.
 ## No solving, interpolation, synthetic points, save-state mutation or history persistence.
 const Catalog = preload("res://scripts/device_catalog.gd")
+const ReadoutCard = preload("res://scripts/right_metric_card.gd")
 const MAX_SAMPLES := 240
 const MIN_SIM_INTERVAL := 1.0
 const MIN_WALL_INTERVAL_MS := 200
@@ -85,6 +86,27 @@ func _value(report: Dictionary, keys: Array) -> Variant:
 func _extract(item: Dictionary, report: Dictionary) -> Dictionary:
 	var kind: String = str(item.get("kind",""))
 	if report.get("valid",true) == false: return {}
+	if kind in Catalog.Materials.INVENTORY_KINDS:
+		var params: Dictionary = item.get("params", {})
+		var capacity: float = Catalog.inventory_capacity(kind, params)
+		var inventory: Variant = _value(report, ["next_inventory_kg"])
+		if inventory == null or not is_finite(capacity) or capacity <= 0.0: return {}
+		var outputs: Dictionary = {
+			"water_supply_boundary": ["water_out_kg_s", "实际供水"],
+			"nitrogen_supply_boundary": ["nitrogen_out_kg_s", "N2(g)供料"],
+			"co2_supply_boundary": ["co2_out_kg_s", "CO2(g)供料"],
+			"ammonia_synthesis_station": ["product_produced_kg_s", "NH3(g)生成"],
+			"methanol_synthesis_station": ["product_produced_kg_s", "CH3OH(l)生成"]}
+		var output: Array = outputs.get(kind, ["hydrogen_out_kg_s", "出库氢"])
+		var outbound: Variant = _value(report, [output[0]])
+		if outbound == null: return {}
+		var series: Array = [outbound]
+		var names: Array = [output[1]]
+		if kind in Catalog.Materials.HYDROGEN_STORE_KINDS:
+			var inbound: Variant = _value(report, ["hydrogen_in_kg_s"])
+			if inbound == null: return {}
+			series = [inbound, outbound]; names = ["入库氢", "出库氢"]
+		return {"values":series,"labels":names,"unit":"kg/s","soc":clampf(float(inventory)/capacity*100.0,0.0,100.0)}
 	if Catalog.is_storage(kind):
 		var thermal: bool = Catalog.is_thermal_storage(kind)
 		var suffix := "mwth" if thermal else "mw"
@@ -101,8 +123,10 @@ func _extract(item: Dictionary, report: Dictionary) -> Dictionary:
 	var label := "实际功率"
 	var unit := "MW"
 	match kind:
+		"electrolyzer_station": keys = ["electric_input_mw"]; label = "电解实际用电"
+		"fuel_cell_station": keys = ["electric_output_mw"]; label = "实际净出力"
 		"wind", "pv": keys = ["sent_mw"]; label = "实际送出"
-		"station": keys = ["sent_mw"]; label = "实际外送"
+		"station", "collector_substation": keys = ["sent_mw"]; label = "实际外送"
 		"load": keys = ["served_mw"]; label = "实际供电"
 		"heat_demand": keys = ["served_mwth"]; label = "实际供热"; unit = "MWth"
 		"electric_boiler", "fuel_boiler", "solar_thermal", "parabolic_trough", "solar_tower_receiver": keys = ["heat_output_mwth","output_mwth","heat_sent_mwth"]; label = "实际产热"; unit = "MWth"
@@ -182,6 +206,17 @@ func _plot(points: Array[Dictionary], box: Rect2, index: int, max_value: float, 
 	if vertices.size() > 1: draw_polyline(vertices,color,1.8,true)
 	elif vertices.size() == 1: draw_circle(vertices[0],2.8,color)
 
+func _series_number(value: float) -> String:
+	# A real low hydrogen flow must not be labelled 0.000 kg/s.
+	if power_unit == "kg/s" and value != 0.0 and absf(value) < 0.001:
+		return ReadoutCard.number(value)
+	return "%.3f" % value
+
+func _inventory_axis_label() -> String:
+	if target_kind in Catalog.Materials.SYNTHESIS_KINDS: return "产品占容"
+	if target_kind in Catalog.Materials.INVENTORY_KINDS: return "库存占容"
+	return "SOC"
+
 func _draw():
 	if sample_count == 0: return
 	var panel := StyleBoxFlat.new(); panel.bg_color = Color("24303ded"); panel.set_corner_radius_all(12);panel.border_color = Color("425565");panel.set_border_width_all(1)
@@ -191,16 +226,16 @@ func _draw():
 	var latest: Dictionary = points[-1]
 	var colors: Array[Color] = [CYAN,AMBER]
 	for index in series.size():
-		_text(Vector2(14+index*152,44),"%s %.3f %s"%[series[index],float(latest.values[index]),power_unit],11,colors[index%2],150)
+		_text(Vector2(14+index*152,44),"%s %s %s"%[series[index],_series_number(float(latest.values[index])),power_unit],11,colors[index%2],150)
 	var graph := Rect2(45,62,maxf(120,size.x-61),maxf(36,size.y-142) if has_soc else maxf(60,size.y-102))
-	var maximum := 0.1 # Keep zero-output axis labels distinct at two-decimal MW precision.
+	var maximum := 0.001 if power_unit == "kg/s" else 0.1 # Keep finite low mass flows readable, with a separate SOC axis.
 	for point in points:
 		for value in point.values: maximum = maxf(maximum,float(value))
 	maximum *= 1.1
 	for index in 3:
 		var y: float = graph.position.y+graph.size.y*index/2.0
 		draw_line(Vector2(graph.position.x,y),Vector2(graph.end.x,y),Color("44515f"),1)
-		_text(Vector2(5,y+4),"%.2f"%(maximum*(1.0-index/2.0)),10,MUTED,38)
+		_text(Vector2(5,y+4),("%.4f" if power_unit == "kg/s" else "%.2f")%(maximum*(1.0-index/2.0)),10,MUTED,38)
 	_text(Vector2(8,58),power_unit,10,MUTED)
 	for index in series.size(): _plot(points,graph,index,maximum,colors[index%2])
 	if has_soc:
@@ -209,6 +244,6 @@ func _draw():
 		draw_line(Vector2(soc_box.position.x,soc_box.end.y),soc_box.end,Color("44515f"),1)
 		_text(Vector2(8,soc_box.position.y+4),"100%",10,MUTED)
 		_text(Vector2(8,soc_box.end.y+3),"0%",10,MUTED)
-		_text(Vector2(graph.position.x,soc_box.position.y-6),"SOC %.1f%%"%float(latest.soc),11,GREEN)
+		_text(Vector2(graph.position.x,soc_box.position.y-6),"%s %.1f%%"%[_inventory_axis_label(),float(latest.soc)],11,GREEN)
 		_plot(points,soc_box,0,100.0,GREEN,true)
 	_text(Vector2(14,size.y-10),"%.0f–%.0f s · 实际运行采样 · %d 点"%[float(points[0].t),float(latest.t),sample_count],10,MUTED,size.x-28)

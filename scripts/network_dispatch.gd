@@ -5,6 +5,7 @@ extends RefCounted
 ## reports have valid=false and MUST NOT be committed by the simulation caller.
 ## step_valid is only the finite/nonnegative-duration guard, not an apply gate.
 const Catalog = preload("res://scripts/device_catalog.gd")
+const Materials = preload("res://scripts/material_dispatch.gd")
 const Thermal = preload("res://scripts/thermal_dispatch.gd")
 const FuelSupply = preload("res://scripts/fuel_supply.gd")
 const HighTemp = preload("res://scripts/high_temp_thermal.gd")
@@ -73,10 +74,10 @@ static func _prepare(devices: Array, links: Array, weather: Dictionary, direct: 
 			errors.append_array(Catalog.validate_state(kind, p, raw_state))
 			if errors.is_empty():
 				state = raw_state.duplicate(true)
-		if Catalog.is_thermal(kind):
+		if Catalog.is_thermal(kind) or Catalog.is_material(kind) or kind in [Catalog.CO2_STORAGE_KIND,Catalog.COLLECTOR_KIND]:
 			if raw.has("model_profile") and (not raw.model_profile is String or raw.model_profile != Catalog.model_profile(kind)):
 				errors.append("Unknown thermal model_profile")
-			if raw.has("model_profile_version") and (not _integer(raw.model_profile_version) or int(raw.model_profile_version) != Catalog.THERMAL_PROFILE_VERSION):
+			if raw.has("model_profile_version") and (not _integer(raw.model_profile_version) or int(raw.model_profile_version) != Catalog.model_profile_version(kind)):
 				errors.append("Unknown thermal model_profile_version")
 		var detail: Dictionary = {"mw": 0.0, "generated_mw": 0.0, "errors": errors,
 			"valid": errors.is_empty(), "source": "device", "nameplate_clipped_mw": 0.0}
@@ -102,7 +103,8 @@ static func _prepare(devices: Array, links: Array, weather: Dictionary, direct: 
 		detail.merge({"id": int(raw.id), "kind": kind, "sent_mw": 0.0,
 			"received_mw": 0.0, "delivered_mw": 0.0, "curtailed_mw": 0.0, "loss_mw": 0.0,
 			"input_mw": 0.0, "output_mw": 0.0, "connected": false, "utilization": 0.0}, true)
-		if kind == "station" and detail.valid:
+		if Catalog.is_electric_station(kind) and detail.valid:
+			if kind == Catalog.COLLECTOR_KIND: detail.merge({"model_profile":Catalog.COLLECTOR_PROFILE,"model_profile_version":1})
 			detail.capacity_mw = p.capacity_mw
 			detail.loss_fraction = p.loss_fraction
 			resources["station:" + id] = float(p.capacity_mw)
@@ -124,7 +126,9 @@ static func _prepare(devices: Array, links: Array, weather: Dictionary, direct: 
 			resources["discharge:" + id] = limits.discharge_limit_mw
 		elif kind in ["wind", "pv"] and detail.valid:
 			resources["source:" + id] = float(detail.mw)
-		if kind in Rankine.KINDS and detail.valid:
+		if Catalog.is_material(kind) and detail.valid:
+			Materials.initialize_node(id, kind, p, state, step_s, detail, resources)
+		elif kind in Rankine.KINDS and detail.valid:
 			Rankine.initialize_node(id, kind, p, detail, resources)
 		elif kind in Tower.KINDS and detail.valid:
 			Tower.initialize_node(id, kind, p, state, step_s, detail, resources)
@@ -186,6 +190,15 @@ static func _prepare(devices: Array, links: Array, weather: Dictionary, direct: 
 		line.merge(Catalog.connection_ports(valid_devices, raw), true)
 		line.valid = true
 		line.reason = ""
+		if line.carrier in Catalog.Materials.CARRIERS:
+			for key in ["capacity_mw", "sent_mw", "received_mw", "signed_mw", "loss_mw"]: line.erase(key)
+			line.merge({"mass_flow_capacity_kg_s":float(raw.mass_flow_capacity_kg_s),"sent_kg_s":0.0,"received_kg_s":0.0,"signed_kg_s":0.0,"loss_kg_s":0.0,"flow_from":line.from,"flow_to":line.to}, true)
+			line.loss_fraction = 0.0
+			resources["material_line:"+str(index)] = line.mass_flow_capacity_kg_s if step_s > 0.0 else 0.0
+			accepted.append(raw)
+			report.devices[str(line.from)].connected = true
+			report.devices[str(line.to)].connected = true
+			continue
 		if line.carrier == "water_steam":
 			line.erase("capacity_mw")
 			line.merge({"mass_flow_capacity_kg_s": float(raw.mass_flow_capacity_kg_s), "sent_kg_s": 0.0, "received_kg_s": 0.0, "signed_kg_s": 0.0, "loss_kg_s": 0.0, "enthalpy_kj_kg": Rankine.enthalpy(line.grade_id), "enthalpy_flow_mw": 0.0, "flow_from": line.from, "flow_to": line.to}, true)
@@ -216,13 +229,13 @@ static func _prepare(devices: Array, links: Array, weather: Dictionary, direct: 
 		report.devices[a].connected = true
 		if nodes.has(b):
 			report.devices[b].connected = true
-		var station_id: String = a if nodes[a].kind == "station" else b
-		var leaf_id: String = b if nodes[a].kind == "station" else a
+		var station_id: String = a if Catalog.is_electric_station(nodes[a].kind) else b
+		var leaf_id: String = b if Catalog.is_electric_station(nodes[a].kind) else a
 		if not outputs.has(station_id):
 			outputs[station_id] = []
-		if leaf_id == "-1" or nodes[leaf_id].kind in ["load", "battery", "battery_sodium", "battery_flow", "caes_aboveground", "liquid_air_store", "hydrogen_storage_system", "electric_boiler", "fuel_boiler", "solar_thermal", "parabolic_trough", "oil_water_exchanger", "steam_generator", "steam_condenser", "feedwater_pump", "salt_steam_generator", "solar_tower_receiver", "molten_salt_store"]:
+		if leaf_id == "-1" or nodes[leaf_id].kind in ["electrolyzer_station", "hydrogen_gas_store", "hydrogen_liquid_store", "hydrogen_metal_hydride_store", "ammonia_synthesis_station", "methanol_synthesis_station", "load", "battery", "battery_sodium", "battery_flow", "caes_aboveground", "liquid_air_store", "hydrogen_storage_system", "co2_liquid_cycle_store", "electric_boiler", "fuel_boiler", "solar_thermal", "parabolic_trough", "oil_water_exchanger", "steam_generator", "steam_condenser", "feedwater_pump", "salt_steam_generator", "solar_tower_receiver", "molten_salt_store"]:
 			outputs[station_id].append({"id": leaf_id, "line": index})
-		if leaf_id != "-1" and nodes[leaf_id].kind in ["wind", "pv", "battery", "battery_sodium", "battery_flow", "caes_aboveground", "liquid_air_store", "hydrogen_storage_system", "steam_turbine"]:
+		if leaf_id != "-1" and nodes[leaf_id].kind in ["fuel_cell_station", "wind", "pv", "battery", "battery_sodium", "battery_flow", "caes_aboveground", "liquid_air_store", "hydrogen_storage_system", "co2_liquid_cycle_store", "steam_turbine"]:
 			attachments[leaf_id] = {"station": station_id, "line": index}
 	var paths: Array = []
 	for source_id in _sorted_ids(attachments):
@@ -235,9 +248,11 @@ static func _prepare(devices: Array, links: Array, weather: Dictionary, direct: 
 		for target in targets:
 			var sink_id: String = target.id
 			var sink_kind: String = "grid" if sink_id == "-1" else str(nodes[sink_id].kind)
-			if Catalog.is_electric_storage(source.kind) and not sink_kind in ["load", "electric_boiler", "fuel_boiler", "solar_thermal", "parabolic_trough", "oil_water_exchanger", "steam_generator", "steam_condenser", "feedwater_pump", "salt_steam_generator", "solar_tower_receiver", "molten_salt_store"]:
+			if source.kind == "fuel_cell_station" and sink_kind != "load": continue
+			if sink_kind in ["electrolyzer_station", "hydrogen_gas_store"] and not source.kind in ["wind", "pv"]: continue
+			if Catalog.is_electric_storage(source.kind) and not sink_kind in ["hydrogen_liquid_store", "hydrogen_metal_hydride_store", "ammonia_synthesis_station", "methanol_synthesis_station", "load", "electric_boiler", "fuel_boiler", "solar_thermal", "parabolic_trough", "oil_water_exchanger", "steam_generator", "steam_condenser", "feedwater_pump", "salt_steam_generator", "solar_tower_receiver", "molten_salt_store"]:
 				continue # No battery-to-battery cycling or discharge for export.
-			if source.kind == "steam_turbine" and not sink_kind in ["load", "battery", "battery_sodium", "battery_flow", "caes_aboveground", "liquid_air_store", "hydrogen_storage_system", "grid"]:
+			if source.kind == "steam_turbine" and not sink_kind in ["load", "battery", "battery_sodium", "battery_flow", "caes_aboveground", "liquid_air_store", "hydrogen_storage_system", "co2_liquid_cycle_store", "grid"]:
 				continue
 			var outgoing: Dictionary = report.lines[target.line]
 			var arriving: float = 1.0 - incoming.loss_fraction
@@ -248,7 +263,7 @@ static func _prepare(devices: Array, links: Array, weather: Dictionary, direct: 
 			coeffs["line:" + str(attach.line)] = 1.0
 			coeffs["station:" + station_id] = arriving
 			coeffs["line:" + str(target.line)] = after_station
-			coeffs["grid" if sink_id == "-1" else ("charge:" if Catalog.is_electric_storage(sink_kind) else ("boiler:" if sink_kind == "electric_boiler" else ("fuel_aux:" if sink_kind == "fuel_boiler" else ("rankine_aux:" if sink_kind in ["steam_generator", "steam_condenser", "feedwater_pump", "salt_steam_generator"] else ("solar_aux:" if sink_kind in ["solar_thermal", "parabolic_trough", "oil_water_exchanger", "solar_tower_receiver", "molten_salt_store"] else "load:"))))) + sink_id] = received
+			coeffs[("material_aux:"+sink_id) if Catalog.is_material(sink_kind) else ("grid" if sink_id == "-1" else ("charge:" if Catalog.is_electric_storage(sink_kind) else ("boiler:" if sink_kind == "electric_boiler" else ("fuel_aux:" if sink_kind == "fuel_boiler" else ("rankine_aux:" if sink_kind in ["steam_generator", "steam_condenser", "feedwater_pump", "salt_steam_generator"] else ("solar_aux:" if sink_kind in ["solar_thermal", "parabolic_trough", "oil_water_exchanger", "solar_tower_receiver", "molten_salt_store"] else "load:"))))) + sink_id)] = received
 			paths.append({"source_id": source_id, "source_kind": source.kind,
 				"station_id": station_id, "sink_id": sink_id, "sink_kind": sink_kind,
 				"incoming": int(attach.line), "outgoing": int(target.line),
@@ -301,6 +316,8 @@ static func _allocate(path: Dictionary, resources: Dictionary, report: Dictionar
 		sink.received_mw += received
 		if path.sink_kind == "load":
 			sink.served_mw += received
+		elif Catalog.is_material(path.sink_kind):
+			sink.electric_input_mw += received
 		elif path.sink_kind == "electric_boiler":
 			sink.electric_input_mw += received
 		elif path.sink_kind in ["fuel_boiler", "solar_thermal", "parabolic_trough", "oil_water_exchanger", "steam_generator", "steam_condenser", "feedwater_pump", "salt_steam_generator", "solar_tower_receiver", "molten_salt_store"]:
@@ -330,6 +347,7 @@ static func run(devices: Array, links: Array, weather: Dictionary, direct: Dicti
 	Thermal.prepare(prepared)
 	Tower.prepare(prepared)
 	Rankine.prepare(prepared)
+	Materials.prepare(prepared)
 	var loads: Array = []
 	for id in _sorted_ids(nodes):
 		if nodes[id].valid and nodes[id].kind in ["load", "heat_demand"]:
@@ -352,10 +370,15 @@ static func run(devices: Array, links: Array, weather: Dictionary, direct: Dicti
 				Thermal.serve_boiler_heat(prepared, load_id, _allocate, true)
 			else:
 				if report.has("rankine") and not _external_can_fill(prepared, load_id): Rankine.serve_sink(prepared, load_id, _allocate)
+				var phase_enabled: bool = false
+				for n in nodes.values(): phase_enabled = phase_enabled or n.kind in Catalog.Materials.PHASE_KINDS
 				for storage in [false, true]:
+					if storage and phase_enabled: Materials.serve_load(prepared,load_id,_allocate)
 					for path in paths:
-						if path.sink_id == load_id and path.source_kind != "steam_turbine" and (Catalog.is_electric_storage(path.source_kind)) == storage:
+						if path.sink_id == load_id and not path.source_kind in ["steam_turbine", "fuel_cell_station"] and (Catalog.is_electric_storage(path.source_kind)) == storage:
 							_allocate(path, resources, report)
+				Materials.serve_load(prepared, load_id, _allocate)
+		Materials.synthesize_surplus(prepared,_allocate)
 		# Boiler demand was reserved/served before either kind of surplus storage.
 		Thermal.charge_solar_storage(prepared, _allocate)
 		Tower.charge_surplus(prepared, _allocate)
@@ -369,6 +392,7 @@ static func run(devices: Array, links: Array, weather: Dictionary, direct: Dicti
 			for path in paths:
 				if path.sink_id == battery_id and path.source_kind != "steam_turbine":
 					_allocate(path, resources, report)
+		Materials.charge_surplus(prepared, _allocate)
 		# The grid is an explicitly cabled, finite export sink, never a fallback.
 		if report.has("rankine") and not _external_can_fill(prepared, "-1"): Rankine.serve_sink(prepared, "-1", _allocate)
 		for path in paths:
@@ -381,7 +405,7 @@ static func run(devices: Array, links: Array, weather: Dictionary, direct: Dicti
 		var d: Dictionary = report.devices[id]
 		if not d.valid:
 			continue
-		match node.kind:
+		match Catalog.dispatch_role(node.kind):
 			"wind", "pv":
 				d.curtailed_mw = maxf(0.0, d.mw - d.sent_mw)
 				report.curtailed_mw += d.curtailed_mw
@@ -394,7 +418,7 @@ static func run(devices: Array, links: Array, weather: Dictionary, direct: Dicti
 				d.utilization = d.served_mw / d.demand_mw if d.demand_mw > 0.0 else 1.0
 				report.served_mw += d.served_mw
 				report.unserved_mw += d.unserved_mw
-			"battery", "battery_sodium", "battery_flow", "caes_aboveground", "liquid_air_store", "hydrogen_storage_system":
+			"battery", "battery_sodium", "battery_flow", "caes_aboveground", "liquid_air_store", "hydrogen_storage_system", "co2_liquid_cycle_store":
 				var p: Dictionary = node.params
 				var e: float = d.energy_after_self_discharge_mwh + (p.charge_efficiency * d.charge_mw - d.discharge_mw / p.discharge_efficiency) * report.dt_h
 				d.next_energy_mwh = clampf(e, 0.0, p.capacity_mwh)
@@ -416,8 +440,9 @@ static func run(devices: Array, links: Array, weather: Dictionary, direct: Dicti
 	Rankine.finish(prepared)
 	Thermal.finish(prepared)
 	Tower.finish(prepared)
+	Materials.finish(prepared)
 	for line in report.lines:
-		if line.carrier in [Catalog.THERMAL_CARRIER, "heat_oil", "heat_salt", "water_steam"]:
+		if line.carrier in [Catalog.THERMAL_CARRIER, "heat_oil", "heat_salt", "water_steam"] or line.carrier in Catalog.Materials.CARRIERS:
 			continue
 		line.active = line.sent_mw > EPS
 		line.utilization = line.sent_mw / line.capacity_mw if line.capacity_mw > 0.0 else 0.0
@@ -425,9 +450,10 @@ static func run(devices: Array, links: Array, weather: Dictionary, direct: Dicti
 	report.loss_mw = report.line_loss_mw + report.station_loss_mw
 	report.network_loss_mw = report.loss_mw
 	report.total_loss_mw = report.loss_mw + report.storage_loss_mw
-	report.available_mw = report.generated_mw - float(report.get("rankine", {}).get("gross_electric_mw", 0.0))
+	report.available_mw = report.generated_mw - float(report.get("rankine", {}).get("gross_electric_mw", 0.0)) - float(report.get("material", {}).get("fuel_cell_output_mw", 0.0))
 	report.produced_mw = report.generated_mw - report.curtailed_mw
 	var fuel_aux: float = float(report.get("fuel", {}).get("auxiliary_electric_mw", 0.0)) + float(report.get("solar", {}).get("auxiliary_electric_mw", 0.0)) + float(report.get("high_temp", {}).get("auxiliary_electric_mw", 0.0)) + float(report.get("rankine", {}).get("auxiliary_electric_mw", 0.0)) + float(report.get("tower", {}).get("auxiliary_electric_mw", 0.0))
+	fuel_aux += float(report.get("material", {}).get("electrolyzer_electric_mw", 0.0)) + float(report.get("material", {}).get("compression_electric_mw", 0.0)) + float(report.get("material", {}).get("phase_store_electric_mw",0.0)) + float(report.get("material", {}).get("chemical_electric_mw",0.0))
 	report.balance_error_mw = report.generated_mw + report.discharge_mw - report.curtailed_mw - report.served_mw - report.charge_mw - report.boiler_electric_mw - fuel_aux - report.delivered_mw - report.loss_mw
 	report.energy_balance_error_mwh = (report.generated_mw - report.curtailed_mw - report.served_mw - report.boiler_electric_mw - fuel_aux - report.delivered_mw - report.total_loss_mw) * report.dt_h + energy_before - energy_after
 	if report.has("fuel"):
@@ -450,6 +476,8 @@ static func run(devices: Array, links: Array, weather: Dictionary, direct: Dicti
 		report.cross_carrier_balance_error_mw = report.balance_error_mw + report.thermal.balance_error_mwth + float(report.get("high_temp", {}).get("balance_error_mwth", 0.0)) + report.rankine.balance_error_mw
 	if report.has("tower"):
 		report.cross_carrier_balance_error_mw = report.balance_error_mw + report.thermal.balance_error_mwth + float(report.get("high_temp", {}).get("balance_error_mwth", 0.0)) + float(report.get("rankine", {}).get("balance_error_mw", 0.0)) + report.tower.balance_error_mwth
+	if report.has("material"):
+		report.cross_carrier_balance_error_mw = report.balance_error_mw + report.thermal.balance_error_mwth + float(report.get("high_temp", {}).get("balance_error_mwth", 0.0)) + float(report.get("rankine", {}).get("balance_error_mw", 0.0)) + float(report.get("tower", {}).get("balance_error_mwth", 0.0)) + report.material.enthalpy_balance_error_mw
 	report.audit_errors = Thermal.audit(prepared)
 	report.errors.append_array(report.audit_errors)
 	report.valid = report.errors.is_empty() and report.warnings.is_empty()
@@ -467,6 +495,7 @@ static func optimization_snapshot(devices: Array, links: Array, weather: Diction
 	Thermal.prepare(prepared)
 	Tower.prepare(prepared)
 	Rankine.prepare(prepared)
+	Materials.prepare(prepared)
 	var report: Dictionary = prepared.report
 	var has_heat: bool = bool(report.get("thermal_enabled", false))
 	var entries: Array = []
@@ -479,6 +508,15 @@ static func optimization_snapshot(devices: Array, links: Array, weather: Diction
 		var entry: Dictionary = node.duplicate(true)
 		entry.ports = Catalog.ports(node.kind)
 		if Catalog.is_storage(node.kind): entry.storage_technology = Catalog.storage_technology(node.kind)
+		if node.kind == Catalog.COLLECTOR_KIND:
+			entry.model_profile = Catalog.COLLECTOR_PROFILE
+			entry.model_profile_version = 1
+		if node.kind == Catalog.CO2_STORAGE_KIND:
+			entry.model_profile = Catalog.CO2_STORAGE_PROFILE
+			entry.model_profile_version = 1
+		if Catalog.is_material(node.kind):
+			entry.model_profile = Catalog.Materials.model_profile(node.kind)
+			entry.model_profile_version = Catalog.Materials.model_profile_version(node.kind)
 		if Catalog.is_thermal(node.kind):
 			entry.model_profile = Catalog.model_profile(node.kind)
 			entry.model_profile_version = Catalog.THERMAL_PROFILE_VERSION
@@ -496,6 +534,9 @@ static func optimization_snapshot(devices: Array, links: Array, weather: Diction
 			var typed_port: Dictionary = p.duplicate(true)
 			typed_port.device_id = node.id
 			all_ports.append(typed_port)
+		if Catalog.is_material_inventory(node.kind):
+			initial_states[id] = node.state.duplicate(true)
+			entry.mode_options = ["idle", "charge", "discharge"] if node.kind in Catalog.Materials.HYDROGEN_STORE_KINDS else ["idle", "supply"]
 		if Catalog.is_electric_storage(node.kind):
 			initial_states[id] = node.state.duplicate(true)
 			entry.storage_limits = Catalog.storage_limits(node.params, node.state.energy_mwh, report.dt_s)
@@ -508,6 +549,9 @@ static func optimization_snapshot(devices: Array, links: Array, weather: Diction
 	var edges: Array = []
 	for line in report.lines:
 		if line.valid:
+			if line.carrier in Catalog.Materials.CARRIERS:
+				edges.append({"id": "line:" + str(line.index), "from": line.from, "to": line.to, "from_port": line.from_port, "to_port": line.to_port, "carrier": line.carrier, "unit": "kg/s", "species_id": line.species_id, "phase_id": line.phase_id, "grade_id": line.grade_id, "mass_flow_capacity_kg_s": line.mass_flow_capacity_kg_s, "loss_fraction": 0.0, "bidirectional": false})
+				continue
 			if line.carrier == "water_steam":
 				edges.append({"id": "line:" + str(line.index), "from": line.from, "to": line.to, "from_port": line.from_port, "to_port": line.to_port, "carrier": line.carrier, "unit": "kg/s", "grade_id": line.grade_id, "mass_flow_capacity_kg_s": line.mass_flow_capacity_kg_s, "loss_fraction": 0.0, "bidirectional": false})
 				continue
@@ -584,16 +628,42 @@ static func optimization_snapshot(devices: Array, links: Array, weather: Diction
 		snapshot.constraints.storage_discharge_to_grid = false
 		snapshot.constraints.storage_to_storage = false
 		snapshot.notes.append("Expanded storage uses finite net-efficiency inventories, not pressure/temperature/electrochemical transients. Hydrogen is an integrated electrolyzer-storage-fuel-cell facility on LHV basis; all input and output stage losses are counted.")
+	if entries.any(func(d): return Catalog.is_material(d.kind)):
+		snapshot.schema_version = 8
+		snapshot.device_catalog_version = Catalog.SCHEMA_VERSION
+		snapshot.units.material_flow = "kg/s"
+		snapshot.units.material_inventory = "kg"
+		snapshot.material_profile = Catalog.Materials.PROFILE_ID
+		snapshot.material_profile_version = Catalog.Materials.PROFILE_VERSION
+		snapshot.constraints.material_inventory = "finite kg; typed kg/s; start-step leakage; mutually exclusive gas charge/discharge; no same-step hydrogen pass-through"
+	if entries.any(func(d): return d.kind == Catalog.CO2_STORAGE_KIND):
+		snapshot.schema_version = 9
+		snapshot.co2_storage_profile = Catalog.CO2_STORAGE_PROFILE
+		snapshot.notes.append(Catalog.storage_technology(Catalog.CO2_STORAGE_KIND).assumptions)
+	if entries.any(func(d): return d.kind == Catalog.COLLECTOR_KIND):
+		snapshot.schema_version = 10
+		snapshot.collector_profile = Catalog.COLLECTOR_PROFILE
+		snapshot.notes.append("Collector is a 200 MW bounded active-power star hub; no station cascade, voltage/power-flow or transformer transient model. Default 1% loss is a teaching assumption.")
+	if entries.any(func(d): return d.kind in Catalog.Materials.PHASE_KINDS):
+		snapshot.schema_version = 11
+		snapshot.material_profile = Catalog.Materials.PHASE_PROFILE_ID
+		snapshot.material_profile_version = Catalog.Materials.PHASE_PROFILE_VERSION
+		snapshot.constraints.phase_hydrogen = "Fixed phase/binding enthalpy, finite external AC/ambient heat, start-step boiloff, exclusive charge/discharge; no store-to-store transfer"
+	if entries.any(func(d): return d.kind in Catalog.Materials.CHEMICAL_KINDS):
+		snapshot.schema_version = 12
+		snapshot.material_profile = Catalog.Materials.CHEMICAL_PROFILE_ID
+		snapshot.material_profile_version = Catalog.Materials.CHEMICAL_PROFILE_VERSION
+		snapshot.constraints.chemical_products = "Finite prepared N2/CO2 gas, actual H2/AC/electric heat/cooling, finite NH3gas/CH3OHliquid buffers, explicit terminal product floor; no sales or power"
 	return snapshot
 
 ## Independent replay audit, usable for tests and transaction-application gates.
-static func audit_result(devices: Array, links: Array, report: Dictionary, generation: Callable, validate: Callable, fuel_supply: Dictionary = {}, weather: Dictionary = {}) -> Array[String]:
+static func audit_result(devices: Array, links: Array, report: Dictionary, generation: Callable, validate: Callable, fuel_supply: Dictionary = {}, weather: Dictionary = {}, original_direct: Dictionary = {}) -> Array[String]:
 	var errors: Array[String] = []
 	for key in ["dt_s", "dt_h", "generated_mw", "discharge_mw", "curtailed_mw", "served_mw", "charge_mw", "delivered_mw", "loss_mw", "boiler_electric_mw", "boiler_conversion_loss_mw"]:
 		if not _number(report.get(key)):
 			errors.append("Independent audit: missing/nonfinite " + key)
 	if not errors.is_empty(): return errors
-	var audit_direct: Dictionary = {}
+	var audit_direct: Dictionary = original_direct.duplicate(true)
 	if report.has("fuel_supply") or not fuel_supply.is_empty():
 		audit_direct["_fuel_supply"] = fuel_supply if not fuel_supply.is_empty() else report.get("fuel_supply")
 	for device in devices:
@@ -601,6 +671,7 @@ static func audit_result(devices: Array, links: Array, report: Dictionary, gener
 			return ["Independent audit: original solar weather required"]
 	var prepared: Dictionary = _prepare(devices, links, weather, audit_direct, float(report.dt_s), generation, validate)
 	Rankine.prepare(prepared)
+	Materials.prepare(prepared)
 	for e in prepared.report.errors: errors.append(str(e))
 	for e in prepared.report.warnings: errors.append(str(e))
 	if not errors.is_empty(): return errors
@@ -621,7 +692,7 @@ static func audit_result(devices: Array, links: Array, report: Dictionary, gener
 				continue
 			if _number(prepared.report.devices[id][field]) and not _number(report.devices[id].get(field)):
 				errors.append("Independent audit: missing/nonfinite device field " + id + ":" + field)
-		if n.kind in ["battery", "battery_sodium", "battery_flow", "caes_aboveground", "liquid_air_store", "hydrogen_storage_system", "thermal_store", "solid_thermal_store", "high_temp_store", "molten_salt_store"]:
+		if Catalog.is_storage(n.kind) or Catalog.is_material_inventory(n.kind):
 			storage_count += 1
 			errors.append_array(Catalog.validate_state(n.kind, n.params, report.next_states.get(id)))
 	if storage_count != report.next_states.size(): errors.append("Independent audit: unexpected storage state set")
@@ -637,9 +708,12 @@ static func audit_result(devices: Array, links: Array, report: Dictionary, gener
 				errors.append("Independent audit: nonfinite line field " + field)
 		if line.get("index") != i or line.get("valid") != true:
 			errors.append("Independent audit: changed edge index/validity")
-		if prepared.report.has("high_temp") or prepared.report.has("tower"):
+		if prepared.report.has("material") or prepared.report.has("high_temp") or prepared.report.has("tower"):
 			for field in ["from", "to", "carrier", "from_port", "to_port", "unit", "grade_id"]:
 				if line.get(field) != prepared.report.lines[i].get(field): errors.append("Independent audit: changed original edge metadata " + field)
+		if prepared.report.lines[i].carrier in Catalog.Materials.CARRIERS:
+			for field in ["species_id", "phase_id"]:
+				if line.get(field) != prepared.report.lines[i].get(field): errors.append("Independent audit: changed material " + field)
 		for field in ["carrier", "from_port", "to_port", "unit", "grade_id"]:
 			if not line.get(field) is String:
 				errors.append("Independent audit: malformed line type metadata")
@@ -685,5 +759,218 @@ static func audit_result(devices: Array, links: Array, report: Dictionary, gener
 	elif report.has("tower"):
 		errors.append("Independent audit: unexpected tower aggregate")
 	if not errors.is_empty(): return errors
+	if prepared.report.has("material"):
+		if not report.get("material") is Dictionary: return ["Independent audit: missing material aggregate"]
+		for key in Materials.FIELDS:
+			if not _number(report.material.get(key)): errors.append("Independent audit: missing/nonfinite material " + key)
+	elif report.has("material"):
+		errors.append("Independent audit: unexpected material aggregate")
+	if not errors.is_empty(): return errors
 	prepared.report = report
 	return Thermal.audit(prepared)
+
+## Whole-horizon, read-only second audit, before displaying a solver result.
+## Replay original inputs and original coefficients; no solver-authored residual
+## or Python "validation.valid" flag can replace this check.
+static func audit_optimization_result(request: Dictionary, result: Dictionary) -> Array[String]:
+	var errors: Array[String] = []
+	if not _integer(request.get("schema_version")) or not _integer(result.get("schema_version")) or result.get("schema_version") != request.get("schema_version"): return ["Optimization schema differs from frozen request"]
+	if not request.get("devices") is Array or not request.get("links") is Array or not request.get("steps") is Array or not result.get("steps") is Array: return ["Incomplete optimization request/result"]
+	if result.steps.size() != request.steps.size() or request.steps.is_empty(): return ["Optimization step count differs from frozen request"]
+	if not result.get("initial_states") is Dictionary or not result.get("final_states") is Dictionary: return ["Optimization initial/final inventories missing"]
+	var model: GDScript = load("res://scripts/energy_model.gd")
+	var fleet: Array = request.devices.duplicate(true)
+	var initial: Dictionary = {}
+	var material_totals: Dictionary = Materials.initial_energy_v1()
+	var material_bounds: Dictionary = {"initial_hydrogen_kg":0.0,"final_hydrogen_kg":0.0,"initial_water_kg":0.0,"final_water_kg":0.0}
+	var has_material: bool = false
+	var has_co2: bool = false
+	var has_collector: bool = false
+	var has_phase: bool = false
+	var has_chemical: bool = false
+	var ids: Dictionary = {}
+	for d in fleet:
+		if not d is Dictionary or not _integer(d.get("id")) or not d.get("kind") is String or not d.get("params",{}) is Dictionary: return ["Malformed frozen device"]
+		var id: String = str(int(d.id))
+		if ids.has(id): return ["Duplicate frozen device"]
+		ids[id] = true
+		if d.kind == Catalog.CO2_STORAGE_KIND:
+			has_co2 = true
+			if not int(request.schema_version) in [9,10,11,12]: return ["CO2 storage requires optimization schema9 or schema10"]
+			if d.get("model_profile",Catalog.CO2_STORAGE_PROFILE) != Catalog.CO2_STORAGE_PROFILE or d.get("model_profile_version",1) != 1: return ["Unsupported original CO2 storage profile"]
+		if d.kind == Catalog.COLLECTOR_KIND:
+			has_collector = true
+			if not int(request.schema_version) in [10,11,12]: return ["Collector requires optimization schema10 or11"]
+			if d.get("model_profile",Catalog.COLLECTOR_PROFILE) != Catalog.COLLECTOR_PROFILE or d.get("model_profile_version",1) != 1: return ["Unsupported original collector profile"]
+		var parameters: Dictionary = Catalog.defaults(d.kind)
+		parameters.merge(d.get("params",{}),true)
+		d.params = parameters
+		var validation: Array = model.validate(d.kind,d.get("params",{}))
+		if not validation.is_empty(): errors.append_array(validation)
+		var state: Variant = d.get("state",Catalog.initial_state(d.kind,d.get("params",{})))
+		errors.append_array(Catalog.validate_state(d.kind,d.get("params",{}),state))
+		if not errors.is_empty(): return errors
+		if d.kind in Catalog.Materials.PHASE_KINDS:
+			has_phase = true
+			if not int(request.schema_version) in [11,12]: return ["Phase hydrogen requires optimization schema11 or12"]
+		if d.kind in Catalog.Materials.CHEMICAL_KINDS:
+			has_chemical = true
+			if request.schema_version != 12: return ["Chemical facilities require optimization schema12"]
+		if Catalog.is_material(d.kind) and (not d.get("model_profile",Catalog.model_profile(d.kind)) is String or d.get("model_profile",Catalog.model_profile(d.kind)) != Catalog.model_profile(d.kind) or not _number(d.get("model_profile_version",Catalog.model_profile_version(d.kind))) or d.get("model_profile_version",Catalog.model_profile_version(d.kind)) != Catalog.model_profile_version(d.kind)): return ["Unsupported original material process profile"]
+		has_material = has_material or Catalog.is_material(d.kind)
+		if d.kind == "water_supply_boundary" or d.kind in Catalog.Materials.HYDROGEN_STORE_KINDS:
+			material_bounds["initial_water_kg" if d.kind == "water_supply_boundary" else "initial_hydrogen_kg"] += float(state.material_inventory_kg[Catalog.Materials.species(d.kind)])
+		if Catalog.is_storage(d.kind) or Catalog.is_material_inventory(d.kind):
+			initial[id] = state.duplicate(true)
+			d.state = state.duplicate(true)
+	if not errors.is_empty(): return errors
+	if has_material and float(request.get("schema_version",0))<8: return ["Material facilities require optimization schema8 or later"]
+	if request.get("schema_version")==8 and not has_material: return ["Optimization schema8 requires material facilities"]
+	if request.get("schema_version")==9 and not has_co2: return ["Optimization schema9 requires CO2 storage"]
+	if request.get("schema_version")==10 and not has_collector: return ["Optimization schema10 requires collector"]
+	if request.get("schema_version")==11 and not has_phase: return ["Optimization schema11 requires phase hydrogen stores"]
+	if request.get("schema_version")==12 and not has_chemical: return ["Optimization schema12 requires chemical facilities"]
+	if has_phase or has_chemical:
+		var profile: String = Catalog.Materials.CHEMICAL_PROFILE_ID if has_chemical else Catalog.Materials.PHASE_PROFILE_ID
+		var version: int = 3 if has_chemical else 2
+		for envelope in [request,result]:
+			if not envelope.get("material_profile") is String or envelope.material_profile != profile or not _number(envelope.get("material_profile_version")) or envelope.material_profile_version != version: return ["Material top-level profile changed"]
+		material_totals = Materials.initial_energy(fleet) if has_chemical else Materials.initial_energy_v2(fleet)
+		if material_totals.is_empty(): return ["Cannot anchor reference-state material ledger"]
+	if initial != result.initial_states: return ["Optimization initial inventories differ from original request"]
+	var options: Variant = request.get("options",{})
+	if not options is Dictionary or not options.get("strict_supply",false) is bool: return ["Malformed original optimization options"]
+	for t in request.steps.size():
+		var step: Variant = request.steps[t]
+		var report: Variant = result.steps[t]
+		if not step is Dictionary or not report is Dictionary or not _number(step.get("dt_h")) or float(step.dt_h)<0.0 or not _number(step.get("time_s")): return ["Malformed original/result optimization step"]
+		if not _number(report.get("time_s")) or absf(float(report.time_s)-float(step.time_s))>1.0e-7: return ["Optimization interval start changed"]
+		if not _number(report.get("dt_s")) or absf(float(report.dt_s)-float(step.dt_h)*3600.0)>1.0e-7: return ["Optimization interval duration changed"]
+		if not step.get("available_mw") is Dictionary or not step.get("demand_mw") is Dictionary: return ["Missing original forecast maps"]
+		var direct: Dictionary = {}
+		for d in fleet:
+			var id: String = str(int(d.id))
+			if d.kind in ["wind","pv"]:
+				if not _number(step.available_mw.get(id)) or float(step.available_mw[id])<0.0: return ["Invalid original renewable forecast"]
+				direct[id] = {"mw":step.available_mw[id],"source":"frozen forecast"}
+				if not report.get("devices") is Dictionary or not report.devices.get(id) is Dictionary or not _number(report.devices[id].get("mw")) or absf(float(report.devices[id].mw)-float(step.available_mw[id]))>2.0e-6: return ["Optimization renewable availability changed"]
+			elif d.kind == "load":
+				if not _number(step.demand_mw.get(id)): return ["Missing original demand forecast"]
+				d.params.demand_mw = step.demand_mw[id]
+			elif d.kind == "heat_demand":
+				if not step.get("heat_demand_mwth") is Dictionary or not _number(step.heat_demand_mwth.get(id)): return ["Missing original heat forecast"]
+				d.params.demand_mwth = step.heat_demand_mwth[id]
+		var seed: Dictionary = _prepare(fleet,request.links,step.get("weather",{}),direct,float(report.dt_s),Callable(model,"generation"),Callable(model,"validate"))
+		var audit_report: Dictionary = _optimization_report_aliases(seed,report,errors)
+		if not errors.is_empty(): return errors
+		var step_errors: Array[String] = audit_result(fleet,request.links,audit_report,Callable(model,"generation"),Callable(model,"validate"),request.get("fuel_supply",{}),step.get("weather",{}),direct)
+		for message in step_errors: errors.append("Step %d: %s" % [t,message])
+		if not errors.is_empty(): return errors
+		if options.get("strict_supply",false):
+			if not _number(report.get("unserved_mw")) or float(report.unserved_mw)>2e-6 or float(report.thermal.unserved_mwth)>2e-6: return ["Original strict-supply requirement violated"]
+		if has_material:
+			material_totals = Materials.accumulate_energy(material_totals,report,float(report.dt_s))
+			if material_totals.is_empty(): return ["Optimization material cumulative ledger failed"]
+		var reconstructed: Dictionary = Materials.reconstruct_next_states(fleet,request.links,audit_report) if has_material else {}
+		for d in fleet:
+			var id: String = str(int(d.id))
+			if reconstructed.has(id): d.state = reconstructed[id].duplicate(true)
+			elif initial.has(id): d.state = report.next_states[id].duplicate(true)
+	if has_material:
+		for d in fleet:
+			if d.kind == "water_supply_boundary" or d.kind in Catalog.Materials.HYDROGEN_STORE_KINDS: material_bounds["final_water_kg" if d.kind == "water_supply_boundary" else "final_hydrogen_kg"] += float(d.state.material_inventory_kg[Catalog.Materials.species(d.kind)])
+		if has_phase or has_chemical:
+			var numeric_totals: Dictionary = Materials.initial_energy_v1()
+			numeric_totals.phase_store_electric_mwh = 0.0
+			numeric_totals.environment_heat_in_mwhth = 0.0
+			if has_chemical:
+				for key in ["chemical_electric_mwh","ammonia_produced_kg","methanol_produced_kg","nitrogen_withdrawn_kg","co2_withdrawn_kg","chemical_hydrogen_consumed_kg","chemical_water_released_kg"]: numeric_totals[key] = 0.0
+			for key in numeric_totals: numeric_totals[key] = material_totals[key]
+			material_totals = numeric_totals
+		material_totals.merge(material_bounds,true)
+		if not result.get("totals") is Dictionary or not result.totals.get("material") is Dictionary or result.totals.material.size() != material_totals.size(): return ["Optimization material totals incomplete"]
+		for key in material_totals:
+			var actual: Variant = result.totals.material.get(key)
+			if not _number(actual) or absf(float(actual)-float(material_totals[key]))>2e-6+2e-12*absf(float(material_totals[key])): errors.append("Optimization material total changed: "+key)
+	if result.final_states != result.steps[-1].next_states: errors.append("Optimization final inventories differ from audited final step")
+	for d in fleet:
+		if not Catalog.is_storage(d.kind): continue
+		var heat: bool = Catalog.is_thermal_storage(d.kind)
+		var floor_value: Variant = options.get("terminal_heat_soc_fraction" if heat else "terminal_soc_fraction")
+		if floor_value == null: continue
+		if not _number(floor_value) or float(floor_value)<0 or float(floor_value)>1: return ["Malformed original terminal SOC target"]
+		var field: String = "energy_mwhth" if heat else "energy_mwh"
+		var capacity: String = "capacity_mwhth" if heat else "capacity_mwh"
+		if float(d.state[field])+2e-6 < float(floor_value)*float(d.params[capacity]): errors.append("Original terminal SOC requirement violated")
+	var targets: Variant = request.get("options",{}).get("terminal_hydrogen_kg",{})
+	if not targets is Dictionary: return ["Malformed original terminal hydrogen target"]
+	for id in targets:
+		if not id is String: return ["Terminal hydrogen target ID must be canonical string"]
+		var h2_node: Dictionary = {}
+		for d in fleet:
+			if str(int(d.id))==id: h2_node=d
+		if h2_node.is_empty() or not h2_node.kind in Catalog.Materials.HYDROGEN_STORE_KINDS or not _number(targets[id]) or float(targets[id])<0.0 or float(targets[id])>Catalog.inventory_capacity(h2_node.kind,h2_node.params): return ["Invalid terminal hydrogen inventory target"]
+		if not _number(targets[id]) or not result.final_states.get(id) is Dictionary or not result.final_states[id].get("material_inventory_kg") is Dictionary or not _number(result.final_states[id].material_inventory_kg.get("H2")):
+			errors.append("Terminal hydrogen target references missing gas inventory")
+		elif float(result.final_states[id].material_inventory_kg.H2) + 2.0e-6 < float(targets[id]): errors.append("Terminal hydrogen inventory target not met")
+	var product_targets: Variant = request.get("options",{}).get("terminal_product_kg",{})
+	if not product_targets is Dictionary: return ["Malformed terminal product targets"]
+	if request.schema_version < 12 and not product_targets.is_empty(): return ["Product targets require schema12"]
+	for id in product_targets:
+		if not id is String: return ["Terminal product target ID must be canonical string"]
+		var target_node: Dictionary = {}
+		for d in fleet:
+			if str(int(d.id))==id: target_node = d
+		if not id is String or target_node.is_empty() or not target_node.kind in Catalog.Materials.SYNTHESIS_KINDS or not _number(product_targets[id]) or float(product_targets[id])<0.0 or float(product_targets[id])>Catalog.inventory_capacity(target_node.kind,target_node.params):
+			errors.append("Invalid terminal chemical product target")
+			continue
+		if float(target_node.state.material_inventory_kg[Catalog.Materials.species(target_node.kind)])+2e-6<float(product_targets[id]): errors.append("Terminal product inventory target not met")
+	return errors
+
+## Compatibility adapter for the existing solver report's presentation aliases.
+## Missing chemistry, flows, inventories and losses are NEVER supplied here.
+static func _optimization_report_aliases(seed: Dictionary, candidate: Dictionary, errors: Array[String]) -> Dictionary:
+	var r: Dictionary = candidate.duplicate(true)
+	if not r.get("devices") is Dictionary or not r.get("lines") is Array: errors.append("Missing solver device/line report"); return {}
+	for id in seed.nodes:
+		if not r.devices.get(id) is Dictionary: errors.append("Missing solver device " + id); continue
+		var n: Dictionary = seed.nodes[id]
+		var d: Dictionary = r.devices[id]
+		var base: Dictionary = seed.report.devices[id]
+		if d.get("kind") != n.kind or not _integer(d.get("id")) or int(d.id) != int(n.id) or d.get("valid") != true: errors.append("Solver device identity/validity changed")
+		for field in ["nameplate_clipped_mw","utilization"]:
+			if not d.has(field): d[field] = base.get(field,0.0)
+		if not n.kind in ["wind","pv"]:
+			for field in ["mw","generated_mw","curtailed_mw"]:
+				if not d.has(field): d[field] = base.get(field,0.0)
+		if Catalog.is_electric_station(n.kind) and not d.has("loss_fraction"): d.loss_fraction = n.params.loss_fraction
+		if Catalog.is_storage(n.kind):
+			for key in ["charge_limit_mw","discharge_limit_mw","charge_limit_mwth","discharge_limit_mwth"]:
+				if not d.has(key) and base.has(key): d[key] = base[key]
+			var unit: String = "mwhth" if Catalog.is_thermal_storage(n.kind) else "mwh"
+			var field: String = "energy_"+unit
+			if not _number(d.get(field)) or not _number(d.get("next_"+field)) or absf(float(d.get(field,0))-float(d.get("next_"+field,0)))>2e-6: errors.append("Solver storage post-step alias differs")
+			d[field] = n.state[field]
+			if not d.has("storage_balance_error_"+unit): d["storage_balance_error_"+unit] = 0.0
+		if n.kind == "electric_boiler":
+			if not d.has("rated_electric_mw"): d.rated_electric_mw = n.params.rated_electric_mw
+			for pair in [["electric_input_mw","boiler_electric_mw"],["heat_output_mwth","boiler_heat_mwth"],["conversion_loss_mw","boiler_conversion_loss_mw"]]:
+				if not d.has(pair[0]) and d.has(pair[1]): d[pair[0]] = d[pair[1]]
+	for line in r.lines:
+		if not line is Dictionary: errors.append("Malformed solver line"); continue
+		for field in ["index","from","to","flow_from","flow_to","direction"]:
+			if not _integer(line.get(field)): errors.append("Malformed solver line integer: "+field)
+			else: line[field] = int(line[field])
+		if line.get("carrier") in [Catalog.THERMAL_CARRIER,"heat_oil","heat_salt"]:
+			# Legacy Python heat reports omit inactive electric-unit placeholders.
+			for field in ["signed_mw","sent_mw","received_mw","loss_mw"]:
+				if not line.has(field): line[field] = 0.0
+		if not line.has("reason"): line.reason = ""
+		if line.get("carrier") == Catalog.CARRIER and not line.has("grade_id"): line.grade_id = ""
+	if not seed.nodes.values().any(func(n): return n.kind == "fuel_boiler") and r.has("fuel"):
+		if not r.fuel is Dictionary: errors.append("Malformed absent-fuel placeholder")
+		else:
+			for value in r.fuel.values():
+				if not _number(value) or absf(float(value))>1e-9: errors.append("Unexpected fuel without fuel facilities")
+			r.erase("fuel")
+	return r

@@ -95,7 +95,7 @@ static func _charge_plan(prepared: Dictionary, path: Dictionary, q: float) -> Di
 	for id in [path.source_id, path.sink_id]:
 		var remaining: float = q * float(prepared.nodes[id].params.auxiliary_electric_ratio)
 		for ep in prepared.paths:
-			if ep.sink_id != id or not ep.source_kind in ["wind", "pv", "battery", "battery_sodium", "battery_flow", "caes_aboveground", "liquid_air_store", "hydrogen_storage_system"]: continue
+			if ep.sink_id != id or not (ep.source_kind in ["wind", "pv"] or Catalog.is_electric_storage(ep.source_kind)): continue
 			if Catalog.is_electric_storage(ep.source_kind) and prepared.report.devices[ep.source_id].mode == "charge": continue
 			var sent: float = remaining / float(ep.received)
 			for key in ep.coefficients:

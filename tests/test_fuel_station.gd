@@ -1,4 +1,5 @@
 extends SceneTree
+const CurrentWorldVersion = preload("res://scripts/world_game.gd")
 ## Fuel station UI integration: real controller edits, save/restore, named ports,
 ## exact report presentation and small-window reachability. Dispatch conservation
 ## is covered by the separate realtime/GLPK fuel suites, not mocked here.
@@ -288,7 +289,7 @@ func test_save() -> void:
 	host.fuel_supply = {"enabled": true, "max_input_mw": 2.5, "lower_heating_value_kwh_per_nm3": 10.0, "price_per_mwh": 300.0}
 	host.refresh()
 	var saved := host.state()
-	check(saved.schema == 13 and host.validate_state(saved).is_empty(), "fuel station saves valid schema 13")
+	check(saved.schema == CurrentWorldVersion.CURRENT_SAVE_SCHEMA and saved.model_version == CurrentWorldVersion.CURRENT_MODEL_VERSION and host.validate_state(saved).is_empty(), "fuel station saves valid current schema")
 	var path := "user://fuel_station_test/%d.json" % OS.get_process_id()
 	check(host.write_save(path), "fuel station save written")
 	var restored := fixture()

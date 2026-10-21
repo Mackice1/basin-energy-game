@@ -33,7 +33,9 @@ func run() -> void:
   var discharge_key := "discharge_mwth" if thermal else "discharge_mw"
   var state := {energy_key: float(params[capacity_key]) * .25}
   var id: int = host.devices.size()
-  host.devices.append({"id":id, "kind":kind, "params":params, "state":state})
+  var current_device := {"id":id, "kind":kind, "params":params, "state":state, "site_geometry_profile":"reference_size_v1"}
+  if kind=="battery_flow":current_device.geometry_profile="flow_process_v2"
+  host.devices.append(current_device)
   host.result.get_or_add("devices", {})[str(id)] = {charge_key:.02, discharge_key:0.0}
   var before := var_to_bytes([host.devices, host.links, host.result])
   check(inspector.open_device(id), kind + " opens detail")
@@ -68,11 +70,21 @@ func run() -> void:
    for stage in ["AbovegroundAirVesselBank", "ElectricDrivenAirCompressor", "AirExpanderGenerator"]:
     check(visual.find_child(stage, true, false) != null, "CAES visible stage " + stage)
   var dimensions: Dictionary = Spatial.profile(kind, params)
-  check(dimensions.valid, kind + " metric profile valid")
+  check(dimensions.valid, kind + " current reference metric profile valid")
+  check(visual.get_meta("site_geometry_profile")=="reference_size_v1", kind + " detail uses actual current reference geometry")
+  check(visual.get_meta("land_dimensions_m")==dimensions.land_dimensions_m, kind + " current detail and placement use same complete site")
   check(dimensions.land_area_m2 > dimensions.body_area_m2, kind + " installation allowance distinct from footprint")
   var larger := params.duplicate(true)
   larger[capacity_key] = float(params[capacity_key]) * 5.0
-  check(Spatial.profile(kind, larger, false).land_area_m2 > dimensions.land_area_m2, kind + " capacity increases land usage")
+  check(not Spatial.profile(kind, larger, false).valid, kind + " current unsupported expansion is rejected")
+  var derated:=params.duplicate(true);derated[capacity_key]=float(params[capacity_key])*.25
+  var low:=Spatial.profile(kind,derated,false)
+  check(low.valid and low.module_count==dimensions.module_count and low.body_dimensions_m==dimensions.body_dimensions_m and low.land_dimensions_m==dimensions.land_dimensions_m, kind + " derating retains all installed hardware")
+  # The old module-scaling contract is retained only for historical geometry,
+  # not as permission to construct oversized current reference facilities.
+  var historical:=Spatial.profile(kind,params,false,"flow_process_v2","")
+  var historical_larger:=Spatial.profile(kind,larger,false,"flow_process_v2","")
+  check(historical.valid and historical_larger.valid and historical_larger.land_area_m2>historical.land_area_m2, kind + " historical capacity increases full-module land usage")
   form.set_parameters(kind, params, false)
   check(form._fields.size() == params.size(), kind + " all parameters have fields")
   check(form.get_validation_errors().is_empty(), kind + " default form valid")
@@ -95,7 +107,10 @@ func run() -> void:
   check(before == var_to_bytes([host.devices, host.links, host.result]), kind + " inspection/form/Esc leave state unchanged")
  var large := Catalog.defaults("caes_aboveground")
  large.capacity_mwh = 100.0
+ check(not Spatial.profile("caes_aboveground",large,false).valid,"current CAES refuses historical 100MWh geometry stress rating")
+ large.visual_site_geometry_profile=""
  var lod := Visual.create("caes_aboveground", large)
+ check(lod.get_meta("site_geometry_profile")=="","CAES stress LOD explicitly remains historical geometry")
  check(lod.get_meta("module_count") == 400, "large installation keeps exact physical count")
  check(lod.get_meta("display_module_count") == 48 and lod.get_meta("representative_lod"), "large facility has explicit bounded visual LOD")
  check(lod.get("surfaces").size() < 20, "large facility uses batched meshes")

@@ -1,0 +1,67 @@
+{
+  "profile_id": "material_hydrogen_2b_v2",
+  "profile_version": 2,
+  "reference_gas": "normal H2 at 298.15 K; no pressure inventory",
+  "constants": {
+    "liquid_phase_enthalpy_kwh_per_kg": -1.24,
+    "liquefaction_kwh_per_kg": 12.0,
+    "vaporizer_aux_kwh_per_kg": 0.02,
+    "boiloff_per_h": 4.1687513899313934e-05,
+    "metal_binding_enthalpy_kwh_per_kg": -4.275,
+    "dry_host_hydrogen_fraction": 0.012,
+    "adsorption_aux_kwh_per_kg": 0.15,
+    "desorption_aux_kwh_per_kg": 0.15,
+    "desorption_process_heat_kwh_per_kg": 0.2,
+    "heater_efficiency": 0.95
+  },
+  "defaults": {
+    "hydrogen_liquid_store": {
+      "capacity_kg": 1000.0,
+      "initial_inventory_kg": 0.0,
+      "charge_kg_s": 0.02,
+      "discharge_kg_s": 0.02,
+      "liquefier_electric_mw": 1.0,
+      "discharge_aux_electric_mw": 0.02,
+      "heat_rejection_mwth": 1.0,
+      "ambient_vaporizer_mwth": 0.1
+    },
+    "hydrogen_metal_hydride_store": {
+      "dry_host_mass_kg": 10000.0,
+      "initial_inventory_kg": 0.0,
+      "charge_kg_s": 0.01,
+      "discharge_kg_s": 0.01,
+      "charge_aux_electric_mw": 0.02,
+      "discharge_heater_electric_mw": 0.4,
+      "heat_rejection_mwth": 0.4
+    }
+  },
+  "maximums": {
+    "hydrogen_liquid_store": {
+      "capacity_kg": 1000.0,
+      "initial_inventory_kg": 0.0,
+      "charge_kg_s": 0.05,
+      "discharge_kg_s": 0.05,
+      "liquefier_electric_mw": 1.0,
+      "discharge_aux_electric_mw": 0.02,
+      "heat_rejection_mwth": 1.0,
+      "ambient_vaporizer_mwth": 0.1
+    },
+    "hydrogen_metal_hydride_store": {
+      "dry_host_mass_kg": 10000.0,
+      "initial_inventory_kg": 0.0,
+      "charge_kg_s": 0.02,
+      "discharge_kg_s": 0.02,
+      "charge_aux_electric_mw": 0.02,
+      "discharge_heater_electric_mw": 0.4,
+      "heat_rejection_mwth": 0.4
+    }
+  },
+  "assumptions": "Illustrative whole-facility finite hydrogen stores, not pressure/kinetics/safety or vendor calibration. Liquid near20.27K para-rich hydrogen relative to25C normal gas has -1.24kWh/kg endpoint enthalpy including ortho/para conversion, separate from12kWh/kg liquefaction AC. Fixed0.1%/day boiloff is a teaching assumption; vent ends as25C normal gas and absorbs1.24kWh/kg ambient heat. Active discharge uses finite ambient vaporizer plus actual auxiliary AC. LaNi5 dry host is immutable and offers1.2%dry-mass usable hydrogen, binding enthalpy-4.275kWh/kgH2. Desorption process heat is cycle-average internal load, not an extra energy inventory. No external useful heat or cold-power output. Charge electricity renewable-only; active discharge auxiliaries can use wind/PV or finite electrical storage, never fuel-cell/turbine output.",
+  "sources": [
+    "https://nvlpubs.nist.gov/nistpubs/Legacy/MONO/nbsmonograph168.pdf",
+    "https://tsapps.nist.gov/publication/get_pdf.cfm?pub_id=832374",
+    "https://www.hydrogen.energy.gov/docs/hydrogenprogramlibraries/pdfs/9013_energy_requirements_for_hydrogen_gas_compression.pdf",
+    "https://pmc.ncbi.nlm.nih.gov/articles/PMC13074617/",
+    "https://elib.dlr.de/205331/1/Eurotherm_2024_HL.pdf"
+  ]
+}

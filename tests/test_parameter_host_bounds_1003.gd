@@ -17,9 +17,12 @@ func find_button(node:Node,text:String)->Button:
 func run():
 	root.content_scale_size=Vector2i.ZERO;root.content_scale_mode=Window.CONTENT_SCALE_MODE_DISABLED
 	var game=Fixture.UIController.new();root.add_child(game);await settle()
+	game.dimension_profile="metric_v1"
 	check(game.add_equipment("wind",Vector2.ZERO),"wind installed")
+	check(game.device(0).get("site_geometry_profile","")=="reference_size_v1","installed wind uses explicit current geometry")
 	for resolution in [Vector2i(1024,768),Vector2i(800,600),Vector2i(640,480)]:
 		root.size=resolution;await settle();game.select_device(0);game.open_parameters(false)
+		check(game.param_dialog.visible,"actual parameter dialog opened "+str(resolution))
 		# Headless DisplayServer has an empty monitor rectangle and clamps native
 		# popup_centered to 1×1. Exercise the same requested logical window size.
 		if DisplayServer.get_name()=="headless":game.param_dialog.size=Vector2i(mini(940,resolution.x-24),mini(790,resolution.y-24))

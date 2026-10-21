@@ -46,13 +46,18 @@ func _test_dimensions() -> void:
 	check(dimensions.clearance_radius_world < Spatial.STATION_INTERIOR_HALF_WORLD, "default unit fits existing 48 m station without shrinking")
 	check(dimensions.source_note.contains("Bosch") and dimensions.source_note.contains("教学"), "source and assumption are surfaced")
 	for value in [0.01, 1.99, 2.0, 2.01, 4.0, 4.01, 20.0]:
-		var d: Dictionary = Spatial.profile("fuel_boiler", _params(value))
+		# Above-default expansion is the preserved historical teaching layout.
+		# The default/derated cases keep explicit new-reference coverage.
+		var site_profile := "" if value > 2.0 else "reference_size_v1"
+		var d: Dictionary = Spatial.profile("fuel_boiler", _params(value), true, "flow_process_v2", site_profile)
+		if value > 2.0:
+			check(not Spatial.profile("fuel_boiler", _params(value), false, "flow_process_v2", "reference_size_v1").valid, "new reference rejects unsupported fuel expansion %.2f" % value)
 		check(d.valid and d.module_count == int(ceil(value / 2.0)), "fuel input determines integer module count %.2f" % value)
 		check(d.unit_dimensions_m == dimensions.unit_dimensions_m, "unit never shrinks or stretches %.2f" % value)
 		check(d.module_origins_m.size() == d.module_count, "all default-sized origins are explicit")
 		for index in int(d.module_count):
 			check(d.module_origins_world[index].is_equal_approx(Spatial.module_origin_m(d, index) * 0.1), "module origin is converted exactly once")
-		var cheap: Dictionary = Spatial.profile("fuel_boiler", _params(value), false)
+		var cheap: Dictionary = Spatial.profile("fuel_boiler", _params(value), false, "flow_process_v2", site_profile)
 		check(cheap.module_count == d.module_count and cheap.land_dimensions_m == d.land_dimensions_m and cheap.clearance_radius_world == d.clearance_radius_world, "cheap placement query retains actual full envelope")
 		check(cheap.module_origins_world.is_empty(), "cheap query omits allocation only")
 	for invalid in [0.0, -1.0, INF, NAN, "2"]:
@@ -60,7 +65,7 @@ func _test_dimensions() -> void:
 	p.thermal_efficiency = 0.8
 	p.auxiliary_electric_ratio = 0.02
 	check(Spatial.profile("fuel_boiler", p).unit_dimensions_m == dimensions.unit_dimensions_m, "efficiency and aux settings do not scale equipment")
-	var huge: Dictionary = Spatial.profile("fuel_boiler", _params(100), false)
+	var huge: Dictionary = Spatial.profile("fuel_boiler", _params(100), false, "flow_process_v2", "")
 	check(huge.clearance_radius_world > Spatial.STATION_INTERIOR_HALF_WORLD, "large capacity exceeds site instead of silently shrinking")
 
 func _test_import_contract() -> void:
@@ -146,7 +151,9 @@ func _test_visuals() -> void:
 	check(fallback.get_meta("thermal_boundary") == item.get_meta("thermal_boundary") and fallback.get_meta("fuel_energy_basis") == "LHV", "fallback preserves fuel/aux semantics")
 	for port_id in ["ac_in", "heat_out"]:
 		check(fallback.get_named_port_position(port_id).is_equal_approx(fallback.named_ports[port_id].global_position), "fallback scaling preserves picking endpoint")
-	var doubled = Visual.create("fuel_boiler", _params(2.01), true)
+	var legacy_expanded := _params(2.01)
+	legacy_expanded.visual_site_geometry_profile = ""
+	var doubled = Visual.create("fuel_boiler", legacy_expanded, true)
 	root.add_child(doubled)
 	check(doubled.get_meta("module_count") == 2 and doubled.get_node("BlenderAsset").get_child_count() == 2, "capacity threshold adds full identical module")
 	check(doubled.named_ports.size() == 2 and doubled.get_meta("modules_share_simulation_limits"), "two visual modules share one endpoint pair and simulation limits")
@@ -157,8 +164,8 @@ func _test_visuals() -> void:
 	doubled.free(); fallback.free(); sibling.free(); item.free()
 
 func _test_legacy_dimensions() -> void:
-	check(Spatial.profile("electric_boiler").unit_dimensions_m == Vector3(4, 2.5, 2.5), "existing electric boiler stays unchanged")
-	check(Spatial.profile("thermal_store").unit_dimensions_m == Vector3(8.5, 7.635, 5), "existing heat store stays unchanged")
-	check(Spatial.profile("heat_exchanger").unit_dimensions_m == Vector3(3, 1.8, 2), "existing exchanger stays unchanged")
-	check(Spatial.profile("thermal_station").interior_dimensions_m == Vector3(48, 0, 48), "station interior remains 48 m")
-	check(Visual.footprint("electric_boiler") == 4 and Visual.footprint("thermal_store") == 5, "legacy saved thermal collision radii unchanged")
+	check(Spatial.profile("electric_boiler",{},true,"flow_process_v2","").unit_dimensions_m == Vector3(4, 2.5, 2.5), "existing electric boiler stays unchanged")
+	check(Spatial.profile("thermal_store",{},true,"flow_process_v2","").unit_dimensions_m == Vector3(8.5, 7.635, 5), "existing heat store stays unchanged")
+	check(Spatial.profile("heat_exchanger",{},true,"flow_process_v2","").unit_dimensions_m == Vector3(3, 1.8, 2), "existing exchanger stays unchanged")
+	check(Spatial.profile("thermal_station",{},true,"flow_process_v2","").interior_dimensions_m == Vector3(48, 0, 48), "station interior remains 48 m")
+	check(Visual.footprint("electric_boiler",{"visual_site_geometry_profile":""}) == 4 and Visual.footprint("thermal_store",{"visual_site_geometry_profile":""}) == 5, "legacy saved thermal collision radii unchanged")

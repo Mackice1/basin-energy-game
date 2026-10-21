@@ -297,7 +297,7 @@ func _refresh_fields():
 	if selected_ids.is_empty():
 		_field_column.add_child(_label("选中设备后显示共同参数。",13,ThemeFactory.MUTED));_error.text="选择已清空，之前暂存的字段也已清空；没有修改设备。";_refreshing=false;return
 	for group in ParameterForm.GROUPS.get(current_kind,[]):
-		var editable_specs:Array=group.fields.filter(func(spec):return spec[0]!="initial_soc" and not str(spec[3]).begins_with("固定"))
+		var editable_specs:Array=group.fields.filter(func(spec):return not ParameterForm.construction_only(str(spec[0])) and not ParameterForm.fixed_field(current_kind,str(spec[0])))
 		if editable_specs.is_empty():continue
 		_field_column.add_child(_label(group.title,15,ThemeFactory.ACCENT))
 		for spec in editable_specs:
@@ -327,6 +327,7 @@ func get_patch()->Dictionary:
 	var patch:Dictionary={}
 	for key in _enabled:
 		if not _enabled[key].button_pressed:continue
+		if ParameterForm.construction_only(key) or ParameterForm.fixed_field(current_kind,key):return {"ok":false,"error":"初始库存、宿主质量和固定profile不能批量修改。","patch":{}}
 		var text_value:String=_fields[key].text.strip_edges()
 		if not text_value.is_valid_float() or not is_finite(float(text_value)):return {"ok":false,"error":"参数 %s 需要有限数字。"%key,"patch":{}}
 		patch[key]=float(text_value)

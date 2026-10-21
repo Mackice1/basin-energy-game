@@ -1,4 +1,5 @@
 extends SceneTree
+const CurrentWorldVersion = preload("res://scripts/world_game.gd")
 ## Actual world schema8 read-save -> isolated real-GLPK regression.
 const ControllerTest = preload("res://tests/test_station_controller.gd")
 const Optimization = preload("res://scripts/optimization_controller.gd")
@@ -28,7 +29,7 @@ func run() -> void:
 	check(game.write_save(save_path), "actual world writes schema8 slot")
 	var saved := FileAccess.get_file_as_bytes(save_path)
 	var parsed: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(save_path))
-	check(parsed.schema == 13 and parsed.model_version == 22, "actual saved schema and model versions")
+	check(parsed.schema == CurrentWorldVersion.CURRENT_SAVE_SCHEMA and parsed.model_version == CurrentWorldVersion.CURRENT_MODEL_VERSION, "actual saved schema and model versions")
 	check(game.read_save(save_path), "actual world reads its saved fuel state")
 	check(game.paused and game.speed == 1.0, "read-save starts paused at speed one")
 	var frozen := var_to_bytes(game.state())

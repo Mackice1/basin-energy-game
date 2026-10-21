@@ -1,7 +1,8 @@
 extends Node3D
 # Deterministic synthetic terrain; every overlay and site assessment uses this height field.
+const Domain = preload("res://scripts/map_domain.gd")
 const MIN_CAMERA_DISTANCE := 8.0
-const MAX_CAMERA_DISTANCE := 300.0
+const MAX_CAMERA_DISTANCE := 650.0
 const MIN_CAMERA_PITCH := 0.25
 const MAX_CAMERA_PITCH := 1.56
 const CAMERA_GROUND_CLEARANCE := 0.6
@@ -18,6 +19,10 @@ var labels := Node3D.new()
 var infrastructure := Node3D.new()
 var road_detail: Node3D
 var export_corridor: Node3D
+var natural_scatter: Node3D
+var visual_surround: Node3D
+var constructible_extension: Node3D
+var resource_facilities: Node3D
 var selection := Node3D.new()
 var overlay := Node3D.new()
 var layer_buttons: Array[Button] = []
@@ -74,7 +79,7 @@ func _ready():
 	add_child(sun)
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
 	camera.size = distance
-	camera.far = 1000
+	camera.far = 2000
 	add_child(camera)
 	camera.current = true
 	add_child(lod_camera)
@@ -98,6 +103,10 @@ func _ready():
 		run_tests()
 
 func height_at(x: float, z: float) -> float:
+	return Domain.extension_height(x,z,Callable(self,"_sample_legacy_height"))
+
+## Preserve the original interpolation byte-for-byte in the core and collar.
+func _sample_legacy_height(x: float, z: float) -> float:
 	var px := clampf((x+128.0)*4.0,0,1022.99)
 	var pz := clampf((z+128.0)*4.0,0,1022.99)
 	var ix := int(px); var iz := int(pz)
@@ -114,12 +123,14 @@ func slope_at(x: float,z: float) -> float:
 	return rad_to_deg(atan(sqrt(dx*dx+dz*dz)))
 
 func exclusion(x: float,z: float) -> String:
+	if not Domain.in_core(Vector2(x,z)):return "" # no invented outer protected sites
 	if abs(x-stream_x(z)) < 4.0: return "季节性干沟 / 洪水通道"
 	if Vector2(x+44,z-34).length() < 12: return "植被保育区"
 	if Vector2(x-32,z-38).length() < 13: return "盐碱洼地 / 地基风险"
 	return ""
 
 func biome(x: float,z: float) -> String:
+	if not Domain.in_core(Vector2(x,z)):return "外延缓坡砾石戈壁"
 	if z < -39: return "低山与残丘"
 	if Vector2(x-32,z-38).length() < 14: return "盐碱洼地"
 	if abs(x-stream_x(z)) < 3: return "季节性干沟"
@@ -138,7 +149,7 @@ func land_color(x: float,z: float) -> Color:
 	if Vector2(x+44,z-34).length() < 12: c = Color("8d9874")
 	if layer == 1: c = Color("8eae91").lerp(Color("bd735b"),clampf(slope_at(x,z)/30,0,1))
 	if layer == 2: c = Color("d4cba3").lerp(Color("5e9297"),clampf((height_at(x,z)+4)/25,0,1))
-	if layer == 3: c = Color("c7a36a").lerp(Color("e1cf8e"),clampf((z+70)/140,0,1))
+	if layer == 3: c = Color("c7a36a").lerp(Color("e1cf8e"),clampf((z+Domain.HALF_EXTENTS.y)/Domain.WORLD_SIZE.y,0,1))
 	if layer == 4: c = c.darkened(0.08); if abs(x-stream_x(z)) < 4: c = Color("8a9992")
 	if layer == 7:
 		if exclusion(x,z) != "": c = Color("b77c69")
@@ -193,7 +204,7 @@ func make_terrain():
 				var c := Color.WHITE
 				if layer == 1: c = Color("87bb99").lerp(Color("e08064"),clampf(slope_at(x,z)/30,0,1))
 				if layer == 2: c = Color("e5d5a0").lerp(Color("6da6c4"),clampf(height_at(x,z)/20,0,1))
-				if layer == 3: c = Color("ddb173").lerp(Color("efe0a7"),clampf((z+70)/140,0,1))
+				if layer == 3: c = Color("ddb173").lerp(Color("efe0a7"),clampf((z+Domain.HALF_EXTENTS.y)/Domain.WORLD_SIZE.y,0,1))
 				if layer == 7:
 					c = Color("82bf9a")
 					if exclusion(x,z) != "": c = Color("f18b72")
@@ -202,6 +213,9 @@ func make_terrain():
 				col.set_pixel(ix,iz,c)
 		col.resize(1024,1024,Image.INTERPOLATE_BILINEAR)
 	terrain.data.import_images([height_image,control_image,col],Vector3(-128,0,-128),0.0,1.0)
+	if is_instance_valid(constructible_extension):
+		constructible_extension.free()
+		constructible_extension=preload("res://scripts/environment_visual.gd").build_constructible_extension(self)
 
 func material(c: Color) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
@@ -220,22 +234,27 @@ func box(parent: Node3D, p: Vector3, size: Vector3,c: Color) -> MeshInstance3D:
 	return mi
 
 func make_base():
-	box(self,Vector3(0,-4,0),Vector3(201,7,141),Color("6b716b"))
-	box(self,Vector3(0,-8,0),Vector3(204,1,144),Color("424e4b"))
-	var edge := SurfaceTool.new(); edge.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var boundary: Array[Vector2] = []
-	for x in range(-100,101): boundary.append(Vector2(x,-70))
-	for z in range(-69,71): boundary.append(Vector2(100,z))
-	for x in range(99,-101,-1): boundary.append(Vector2(x,70))
-	for z in range(69,-71,-1): boundary.append(Vector2(-100,z))
+	# New outer ground, old core raster unchanged. Foundation is below every
+	# terrain sample, so no box top can cover the slightly negative SE plain.
+	box(self,Vector3(0,-9,0),Vector3(Domain.WORLD_SIZE.x+1.0,6,Domain.WORLD_SIZE.y+1.0),Color("6b716b"))
+	var edge:=SurfaceTool.new();edge.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var boundary:Array[Vector2]=[]
+	var half_x:=int(Domain.HALF_EXTENTS.x);var half_z:=int(Domain.HALF_EXTENTS.y)
+	for x in range(-half_x,half_x+1,2):boundary.append(Vector2(x,-half_z))
+	for z in range(-half_z+2,half_z+1,2):boundary.append(Vector2(half_x,z))
+	for x in range(half_x-2,-half_x-1,-2):boundary.append(Vector2(x,half_z))
+	for z in range(half_z-2,-half_z,-2):boundary.append(Vector2(-half_x,z))
+	boundary.append(boundary[0])
 	for i in range(boundary.size()-1):
-		var a := boundary[i]; var b := boundary[i+1]
-		var verts := [Vector3(a.x,height_at(a.x,a.y),a.y),Vector3(b.x,height_at(b.x,b.y),b.y),Vector3(a.x,-0.5,a.y),Vector3(b.x,-0.5,b.y)]
-		for idx in [0,1,2,1,3,2]: edge.add_vertex(verts[idx])
+		var a:=boundary[i];var b:=boundary[i+1]
+		var verts:=[Vector3(a.x,height_at(a.x,a.y),a.y),Vector3(b.x,height_at(b.x,b.y),b.y),Vector3(a.x,-6,a.y),Vector3(b.x,-6,b.y)]
+		for idx in [0,1,2,1,3,2]:edge.add_vertex(verts[idx])
 	edge.generate_normals()
-	var skirt := MeshInstance3D.new(); skirt.mesh = edge.commit()
-	var sm := material(Color("90816a")); sm.cull_mode = BaseMaterial3D.CULL_DISABLED
-	skirt.material_override = sm; add_child(skirt)
+	var skirt:=MeshInstance3D.new();skirt.name="OuterDomainSkirt";skirt.mesh=edge.commit()
+	var sm:=material(Color("90816a"));sm.cull_mode=BaseMaterial3D.CULL_DISABLED
+	skirt.material_override=sm;add_child(skirt)
+	constructible_extension=preload("res://scripts/environment_visual.gd").build_constructible_extension(self)
+	visual_surround=preload("res://scripts/environment_visual.gd").build_surround(self)
 
 
 func line(parent: Node3D,points: Array,width: float,c: Color,offset: float=0.25):
@@ -300,51 +319,11 @@ func make_routes():
 	marker(Vector2(61,48),"局部沙丘",Color("bca883"))
 	marker(Vector2(31,39),"盐碱洼地",Color("d0c9b6"))
 	marker(Vector2(-46,34),"植被保育区",Color("7f906f"))
+	resource_facilities = preload("res://scripts/environment_visual.gd").build_resources(self,infrastructure)
 
 func make_details():
-	var surface = preload("res://scripts/desert_surface.gd")
-	var rng := RandomNumberGenerator.new(); rng.seed = int(cfg.seed)
-	var scatter := FastNoiseLite.new(); scatter.seed = int(cfg.seed) + 47
-	scatter.frequency = 0.11; scatter.fractal_octaves = 2
-	var rocks := MultiMesh.new(); rocks.transform_format = MultiMesh.TRANSFORM_3D; rocks.use_colors = true
-	rocks.mesh = surface.rock_mesh(); rocks.instance_count = 1580
-	for i in range(rocks.instance_count):
-		var x := rng.randf_range(-98,98); var z := rng.randf_range(-68,68)
-		# Broken concentrations, with quiet gaps, instead of even screen-wide pepper.
-		for attempt in range(5):
-			if scatter.get_noise_2d(x,z) + rng.randf_range(-0.35,0.35) > -0.08: break
-			x = rng.randf_range(-98,98); z = rng.randf_range(-68,68)
-		var sc := rng.randf_range(0.13,0.40)
-		if i < 130:
-			x = rng.randf_range(-94,-25); z = rng.randf_range(-58,-18)
-			sc = rng.randf_range(0.55,1.25)
-		# Sand and salt stay visually quiet. This changes decoration only.
-		if (x > 40 and z > 28) or Vector2(x-32,z-38).length() < 13.0:
-			sc *= 0.34
-		var ground_normal := Vector3(height_at(x-0.5,z)-height_at(x+0.5,z),1.0,height_at(x,z-0.5)-height_at(x,z+0.5)).normalized()
-		var basis := Basis(Quaternion(Vector3.UP,ground_normal)) * Basis(Vector3.UP,rng.randf()*TAU).scaled(Vector3(sc,sc*rng.randf_range(0.60,1.00),sc*rng.randf_range(0.80,1.45)))
-		rocks.set_instance_transform(i,Transform3D(basis,Vector3(x,height_at(x,z),z)))
-		var tint := Color("8d897d").lerp(Color("b4a48b"),rng.randf())
-		rocks.set_instance_color(i,tint)
-	var ri := MultiMeshInstance3D.new(); ri.name = "Gravel_and_weathered_rocks"; ri.multimesh = rocks
-	ri.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF; add_child(ri)
-	var shrubs := MultiMesh.new(); shrubs.transform_format = MultiMesh.TRANSFORM_3D; shrubs.use_colors = true
-	shrubs.mesh = surface.shrub_mesh(); shrubs.instance_count = 232
-	for i in range(shrubs.instance_count):
-		var z := rng.randf_range(-15,65)
-		var bank := -1.0 if rng.randf() < 0.5 else 1.0
-		var x := stream_x(z) + bank * rng.randf_range(1.5,4.8)
-		if i > 145:
-			var angle := rng.randf() * TAU
-			var radius := sqrt(rng.randf()) * 10.2
-			x = -44.0 + cos(angle) * radius; z = 34.0 + sin(angle) * radius * 0.78
-		var sc := rng.randf_range(0.48,1.15)
-		var basis := Basis(Vector3.UP,rng.randf()*TAU).scaled(Vector3(sc,sc*rng.randf_range(0.70,1.15),sc*rng.randf_range(0.80,1.25)))
-		shrubs.set_instance_transform(i,Transform3D(basis,Vector3(x,height_at(x,z)+0.025,z)))
-		var tint := Color("727c62").lerp(Color("9b9a78"),rng.randf())
-		shrubs.set_instance_color(i,tint)
-	var si := MultiMeshInstance3D.new(); si.name = "Sparse_desert_shrubs"; si.multimesh = shrubs
-	si.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF; add_child(si)
+	natural_scatter = preload("res://scripts/environment_visual.gd").build_scatter(self)
+	preload("res://scripts/environment_visual.gd").set_detail(natural_scatter,distance)
 	# Retain light planning parcels without prebuilding a power station.
 	for x in range(-8,60,8): line(infrastructure,[Vector2(x,13),Vector2(x,35)],0.045,Color("b8ad92"))
 	for z in range(13,36,8): line(infrastructure,[Vector2(-8,z),Vector2(56,z)],0.045,Color("b8ad92"))
@@ -430,7 +409,7 @@ func select_site(p: Vector2):
 	for child in selection.get_children(): child.queue_free()
 	var s := slope_at(p.x,p.y)
 	var reason := exclusion(p.x,p.y)
-	var ok := reason == "" and s <= float(cfg.max_build_slope_degrees)
+	var ok := Domain.contains(p) and reason == "" and s <= float(cfg.max_build_slope_degrees)
 	var c := Color("b8dba4") if ok else Color("df9476")
 	var r := 3.0
 	line(selection,[p+Vector2(-r,-r),p+Vector2(r,-r),p+Vector2(r,r),p+Vector2(-r,r),p+Vector2(-r,-r)],0.3,c,0.5)
@@ -438,7 +417,7 @@ func select_site(p: Vector2):
 	if reason == "" and not ok: reason = "超过 %s° 示意坡度阈值" % cfg.max_build_slope_degrees
 	if ok: reason = "仍需地基 / 供水专项勘察"
 	var wind := 5.8+height_at(p.x,p.y)*0.055
-	detail.text = "坐标  %.1f, %.1f km\n地貌  %s\n相对高程  %.0f m\n坡度  %.1f°\n\n%s\n%s\n\n平均风速  %.1f m/s*\n太阳资源  佳*\n距送出点  %.1f km\n\n* 合成资源，非实测" % [p.x*float(cfg.meters_per_unit)/1000,p.y*float(cfg.meters_per_unit)/1000,biome(p.x,p.y),height_at(p.x,p.y)*float(cfg.meters_per_unit),s,condition,reason,wind,p.distance_to(Vector2(87,3))*float(cfg.meters_per_unit)/1000]
+	detail.text = "坐标  %.1f, %.1f km\n地貌  %s\n相对高程  %.0f m\n坡度  %.1f°\n\n%s\n%s\n\n平均风速  %.1f m/s*\n太阳资源  佳*\n距送出点  %.1f km\n\n网格10m / 主格100m · 全域4×4km\n* 合成资源，非实测" % [p.x*Domain.METERS_PER_UNIT/1000,p.y*Domain.METERS_PER_UNIT/1000,biome(p.x,p.y),height_at(p.x,p.y)*Domain.METERS_PER_UNIT,s,condition,reason,wind,p.distance_to(Vector2(87,3))*Domain.METERS_PER_UNIT/1000]
 
 func set_view(mode: int):
 	target = Vector3.ZERO
@@ -460,34 +439,50 @@ func update_camera():
 	yaw = wrapf(yaw, -PI, PI) if is_finite(yaw) else -0.22
 	pitch = clampf(pitch, MIN_CAMERA_PITCH, MAX_CAMERA_PITCH) if is_finite(pitch) else 0.78
 	if not target.is_finite(): target = Vector3.ZERO
-	target.x = clampf(target.x, -100.0, 100.0)
-	target.z = clampf(target.z, -70.0, 70.0)
+	var bounded:=Domain.clamp_point(Vector2(target.x,target.z))
+	target.x=bounded.x;target.z=bounded.y
 	var ground := height_at(target.x, target.z)
 	target.y = clampf(target.y, ground + 0.05, ground + 32.0)
 	camera.size = distance
-	camera.position = target + Vector3(sin(yaw)*cos(pitch),sin(pitch),cos(yaw)*cos(pitch))*(distance*1.25 if camera.projection == Camera3D.PROJECTION_PERSPECTIVE else 250.0)
-	if absf(camera.position.x) <= 128.0 and absf(camera.position.z) <= 128.0:
+	camera.position = target + Vector3(sin(yaw)*cos(pitch),sin(pitch),cos(yaw)*cos(pitch))*(distance*1.25 if camera.projection == Camera3D.PROJECTION_PERSPECTIVE else maxf(250.0,distance*.85))
+	if Domain.contains(Vector2(camera.position.x,camera.position.z)):
 		camera.position.y = maxf(camera.position.y, height_at(camera.position.x, camera.position.z) + CAMERA_GROUND_CLEARANCE)
 	camera.look_at(target)
 	lod_camera.position = target + Vector3(0,20,0)
 	# Orthographic cameras remain 250 units away: use visible world span for LOD.
 	preload("res://scripts/road_visual.gd").set_detail(road_detail,distance < 115.0)
+	preload("res://scripts/environment_visual.gd").set_detail(natural_scatter,distance)
 	if is_instance_valid(export_corridor):
 		preload("res://scripts/export_corridor_visual.gd").set_detail(export_corridor,distance < 65.0)
 
 func pick_ground(pos: Vector2) -> Vector2:
-	var origin := camera.project_ray_origin(pos)
-	var dir := camera.project_ray_normal(pos)
-	var prev := origin
-	for i in range(1200):
-		var p := origin+dir*i*0.5
-		if p.x >= -100 and p.x <= 100 and p.z >= -70 and p.z <= 70 and p.y <= height_at(p.x,p.z):
-			for j in range(10):
-				var mid := (prev+p)*0.5
-				if mid.y > height_at(mid.x,mid.z): prev = mid
-				else: p = mid
-			return Vector2(p.x,p.z)
-		prev = p
+	var origin:=camera.project_ray_origin(pos)
+	var dir:=camera.project_ray_normal(pos)
+	var enter:float=0.0;var leave:float=camera.far
+	# Clip only against the buildable rectangle, never the decorative horizon.
+	for axis in [0,2]:
+		var half_extent:float=Domain.HALF_EXTENTS.x if axis==0 else Domain.HALF_EXTENTS.y
+		if absf(dir[axis])<.0000001:
+			if absf(origin[axis])>half_extent:return Vector2(INF,INF)
+		else:
+			var a:float=(-half_extent-origin[axis])/dir[axis]
+			var b:float=(half_extent-origin[axis])/dir[axis]
+			enter=maxf(enter,minf(a,b));leave=minf(leave,maxf(a,b))
+	if enter>leave:return Vector2(INF,INF)
+	var prev:=origin+dir*enter
+	var previous_delta:float=prev.y-height_at(prev.x,prev.z)
+	var t:float=enter
+	while t<leave:
+		t=minf(t+1.0,leave)
+		var p:=origin+dir*t
+		var delta:float=p.y-height_at(p.x,p.z)
+		if previous_delta>=0.0 and delta<=0.0:
+			for j in 16:
+				var mid:Vector3=(prev+p)*.5
+				if mid.y>height_at(mid.x,mid.z):prev=mid
+				else:p=mid
+			return Domain.clamp_point(Vector2(p.x,p.z))
+		prev=p;previous_delta=delta
 	return Vector2(INF,INF)
 
 func pan_camera(screen_delta: Vector2) -> void:

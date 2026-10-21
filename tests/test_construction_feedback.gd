@@ -59,7 +59,7 @@ func _run():
 	check(game.can_place("wind", Vector2.ZERO) != "", "build still rejects original occupancy")
 	tick(Vector2(-20, 8))
 	check(game.ghost.preview_valid, "valid destination is green")
-	check(game.ghost.position.is_equal_approx(Vector3(-20,game.height_at(-20,8)+0.15,8)), "ghost follows sampled ground height")
+	check(game.ghost.position.is_equal_approx(Vector3(-20,game.height_at(-20,8)+0.005,8)), "ghost follows sampled ground height")
 	check(game.state() == before and solved() == output, "live valid feedback leaves model and state unchanged")
 	var arrays: Array = game.placement_outline.mesh.surface_get_arrays(0)
 	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
@@ -91,7 +91,7 @@ func _run():
 	check(game.mode == "select" and game.ghost == null, "move without selection falls back safely")
 	game.start_build("pv")
 	tick(Vector2(-25,0))
-	check(game.ghost.device_kind == "pv" and game.ghost.preview_valid, "build mode creates correct preview")
+	check(game.mode == "select" and game.ghost == null and game.last_notice.contains("旧比例"), "legacy layout rejects new PV construction without a preview")
 	game.set_mode("link")
 	check(game.ghost == null and game.placement_outline == null and game.pending_link == -2, "link transition clears construction feedback")
 	check(game.state() == before and solved() == output, "all feedback transitions preserve physics")
@@ -107,6 +107,20 @@ func _run():
 	check(game.mode == "select" and game.ghost == null and game.undo_states.size() == 1, "commit exits preview and records one undo")
 	game.undo()
 	check(game.state() == before, "committed move remains fully undoable")
+	# Separate, explicit reference-layout fixture; do not migrate the legacy move
+	# case implicitly or compare its snapshot against different geometry markers.
+	game.dimension_profile = "metric_v1"
+	for item in game.devices: item.site_geometry_profile = "reference_size_v1"
+	game.rebuild_equipment()
+	before = game.state()
+	output = solved()
+	game.start_build("pv")
+	tick(Vector2(-25, 0))
+	check(game.ghost != null and game.ghost.device_kind == "pv" and game.ghost.preview_valid, "reference layout creates the correct valid PV preview")
+	game.set_mode("link")
+	check(game.ghost == null and game.placement_outline == null and game.pending_link == -2, "reference build-to-link transition clears all construction feedback")
+	check(game.state() == before and solved() == output, "reference preview and cancellation preserve its own snapshot and physics")
+	game.set_mode("select")
 	for key in ["lod_camera","terrain","infrastructure","selection","overlay","confirmation","param_dialog","param_errors","param_target","data_dialog","data_list","line_dialog","line_capacity","line_loss","line_choice"]:
 		var node = game.get(key)
 		if is_instance_valid(node) and node.get_parent() == null: node.free()

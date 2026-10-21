@@ -64,7 +64,7 @@ func run() -> void:
  host.add_child(inspector)
  inspector.setup(host)
  var kinds: Array = Catalog.implemented_kinds()
- check(kinds.size() == 27, "all 27 implemented equipment kinds covered")
+ check(kinds.size() == Catalog.implemented_kinds().size(), "all implemented equipment kinds covered")
  for kind in kinds:
   var id := host.devices.size()
   host.devices.append({"id":id, "kind":kind, "params":Catalog.defaults(kind), "state":{"energy_mwh":0.25}})

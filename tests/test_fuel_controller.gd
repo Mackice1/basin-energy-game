@@ -1,4 +1,5 @@
 extends SceneTree
+const CurrentWorldVersion = preload("res://scripts/world_game.gd")
 ## Real controller boundary: independently configured external gas, AC-coupled
 ## useful heat, integrated ledgers, transactional edits and read-only real GLPK.
 const Fuel = preload("res://scripts/fuel_supply.gd")
@@ -168,6 +169,11 @@ func legacy_state(game: Fixture, schema: int) -> Dictionary:
 	var state: Dictionary = game.state()
 	state.schema = schema; state.model_version = {3:11,4:12,5:14,6:15,7:16}[schema]
 	for storage_kind in game.Catalog.NEW_STORAGE_KINDS: state.templates.erase(storage_kind)
+	for material_kind in game.Catalog.Materials.KINDS: state.templates.erase(material_kind)
+	state.erase("material_energy")
+	state.templates.erase("co2_liquid_cycle_store")
+	for template_kind in state.templates.keys():
+		if not template_kind in (game.SaveValidator.LEGACY_KINDS if schema==3 else game.SaveValidator.ELECTRIC_KINDS if schema==4 else game.SaveValidator.PRE_FUEL_KINDS): state.templates.erase(template_kind)
 	state.erase("fuel_supply"); state.erase("fuel_energy"); state.templates.erase("fuel_boiler"); state.templates.erase("solar_thermal"); state.erase("tower_energy"); state.templates.erase("solar_tower_receiver"); state.templates.erase("molten_salt_store"); state.templates.erase("salt_steam_generator"); state.erase("rankine_energy"); state.templates.erase("steam_generator"); state.templates.erase("steam_turbine"); state.templates.erase("steam_condenser"); state.templates.erase("feedwater_pump"); state.erase("high_temp_energy"); state.templates.erase("parabolic_trough"); state.templates.erase("high_temp_store"); state.templates.erase("oil_water_exchanger"); state.erase("solar_energy")
 	if schema < 7: state.erase("dimension_profile")
 	if schema < 6: state.erase("stations"); state.erase("next_station_id")
@@ -189,14 +195,14 @@ func test_legacy_and_save() -> void:
 		check(migrated.read_save(path),"old schema %d reads through real boundary: %s" % [schema,migrated.last_notice])
 		check(migrated.fuel_supply == Fuel.defaults() and migrated.fuel_energy == Fuel.initial_energy(),"schema %d migration starts disabled and unbilled" % schema)
 		check(migrated.devices.is_empty() and migrated.links.is_empty() and migrated.elapsed_s == 123.25,"schema %d creates no fuel devices or links and retains clock" % schema)
-		check(migrated.state().schema == 13 and migrated.state().model_version == 22 and migrated.templates.has("fuel_boiler"),"schema %d next write upgrades explicit version/template" % schema)
+		check(migrated.state().schema == CurrentWorldVersion.CURRENT_SAVE_SCHEMA and migrated.state().model_version == CurrentWorldVersion.CURRENT_MODEL_VERSION and migrated.templates.has("fuel_boiler"),"schema %d next write upgrades explicit version/template" % schema)
 		check(var_to_bytes(old) == old_bytes and FileAccess.get_sha256(path) == input_hash,"schema %d read never rewrites original" % schema)
 		check(migrated.validate_state(migrated.state()).is_empty(),"schema %d migrated current state validates" % schema)
 	var game := chain(); var supply := Fuel.defaults(); supply.enabled = true; supply.max_input_mw = 1.5
 	game.apply_fuel_supply(supply); check(game.advance(3.25),"meter fuel before save")
 	var path := path_for("current"); check(game.write_save(path),"current fuel save writes")
 	var frozen := canonical(game.state()); var disk: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path))
-	check(disk.schema == 13 and disk.model_version == 22,"new write pairs schema13/model22")
+	check(disk.schema == CurrentWorldVersion.CURRENT_SAVE_SCHEMA and disk.model_version == CurrentWorldVersion.CURRENT_MODEL_VERSION,"new write pairs schema15/model24")
 	var restored := fixture(); restored.paused = false; restored.speed = 60.0; restored.accumulator = 0.5
 	check(restored.read_save(path),"fresh controller reads gas save: " + restored.last_notice)
 	check(canonical(restored.state()) == frozen,"new read preserves entire scene/resources/all ledgers")

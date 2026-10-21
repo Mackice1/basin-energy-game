@@ -7,6 +7,7 @@ extends Node3D
 const FOOTPRINT_RADIUS := 8.0
 const Spatial = preload("res://scripts/spatial_dimensions.gd")
 const Visual = preload("res://scripts/equipment_visual.gd")
+const Catalog = preload("res://scripts/device_catalog.gd")
 const PORT_LOCALS := {
 	"ac_in": Vector3(-7.1, 1.05, 0.8),
 	"heat_out": Vector3(7.1, 1.05, 0.8),
@@ -38,6 +39,7 @@ var footprint_radius := FOOTPRINT_RADIUS
 var preview_only := false
 var tower_site := false
 var tower_geometry:Node3D
+var installed_device_nodes: Dictionary = {}
 
 func setup(station_data: Dictionary, prefer_blender_assets: bool = true) -> void:
 	# Rebuilding is safe for restored saves and placement previews. Input is never
@@ -45,12 +47,14 @@ func setup(station_data: Dictionary, prefer_blender_assets: bool = true) -> void
 	for child in get_children():
 		remove_child(child)
 		child.free()
+	installed_device_nodes.clear()
+	tower_geometry = null
 	surfaces.clear()
 	base_materials.clear()
 	named_ports.clear()
 	annotation_labels.clear()
 	named_port_locals = PORT_LOCALS.duplicate()
-	for key in ["visual_backend", "asset_source", "asset_fallback", "visual_only", "capacity_added", "visual_dimension_profile", "footprint_radius", "world_units_per_meter", "body_dimensions_m", "land_area_m2", "energy_port_count", "preview_only", "commissioned"]:
+	for key in ["visual_backend", "asset_source", "asset_fallback", "visual_only", "capacity_added", "visual_dimension_profile", "footprint_radius", "world_units_per_meter", "body_dimensions_m", "land_area_m2", "energy_port_count", "preview_only", "commissioned", "installed_device_count", "installed_device_ids", "installed_geometry_contract", "legacy_scale_migration_required"]:
 		if has_meta(key):
 			remove_meta(key)
 	name = "ThermalStationFacade"
@@ -76,20 +80,27 @@ func setup(station_data: Dictionary, prefer_blender_assets: bool = true) -> void
 	tower_site = station_data.get("kind", "") in ["tower_station","tower_station_preview"]
 	if tower_site:
 		_build_tower_facade(title, p, prefer_blender_assets)
+		if not preview_only:
+			_build_installed_devices(station_data, prefer_blender_assets)
+			if preview_enabled: set_preview(preview_valid)
 		return
 	var metric := str(station_data.get("visual_dimension_profile", "legacy_illustrative")) == "metric_v1"
-	var imported := metric and prefer_blender_assets and _try_build_blender()
-	if not imported:
+	# Metric mode is an installation, not a pre-authored two-tank symbol. Keep
+	# the shared site dimensions while rendering only the supplied real members.
+	if metric:
+		_build_metric_courtyard(p)
+		_build_installed_devices(station_data, prefer_blender_assets)
+	else:
 		_build_courtyard(p)
 		_build_building(p)
 		_build_tanks(p)
-	_build_ports(p, imported, metric)
+	_build_ports(p, false, metric)
 	footprint_radius = FOOTPRINT_RADIUS
 	if metric:
 		var dimensions: Dictionary = Spatial.profile("thermal_station")
 		footprint_radius = dimensions.clearance_radius_world
-		if not imported:
-			_scale_metric_fallback()
+		set_meta("visual_backend", "metric_installed_equipment")
+		set_meta("asset_source", "installed_devices")
 		set_meta("visual_dimension_profile", "metric_v1")
 		set_meta("footprint_radius", footprint_radius)
 		set_meta("world_units_per_meter", Spatial.WORLD_UNITS_PER_METER)
@@ -117,11 +128,89 @@ func setup(station_data: Dictionary, prefer_blender_assets: bool = true) -> void
 	# Place the readout beyond the front gate so it does not collide with the
 	# two carrier labels at the standard elevated base-map camera angle.
 	status_label = _label(self, "StationStatus", "", Vector3(0, 0.14, 3.6) if metric else Vector3(0, 0.7, 6.7), 28, 0.010 if metric else 0.04)
+	if not metric and station_data.has("visual_dimension_profile"):
+		set_meta("visual_dimension_profile", "legacy_illustrative")
+		set_meta("legacy_scale_migration_required", true)
+		_label(self, "LegacyScaleNotice", "旧版图标化尺度 · 非真实尺寸 · 需显式米制迁移", Vector3(0, 5.7, -0.3), 24, .02)
 	set_status(NAN, NAN, NAN)
 	if preview_enabled:
 		set_preview(preview_valid)
 	else:
 		set_selected(selected)
+
+## The yard is a real 80x60 m container (48x48 m clear internal zone), not
+## an enclosing process building. Device coordinates already use world units.
+func _build_metric_courtyard(p: Dictionary) -> void:
+	var dimensions: Dictionary = Spatial.profile("thermal_station")
+	var land: Vector3 = dimensions.land_dimensions_m * Spatial.WORLD_UNITS_PER_METER
+	var interior: Vector3 = dimensions.interior_dimensions_m * Spatial.WORLD_UNITS_PER_METER
+	_box(self, "FacilityFoundation", Vector3(land.x, .05, land.z), Vector3(0, -.025, 0), p.concrete)
+	_box(self, "Courtyard", Vector3(interior.x, .008, interior.z), Vector3(0, -.004, 0), p.yard)
+	_box(self, "ServiceRoad", Vector3(land.x-.4, .01, .4), Vector3(0, .005, -land.z*.5+.30), p.concrete)
+	for x in [-land.x*.5+.04, land.x*.5-.04]:
+		_box(self, "FenceSide", Vector3(.018, .018, land.z-.08), Vector3(x, .12, 0), p.metal)
+		for z in [-land.z*.5+.04, 0.0, land.z*.5-.04]:
+			_box(self, "FencePost", Vector3(.025, .14, .025), Vector3(x, .07, z), p.metal)
+	_box(self, "FenceBack", Vector3(land.x-.08, .018, .018), Vector3(0, .12, -land.z*.5+.04), p.metal)
+	for x in [-land.x*.25-.25, land.x*.25+.25]:
+		_box(self, "FenceFront", Vector3(land.x*.5-.54, .018, .018), Vector3(x, .12, land.z*.5-.04), p.metal)
+	for x in [-.5, .5]:
+		_box(self, "GatePost", Vector3(.04, .18, .04), Vector3(x, .09, land.z*.5-.04), p.metal)
+
+func _build_installed_devices(station_data: Dictionary, prefer_assets: bool) -> void:
+	var equipment := Node3D.new()
+	equipment.name = "InstalledEquipment"
+	add_child(equipment)
+	var snapshots: Variant = station_data.get("installed_devices", [])
+	var ids: Array[int] = []
+	if snapshots is Array:
+		for item in snapshots:
+			if not item is Dictionary or not item.get("kind", "") in Catalog.implemented_kinds(): continue
+			var id := int(item.get("id", -1))
+			if id < 0 or installed_device_nodes.has(id): continue
+			if station_data.has("id") and item.has("parent_station_id") and int(item.parent_station_id) != int(station_data.id): continue
+			var x: float = float(item.get("interior_x", 0.0))
+			var z: float = float(item.get("interior_z", 0.0))
+			if not is_finite(x) or not is_finite(z): continue
+			var params: Dictionary = item.get("params", {}).duplicate(true)
+			params.visual_dimension_profile = "metric_v1"
+			params.visual_site_geometry_profile = str(item.get("site_geometry_profile", ""))
+			if item.kind == "battery_flow": params.visual_geometry_profile = item.get("geometry_profile", "flow_icon_v1")
+			var visual: Node3D = Visual.create(item.kind, params, prefer_assets)
+			visual.name = "InstalledDevice_%d" % id
+			visual.position = Vector3(x, 0, z)
+			visual.set_meta("source_device_id", id)
+			visual.set_meta("source_station_id", int(station_data.get("id", -1)))
+			equipment.add_child(visual)
+			visual.set_annotation_visibility(false, false)
+			visual.set_highlight(false)
+			_register_asset_meshes(visual)
+			installed_device_nodes[id] = visual
+			ids.append(id)
+	set_meta("installed_device_count", ids.size())
+	set_meta("installed_device_ids", ids)
+	set_meta("installed_geometry_contract", "same Visual.create; metric_v1; unscaled interior world coordinates; no simulation copy")
+
+func _build_metric_ports(p: Dictionary) -> void:
+	var definition: Dictionary = Visual.thermal_asset_definition("thermal_station")
+	for id in PORT_LOCALS:
+		var coordinates: Array = definition.get("ports", {}).get(id, [])
+		var local: Vector3 = Visual._vector3(coordinates) if not coordinates.is_empty() else Vector3(-3.9 if id=="ac_in" else 3.9, .105, .8)
+		var port := Node3D.new()
+		port.name = "Port_" + id; port.position = local; add_child(port)
+		named_ports[id] = port; named_port_locals[id] = local
+		port.set_meta("port_id", id); port.set_meta("mapped_boundary_only", true)
+		port.set_meta("direction", "input" if id=="ac_in" else "output")
+		port.set_meta("carrier", "electricity_ac" if id=="ac_in" else "heat_water")
+		port.set_meta("unit", "MW" if id=="ac_in" else "MWth")
+		if id=="ac_in":
+			port.set_meta("voltage_level", "AC_BUS")
+			_box(port, "ACSquare", Vector3.ONE*.12, Vector3.ZERO, p.electric)
+		else:
+			port.set_meta("grade_id", "hw_secondary_70_40")
+			_cylinder(port, "HeatOuterFlange", .07, .07, .025, Vector3.ZERO, p.heat).rotation.z=PI*.5
+			_cylinder(port, "HeatInnerFlange", .04, .04, .03, Vector3.ZERO, p.return).rotation.z=PI*.5
+		_label(port, "PortLabel", "AC 输入" if id=="ac_in" else "热70/40 输出", Vector3(0,.16,0), 30, .01)
 
 ## Authored mesh slots remain intact. Placement tint uses material_override,
 ## which masks every slot and is restored to its original value (usually null).
@@ -332,6 +421,9 @@ func _build_tanks(p: Dictionary) -> void:
 	_box(self, "UtilityPipeRiser", Vector3(0.20, 1.6, 0.20), Vector3(2.85, 1.7, 0.6), p.heat)
 
 func _build_ports(p: Dictionary, imported_geometry: bool = false, metric: bool = false) -> void:
+	if metric and not imported_geometry:
+		_build_metric_ports(p)
+		return
 	for port_id in PORT_LOCALS:
 		var port: Node3D
 		if imported_geometry:

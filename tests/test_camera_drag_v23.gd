@@ -87,7 +87,7 @@ func run():
  game.pan_camera(Vector2(20,10))
  check(game.target!=initial and game.target.is_finite(),"perspective pan finite and effective")
  game.pan_camera(Vector2(100000,100000))
- check(absf(game.target.x)<=100 and absf(game.target.z)<=70,"pan bounded to terrain")
+ check(preload("res://scripts/map_domain.gd").contains(Vector2(game.target.x,game.target.z)),"pan bounded to current metric terrain domain")
  for key in ["camera","lod_camera","terrain","labels","infrastructure","selection","overlay","equipment","cables","confirmation","param_dialog","param_errors","param_target","data_dialog","data_list","line_dialog","line_capacity","line_loss","line_choice"]:
   var node=game.get(key)
   if is_instance_valid(node) and node.get_parent()==null:node.free()

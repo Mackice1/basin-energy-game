@@ -1,4 +1,5 @@
 extends SceneTree
+const CurrentWorldVersion = preload("res://scripts/world_game.gd")
 var game
 var failures:Array[String]=[]
 var checks:=0
@@ -14,7 +15,7 @@ func run():
  check(game.stations.size()==1 and game.stations[0].get("kind","")=="tower_station","tower example station")
  check(game.devices.size()==10,"10 tower example devices")
  check(game.result.get("valid",false),"valid dispatch "+str(game.result.get("error","")))
- check(game.state().schema==13 and game.state().model_version==22,"schema13/model22")
+ check(game.state().schema==CurrentWorldVersion.CURRENT_SAVE_SCHEMA and game.state().model_version==CurrentWorldVersion.CURRENT_MODEL_VERSION,"schema15/model24")
  for d in game.devices:
   if d.has("parent_station_id"):check(game.can_place_internal(int(d.parent_station_id),d.kind,Vector2(d.interior_x,d.interior_z),int(d.id),d.params)=="","valid placement "+d.kind)
  var receiver:int=-1

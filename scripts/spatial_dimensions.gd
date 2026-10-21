@@ -3,6 +3,7 @@ extends RefCounted
 ## Vector3 dimensions are (x, height, z), in metres; convert to world units once.
 ## Teaching installation allowances are not certified engineering clearances.
 const Catalog = preload("res://scripts/device_catalog.gd")
+const SiteLayout = preload("res://scripts/site_layout_support.gd")
 const WORLD_UNITS_PER_METER: float = 0.1
 const METRIC_PROFILE: String = "metric_v1"
 const LEGACY_PROFILE: String = "legacy_illustrative"
@@ -130,7 +131,7 @@ static func _modules(result: Dictionary, count: int, unit: Vector3, source: Stri
 	var pitch_x: float = unit.x + MODULE_SPACING_M
 	var pitch_z: float = unit.z + MODULE_SPACING_M
 	var columns: int = maxi(1, int(ceil(sqrt(float(count) * pitch_z / pitch_x))))
-	if result.kind in ["parabolic_trough", "high_temp_store", "oil_water_exchanger"]:
+	if result.kind in ["parabolic_trough", "high_temp_store", "oil_water_exchanger", "collector_substation"]:
 		columns = mini(columns, count)
 	var rows: int = int(ceil(float(count) / float(columns)))
 	result.columns = columns
@@ -152,10 +153,132 @@ static func _modules(result: Dictionary, count: int, unit: Vector3, source: Stri
 	result.source_note = source + " 模块间距2 m、四周检修预留2 m为教学假设，非工程或消防认证。"
 	return result
 
+## Reference hardware is finite and never shrinks when its usable rating is reduced.
+## Cavity dimensions exclude the exterior shell / insulation allowance. This is
+## a teaching capacity check, NOT a pressure-vessel wall or safety calculation.
+static func _reference_sized_profile(kind: String, p: Dictionary, include_origins: bool) -> Dictionary:
+	if not kind in ["thermal_store", "solid_thermal_store", "hydrogen_gas_store", "hydrogen_storage_system", "nitrogen_supply_boundary", "ammonia_synthesis_station"]:
+		return {}
+	var proof: Dictionary = SiteLayout.required_geometry(kind,p)
+	var hw: Dictionary = proof.get("hardware",{})
+	var d: Dictionary = _base(kind)
+	d.site_geometry_profile = "reference_size_v1"
+	var g: Dictionary = {}
+	var unit: Vector3
+	var count: int = 1
+	var rating_key: String
+	var rating: float
+	match kind:
+		"thermal_store":
+			unit = Vector3(11.0, 7.4, 6.0); rating_key = "capacity_mwhth"; rating = 4.0
+			g = {"shape":"cylinder", "outer_radius_m":2.15, "outer_total_length_m":6.3, "usable_fill_fraction":0.8}
+		"solid_thermal_store":
+			unit = Vector3(10.0, 6.2, 7.0); count = 2; rating_key = "capacity_mwhth"; rating = 8.0
+			g = {"shape":"solid_core"}
+		"hydrogen_gas_store":
+			unit = Vector3(22.0, 4.5, 9.0); rating_key = "capacity_kg"; rating = 1000.0
+			g = {"shape":"capsule", "outer_radius_m":0.44, "outer_total_length_m":3.13}
+		"hydrogen_storage_system":
+			unit = Vector3(24.0, 5.0, 16.0); rating_key = "capacity_mwh"; rating = 20.0
+			g = {"shape":"capsule", "outer_radius_m":0.80, "outer_total_length_m":5.8}
+		"nitrogen_supply_boundary":
+			unit = Vector3(18.0, 4.0, 14.0); rating_key = "capacity_kg"; rating = 1000.0
+			g = {"shape":"capsule", "outer_radius_m":0.12, "outer_total_length_m":1.55}
+		"ammonia_synthesis_station":
+			unit = Vector3(60.0, 15.0, 40.0); rating_key = "capacity_kg"; rating = 200.0
+			g = {"shape":"capsule", "outer_radius_m":0.87, "outer_total_length_m":8.74}
+	# Internal dimensions and required volumes have ONE shared JSON source.
+	# Only outer-shell / site / support allowances are authored in this file.
+	if proof.is_empty() or hw.is_empty(): return _fail(d,"Missing shared reference geometry contract.")
+	rating_key = str(proof.capacity_key)
+	rating = float(proof.installed_capacity)
+	g.required_net_volume_m3 = float(proof.minimum_container_volume_m3)
+	if kind == "solid_thermal_store":
+		var axes: Array = hw.net_block_dimensions_m
+		g.core_dimensions_m = Vector3(float(axes[0]),float(axes[1]),float(axes[2]))
+		g.core_count = int(hw.count)
+		g.solid_fraction = float(proof.material_volume_fraction)
+		g.required_solid_volume_m3 = float(proof.minimum_installed_effective_volume_m3)
+	else:
+		g.vessel_count = int(hw.count)
+		g.inner_radius_m = float(hw.internal_radius_m)
+		g.inner_straight_length_m = float(hw.straight_length_m)
+	if float(p[rating_key]) > rating + 1e-9:
+		return _fail(d, "%s exceeds finite reference_size_v1 hardware rating." % rating_key)
+	var net: float = 0.0
+	if g.shape == "solid_core":
+		var core: Vector3 = g.core_dimensions_m
+		net = int(g.core_count)*core.x*core.y*core.z
+		d.actual_solid_volume_m3 = net*float(g.solid_fraction)
+	else:
+		var r: float = g.inner_radius_m
+		net = int(g.vessel_count)*(PI*r*r*float(g.inner_straight_length_m)+(4.0/3.0*PI*r*r*r if g.shape=="capsule" else 0.0))
+	g.actual_net_volume_m3 = net
+	d.site_support_geometry = proof
+	d.reference_site_geometry = g
+	d.actual_net_volume_m3 = net
+	d.required_net_volume_m3 = g.required_net_volume_m3
+	d.reference_volume_check_pass = net >= float(g.required_net_volume_m3)
+	d.reference_rating_per_module = rating/float(count)
+	d.installed_reference_rating = rating
+	d.requested_rating = float(p[rating_key])
+	d.rating_parameter = rating_key
+	d.rating_unit = "MWhth" if rating_key=="capacity_mwhth" else "MWh H2 LHV" if rating_key=="capacity_mwh" else "kg"
+	d.material_phase = "gas" if kind in ["hydrogen_gas_store","nitrogen_supply_boundary","ammonia_synthesis_station"] else "solid" if kind=="solid_thermal_store" else "process"
+	d.inventory_phase = d.material_phase
+	d.capacity_kg = float(p.get("capacity_kg",0.0))
+	d.geometry_is_capacity_proof = false
+	d.pressure_vessel_certified = false
+	_modules(d,count,unit,"reference_size_v1 有限额定硬件：净腔/实芯体积显式核对；降低可用额定不缩壳。外壳、保温与支撑有独立教学余量，不是承压壁厚、安全间距或厂家额定认证。旧空标识保留原几何。",include_origins)
+	return d
+
+## Manufacturer nameplates establish a conservative fixed hardware allocation,
+## not a new dispatch inventory, efficiency, or engineering certification.
+static func _reference_electrochemical_profile(kind: String, geometry_profile: String, include_origins: bool) -> Dictionary:
+	if kind not in ["battery_sodium", "battery_flow"]: return {}
+	var d: Dictionary = _base(kind)
+	d.site_geometry_profile = "reference_size_v1"
+	var hardware: Dictionary = SiteLayout.geometry(kind)
+	if hardware.is_empty() or not hardware.has("hardware_module_count_cap"):
+		return _fail(d,"Missing finite electrochemical reference hardware.")
+	var count: int = int(hardware.hardware_module_count_cap)
+	d.reference_hardware = hardware
+	d.geometry_is_capacity_proof = false
+	d.geometry_is_teaching_assumption = true
+	if kind == "battery_sodium":
+		for key in ["reference_module_energy_mwh","reference_module_power_mw","reference_container_dimensions_m","reference_unit_dimensions_m"]:
+			if not hardware.has(key): return _fail(d,"Missing sodium reference hardware field: " + key)
+		var shell: Array = hardware.reference_container_dimensions_m
+		var unit: Array = hardware.reference_unit_dimensions_m
+		d.reference_container_dimensions_m = Vector3(float(shell[0]),float(shell[1]),float(shell[2]))
+		d.reference_capacity_per_module = float(hardware.reference_module_energy_mwh)
+		d.reference_power_per_module = float(hardware.reference_module_power_mw)
+		d.reference_hardware_energy_mwh = count * d.reference_capacity_per_module
+		d.reference_hardware_power_mw = count * d.reference_power_per_module
+		d.reference_capacity_basis = "manufacturer_nominal_energy_not_dispatch_inventory"
+		return _modules(d,count,Vector3(float(unit[0]),float(unit[1]),float(unit[2])),"ZTTEK Quantum N2.5厂家PDF：每箱2.5MWh名义容量/1.25MW，真实箱壳7.120×2.800×2.896m；选较网页20ft文字更大的PDF外形。固定3整箱共7.5MWh参考硬件，游戏仅分配6MWh内部库存及2MW，不改效率。每箱9×4×3.5m教学单元包含独立辅机/基础余量，不膨胀箱壳，不称实厂复现。详SODIUM_FLOW_CAPACITY_REFERENCE.md。",include_origins)
+	if geometry_profile != "flow_process_v2":
+		return _fail(d,"reference_size_v1 requires full flow_process_v2 hardware; flow_icon_v1 is legacy only.")
+	for key in ["reference_submodules_per_module","reference_submodule_energy_mwh_ac","reference_submodule_power_mw_ac","reference_plant_energy_mwh_ac","reference_plant_power_mw_ac"]:
+		if not hardware.has(key): return _fail(d,"Missing flow reference hardware field: " + key)
+	d.geometry_profile = geometry_profile
+	d.legacy_icon_geometry = false
+	d.reference_process_units_per_module = int(hardware.reference_submodules_per_module)
+	d.reference_process_unit_count = count * d.reference_process_units_per_module
+	d.reference_capacity_per_module = float(hardware.reference_plant_energy_mwh_ac)
+	d.reference_power_per_module = float(hardware.reference_plant_power_mw_ac)
+	d.reference_hardware_energy_mwh_ac = count * d.reference_capacity_per_module
+	d.reference_hardware_power_mw_ac = count * d.reference_power_per_module
+	d.reference_capacity_basis = "manufacturer_AC_delivered_energy_not_internal_inventory"
+	return _modules(d,count,Vector3(38.0,5.5,15.0),"Sumitomo官方2025.10目录：40ft双罐/电堆组12.192×4.902×5.425m，每组2000kWh AC/334kW AC，6组参考站12MWh AC/2MW、38×15m。固定2大模块共12组参考硬件24MWh AC，仅保守分配12MWh内部教学库存/2MW；AC额定与内部库存口径不同，不反推效率或电解液有效体积。10MWh仅为旧几何复制阈值，非厂家额定。详SODIUM_FLOW_CAPACITY_REFERENCE.md。",include_origins)
+
 ## include_origins=false is a cheap bounds/count query for live placement and
 ## persistence validation. It never changes geometry or procedural-origin access.
-static func profile(kind: String, params: Dictionary = {}, include_origins: bool = true) -> Dictionary:
+static func profile(kind: String, params: Dictionary = {}, include_origins: bool = true, geometry_profile: String = "flow_process_v2", site_geometry_profile: String = "reference_size_v1") -> Dictionary:
 	var result: Dictionary = _base(kind)
+	result.site_geometry_profile = site_geometry_profile
+	if not site_geometry_profile in ["", "reference_size_v1"]:
+		return _fail(result, "Unknown site geometry profile: " + site_geometry_profile)
 	var p: Dictionary = Catalog.defaults(kind)
 	p.merge(params, true)
 	var limits: Dictionary = {}
@@ -169,7 +292,15 @@ static func profile(kind: String, params: Dictionary = {}, include_origins: bool
 		"solar_thermal": limits = {"absorber_area_m2": Vector2(0.0, 3030.0)}
 		"pv": limits = {"dc_capacity_mw": Vector2(0.0, 10000.0)}
 		"station": limits = {"capacity_mw": Vector2(0.0, 10000.0)}
+		"nitrogen_supply_boundary", "co2_supply_boundary", "methanol_synthesis_station": limits = {"capacity_kg":Vector2(0,1000)}
+		"ammonia_synthesis_station": limits = {"capacity_kg":Vector2(0,200)}
+		"hydrogen_liquid_store": limits = {"capacity_kg":Vector2(0,1000)}
+		"hydrogen_metal_hydride_store": limits = {"dry_host_mass_kg":Vector2(0,10000)}
+		"collector_substation": limits = {"capacity_mw": Vector2(0.0, 200.0)}
 		"battery", "battery_sodium", "battery_flow", "caes_aboveground", "liquid_air_store", "hydrogen_storage_system": limits = {"capacity_mwh": Vector2(0.0, 100000.0), "charge_mw": Vector2(0.0, 10000.0), "discharge_mw": Vector2(0.0, 10000.0)}
+		"water_supply_boundary", "hydrogen_gas_store": limits = {"capacity_kg": Vector2(0.0, 1000000000.0)}
+		"electrolyzer_station", "fuel_cell_station": limits = {"rated_electric_mw": Vector2(0.0, 10000.0)}
+		"co2_liquid_cycle_store": limits = {"capacity_mwh": Vector2(0.0,795.0), "charge_mw": Vector2(0.0,146.0), "discharge_mw": Vector2(0.0,100.0)}
 		"electric_boiler": limits = {"rated_electric_mw": Vector2(0.0, 10000.0)}
 		"fuel_boiler": limits = {"rated_fuel_mw": Vector2(0.0, 10000.0)}
 		"thermal_store", "solid_thermal_store": limits = {"capacity_mwhth": Vector2(0.0, 100000.0)}
@@ -177,9 +308,90 @@ static func profile(kind: String, params: Dictionary = {}, include_origins: bool
 		"load", "heat_demand", "thermal_station", "tower_station_preview", "tower_station", "solar_tower_receiver": pass
 		_: return _fail(result, "Unknown spatial device kind: " + kind)
 	var error: String = _check_values(p, limits)
+	if site_geometry_profile == "reference_size_v1" and not SiteLayout.parameter_limits(kind).is_empty():
+		var support: Dictionary = SiteLayout.assess_device({"kind":kind,"params":p,"site_geometry_profile":site_geometry_profile})
+		if not support.supported:error = "Parameters exceed finite reference_size_v1 support: " + str(support.issues)
 	if not error.is_empty():
 		return _fail(result, error)
+	# Vector2 stores float32; enforce the CO2 fractional cap in float64 so
+	# default 794.24 is not rejected by an upper limit rounded downward.
+	if kind == "co2_liquid_cycle_store" and float(p.capacity_mwh) > 794.24:
+		return _fail(result, "capacity_mwh is outside supported CO2 geometry bounds.")
+	if site_geometry_profile == "reference_size_v1":
+		var sized: Dictionary = _reference_sized_profile(kind, p, include_origins)
+		if not sized.is_empty(): return sized
+		var electrochemical: Dictionary = _reference_electrochemical_profile(kind,geometry_profile,include_origins)
+		if not electrochemical.is_empty(): return electrochemical
+		# Geometry-only floor: a derated installation retains default hardware.
+		# The caller's simulation dictionary and requested rating remain untouched.
+		var nominal: Dictionary = Catalog.defaults(kind)
+		for key in ["capacity_mwh", "capacity_mwhth", "charge_mw", "discharge_mw", "charge_mwth", "discharge_mwth", "capacity_mw", "capacity_mwth", "capacity_kg", "rated_electric_mw", "rated_fuel_mw", "dc_capacity_mw", "absorber_area_m2", "aperture_area_m2", "mass_flow_capacity_kg_s", "rotor_diameter_m", "hub_height_m"]:
+			if p.has(key) and nominal.has(key) and _finite_number(p[key]) and _finite_number(nominal[key]):
+				p[key] = maxf(float(p[key]),float(nominal[key]))
 	match kind:
+		"nitrogen_supply_boundary", "co2_supply_boundary", "ammonia_synthesis_station", "methanol_synthesis_station":
+			var units:Dictionary={"nitrogen_supply_boundary":Vector3(18,4,14),"co2_supply_boundary":Vector3(20,10,14),"ammonia_synthesis_station":Vector3(60,15,40),"methanol_synthesis_station":Vector3(72,20,50)}
+			_modules(result,1,units[kind],"真实照片构件参考的原创教学成套站：N2预制气瓶束/CO2柔性低压气囊/氨反应循环分离框架/醇生产分离塔。场址长宽与设备尺寸为教学总图，非实测厂商站，容量下降不缩整站。见docs/phase2/PROCESS_FACILITY_VISUAL_PLAN.md。",include_origins)
+			result.geometry_is_capacity_proof=false
+			result.inventory_phase="liquid" if kind=="methanol_synthesis_station" else "gas"
+			result.capacity_kg=float(p.capacity_kg)
+			result.description="完整%s教学站，固定安装区%.0f×%.0fm，有限%s库存%.1fkg；无免费原料产出，外观不证明压力/容积/产能。" % [kind,result.land_dimensions_m.x,result.land_dimensions_m.z,result.inventory_phase,result.capacity_kg]
+			return result
+		"hydrogen_liquid_store", "hydrogen_metal_hydride_store":
+			var liquid:bool=kind=="hydrogen_liquid_store"
+			var size:=Vector3(40,15,28) if liquid else Vector3(20,5,14)
+			_modules(result,1,size,"Air Liquide实拍的绝热罐/冷箱/管廊，或DLR纯LaNi5实验材料床/换热器与NREL容器化站外观。原创教学总图非厂家设计；液氢44×32m，LaNi5宿主站24×18m（宿主0<质量≤10t，建成后固定）。内部液化/环境气化或电热放氢设备随真实热学合同；外部只有AC和气氢，无液氢管/热网。Source: docs/phase2/PROCESS_FACILITY_VISUAL_PLAN.md.",include_origins)
+			result.geometry_is_capacity_proof=false
+			result.material_phase="liquid_internal" if liquid else "metal_hydride_bound_internal"
+			result.reference_rating_per_module=1000.0 if liquid else 120.0
+			result.rating_parameter="capacity_kg" if liquid else "dry_host_mass_kg"
+			result.rating_unit="kg H2" if liquid else "kg dry LaNi5 host"
+			result.requested_rating=float(p.capacity_kg) if liquid else float(p.dry_host_mass_kg)
+			if not liquid: result.dry_host_mass_kg=float(p.dry_host_mass_kg);result.derived_hydrogen_capacity_kg=0.012*float(p.dry_host_mass_kg)
+			result.description="液氢成套站44×32m：绝热罐+液化压缩机房/冷箱+有限环境气化器；1000kg上限，调低流量/容量不缩整站。" if liquid else "LaNi5成套站24×18m：干宿主%.1fkg、派生%.2fkg可用氢（0.012×干宿主）；宿主建成后固定，减小装填不缩整站；材料床+内部循环/冷却+电加热放氢，不是固态纯氢。" % [float(p.dry_host_mass_kg),0.012*float(p.dry_host_mass_kg)]
+			return result
+		"collector_substation":
+			_modules(result,1,Vector3(96,16,98),"独立基地级汇集站，100×102m=1.02ha为教学矩形总图；Donegal规划1120289仅支持场址总面积量级，非实测长宽。Cordal/Kirby AIS现场照片支持主变区、母线间隔、控制楼与道路形态。200MW为独立聚合通量假设，不将120MVA直接当MW；无真实数值电压/无功/保护仿真。单体尺寸与安全间距均为教学假设。Source: docs/phase2/COLLECTOR_SUBSTATION_REFERENCES.md.",include_origins)
+			result.reference_rating_per_module = 200.0
+			result.rating_parameter = "capacity_mw"
+			result.rating_unit = "MW AC aggregate"
+			result.requested_rating = float(p.capacity_mw)
+			result.geometry_is_capacity_proof = false
+			result.is_site_container = false
+			result.description = "基地汇集升压站外观：教学总图100×102m（1.02ha），两主变区、AIS间隔/母线、控制楼/道路；默认200MW聚合节点，不模拟实际电压变换。降低额定不缩小完整场址。"
+			return result
+		"co2_liquid_cycle_store":
+			# 848 mu ~= 565333.3m2 is published area, not a surveyed rectangle.
+			# Keep this original 752m-square teaching site even at lower ratings.
+			_modules(result,1,Vector3(748,55,748),"木垒公开848亩约565333m²量级；752×752m=565504m²为取整后的教学正方形总图，非实测长宽。五长拱气仓、141储液/97蓄热单元；单体尺寸/间距为照片构型启发的示意假设，不证明容积/工质质量/承压能力或容量。完整闭式CO₂设施，非CAES换皮。Source: docs/phase2/CO2_REFERENCE_REVIEW.md.",include_origins)
+			result.gas_holder_count = 5
+			result.liquid_storage_unit_count = 141
+			result.thermal_storage_unit_count = 97
+			result.published_site_area_m2 = 848.0*2000.0/3.0
+			result.geometry_is_capacity_proof = false
+			result.dimensions_source_status = "published_area_with_teaching_general_arrangement"
+			result.description = "完整闭式CO₂储能站：教学院区752×752m（565504m²，约848亩）；5座长拱气仓、141储液和97蓄热示意单元。公开总面积仅约束量级，单体尺寸非实测、无kg/压力标定；调低功率/容量不缩小现有整站。"
+			return result
+		"water_supply_boundary", "electrolyzer_station", "hydrogen_gas_store", "fuel_cell_station":
+			# Source-backed component shapes; complete skid envelopes and aggregate
+			# ratings are original teaching assumptions, not manufacturer products.
+			var geometry := {
+				"water_supply_boundary": ["capacity_kg", 10000.0, Vector3(6, 3, 5), "kg H2O", "Balmoral GRP sectional tank panels and Grundfos Rottal pump-stage references; 3x2x2m gross reservoir with freeboard for illustrative 10,000kg usable water; no replenishment. Original 6x5x3m finite-water skid."],
+				"electrolyzer_station": ["rated_electric_mw", 2.0, Vector3(15, 4, 9), "MW AC", "Nel MC series enclosure dimensions: electrolyser 12.2x2.5x3m and power supply 6.1x2.5x2.6m. Original 15x9x4m teaching layout and 2MW aggregate rating, not a Nel MC500 performance model."],
+				"hydrogen_gas_store": ["capacity_kg", 1000.0, Vector3(17, 4, 8), "kg H2 gas", "Hexagon Purus 45-ft distribution-system photograph: vertical composite cylinders, steel cross-braced rack. Original stationary 17x8x4m layout including compressor/valve skid; 1000kg is teaching allocation, not geometry-derived or a vendor pressure/rating certification."],
+				"fuel_cell_station": ["rated_electric_mw", 1.0, Vector3(12, 3.5, 7), "MW AC", "Ballard FCwave cabinet geometry from official datasheet: 1.215x0.738x2.195m, 200kW DC component. Six reference-size cabinets plus inverter and dry cooler in original 12x7x3.5m / 1MW net-AC teaching module; not a certified Ballard turnkey plant."]}
+			var spec: Array = geometry[kind]
+			var key: String = spec[0]
+			var reference: float = spec[1]
+			var count := maxi(1, int(ceil(float(p[key]) / reference - .000000001)))
+			result.rating_parameter = key
+			result.rating_unit = spec[3]
+			result.reference_rating_per_module = reference
+			result.requested_rating = float(p[key])
+			result.installed_reference_rating = count * reference
+			result.geometry_is_capacity_proof = false
+			result.material_phase = "liquid" if kind == "water_supply_boundary" else "gas" if kind == "hydrogen_gas_store" else "process"
+			return _modules(result, count, spec[2], spec[4] + " Source audit: docs/phase2/MATERIAL_2A_VISUAL_REFERENCES.md.", include_origins)
 		"steam_generator", "salt_steam_generator", "steam_turbine", "steam_condenser", "feedwater_pump":
 			var reference := .1 if kind in ["steam_generator", "salt_steam_generator"] else .08 if kind == "steam_condenser" else .05
 			var key := "capacity_mwth" if kind in ["steam_generator", "salt_steam_generator", "steam_condenser"] else "mass_flow_capacity_kg_s"
@@ -241,7 +453,7 @@ static func profile(kind: String, params: Dictionary = {}, include_origins: bool
 			# Technology-specific site envelopes are teaching assumptions, not pressure-vessel sizing.
 			var specifications := {
 				"battery_sodium": [5.0, 2.5, Vector3(6.5, 3.0, 3.2)],
-				"battery_flow": [10.0, 2.0, Vector3(14.0, 5.5, 10.0)],
+				"battery_flow": [10.0, 2.0, Vector3(14.0, 5.5, 10.0) if geometry_profile == "flow_icon_v1" else Vector3(38.0, 5.5, 15.0)],
 				"caes_aboveground": [0.25, 0.1, Vector3(24.0, 6.0, 18.0)],
 				"liquid_air_store": [10.0, 3.0, Vector3(20.0, 11.0, 16.0)],
 				"hydrogen_storage_system": [20.0, 2.0, Vector3(24.0, 5.0, 16.0)],
@@ -255,6 +467,13 @@ static func profile(kind: String, params: Dictionary = {}, include_origins: bool
 			result.reference_capacity_per_module = spec[0]
 			result.reference_power_per_module = spec[1]
 			result.geometry_is_teaching_assumption = true
+			if kind == "battery_flow":
+				if not geometry_profile in ["flow_icon_v1","flow_process_v2"]: return _fail(result,"Unknown battery_flow geometry profile: "+geometry_profile)
+				result.geometry_profile=geometry_profile
+				result.legacy_icon_geometry=geometry_profile=="flow_icon_v1"
+				result.geometry_is_capacity_proof=false
+				var source:="旧档兼容图标化液流设施：14×10m仅为原示意占位，不是10MWh实尺度。保留原位置/碰撞/端口；不得据此宣称真实储液量。" if result.legacy_icon_geometry else "Sumitomo官方RFB目录2025.10：40ft模块12.192×4.902×5.425m，参考整站8MWh AC为39×12m、12MWh AC为38×15m。本原创38×15m工艺区采用6组双层双电解液罐/电堆模块和PCS；加外围2m后42×19m。10MWh为内部教学库存，不将12MWh AC产品额定挪作仿真容量。详STORAGE_FOUR_REFERENCE_REVIEW.md。"
+				return _modules(result,count,spec[2],source,include_origins)
 			return _modules(result, count, spec[2], "完整储能设施教学单元；容量/功率增加会增加模块与占地。尺寸不用于推导实际压力、介质质量或工业安全距离；不是厂家CAD或工程设计。", include_origins)
 		"station":
 			result.reference_capacity_mw_per_module = 2.0

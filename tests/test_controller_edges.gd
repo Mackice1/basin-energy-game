@@ -127,11 +127,17 @@ func _run():
 	game.devices = base_state().devices
 	game.devices[0].params.rotor_diameter_m = 300.0
 	game.devices[0].params.hub_height_m = 200.0
-	check(game.can_place("wind", Vector2(20,0)) != "", "existing enlarged rotor included in collision screening")
-	game.devices = []
+	# Test legacy movement explicitly: new construction is intentionally blocked
+	# before collision checks, and must not make a nonempty-error assertion pass.
+	game.devices.append({"id":1,"kind":"wind","x":60.0,"z":0.0,"params":game.model.defaults("wind")})
+	check(game.can_place("wind", Vector2(20,0), 1, game.devices[1].params) == "与设备占地重叠", "existing enlarged rotor is the actual collision rejection reason")
+	check(game.can_place("wind", Vector2(40,0), 1, game.devices[1].params).is_empty(), "legacy candidate can move clear of the enlarged rotor")
+	game.devices.pop_back()
 	game.templates.wind.rotor_diameter_m = 300.0
 	game.templates.wind.hub_height_m = 200.0
-	check(game.can_place("wind", Vector2(80,0)) != "", "enlarged template rotor included in boundary screening")
+	var boundary_x: float = game.WorldDomain.HALF_EXTENTS.x - game.device_footprint(game.devices[0])
+	check(game.can_place("wind", Vector2(boundary_x + 0.01,0), 0, game.templates.wind) == "超出4×4km可建场地边界", "enlarged legacy rotor is the actual boundary rejection reason")
+	check(game.can_place("wind", Vector2(boundary_x - 0.01,0), 0, game.templates.wind).is_empty(), "same enlarged legacy rotor fits just inside the current domain")
 	print("CONTROLLER_REVIEW checks=", checks, " failures=", failures.size())
 	for key in ["camera","lod_camera","terrain","labels","infrastructure","selection","overlay","equipment","cables","confirmation","param_dialog","param_editor","param_errors","param_target","data_dialog","data_list","line_dialog","line_capacity","line_loss","line_choice"]:
 		var node = game.get(key)

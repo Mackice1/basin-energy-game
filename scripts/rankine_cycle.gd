@@ -100,7 +100,7 @@ static func prepare(prepared: Dictionary) -> void:
 	prepared.rankine_aux_paths = {}
 	for battery in [false,true]:
 		for ep in prepared.paths:
-			if not ep.source_kind in ["wind","pv","battery", "battery_sodium", "battery_flow", "caes_aboveground", "liquid_air_store", "hydrogen_storage_system"] or (Catalog.is_electric_storage(ep.source_kind)) != battery or not ep.sink_kind in AUX_KINDS: continue
+			if not (ep.source_kind in ["wind","pv"] or Catalog.is_electric_storage(ep.source_kind)) or (Catalog.is_electric_storage(ep.source_kind)) != battery or not ep.sink_kind in AUX_KINDS: continue
 			if not prepared.rankine_aux_paths.has(ep.sink_id): prepared.rankine_aux_paths[ep.sink_id] = []
 			prepared.rankine_aux_paths[ep.sink_id].append(ep)
 	var ids: Array = nodes.keys()
@@ -351,8 +351,8 @@ static func audit(prepared: Dictionary, errors: Array[String]) -> Dictionary:
 			if not forward and not reverse: errors.append("Independent audit: Rankine changed AC route provenance")
 			if electric_out.has(a): electric_out[a] += float(line.sent_mw)
 			if electrical.has(b): electrical[b] += float(line.received_mw)
-			if prepared.nodes.has(a) and prepared.nodes[a].kind in ["wind", "pv", "battery", "battery_sodium", "battery_flow", "caes_aboveground", "liquid_air_store", "hydrogen_storage_system"] and prepared.nodes.has(b) and prepared.nodes[b].kind == "station": external_station[b] = float(external_station.get(b, 0.0)) + float(line.received_mw)
-			if prepared.nodes.has(a) and prepared.nodes[a].kind == "station" and prepared.nodes.has(b) and prepared.nodes[b].kind in AUX_KINDS: auxiliary_station[a] = float(auxiliary_station.get(a, 0.0)) + float(line.sent_mw)
+			if prepared.nodes.has(a) and (prepared.nodes[a].kind in ["wind", "pv"] or Catalog.is_electric_storage(prepared.nodes[a].kind)) and prepared.nodes.has(b) and Catalog.is_electric_station(prepared.nodes[b].kind): external_station[b] = float(external_station.get(b, 0.0)) + float(line.received_mw)
+			if prepared.nodes.has(a) and Catalog.is_electric_station(prepared.nodes[a].kind) and prepared.nodes.has(b) and prepared.nodes[b].kind in AUX_KINDS: auxiliary_station[a] = float(auxiliary_station.get(a, 0.0)) + float(line.sent_mw)
 	for station in auxiliary_station:
 		if float(auxiliary_station[station]) > float(external_station.get(station, 0.0))*(1.0-float(prepared.nodes[station].params.loss_fraction))+2e-6: errors.append("Independent audit: Rankine external-only auxiliary provenance")
 	var complete := {}

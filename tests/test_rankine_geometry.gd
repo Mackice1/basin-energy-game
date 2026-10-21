@@ -16,11 +16,20 @@ func _init() -> void:
 		check(d.unit_dimensions_m.x >= 2 and d.unit_dimensions_m.z >= 1.2, "physical envelope never miniature")
 		var enlarged: Dictionary = Catalog.defaults(kind)
 		enlarged[d.rating_parameter] = float(d.reference_rating_per_module) * 2.05
-		var big := Spatial.profile(kind,enlarged)
+		# Current finite hardware rejects oversized ratings. Historical scenes
+		# still retain the original replicated-module geometry without migration.
+		check(not Spatial.profile(kind,enlarged).valid, "current reference hardware rejects enlarged rating: " + kind)
+		var big := Spatial.profile(kind,enlarged,true,"flow_process_v2","")
 		check(big.module_count == 3 and big.unit_dimensions_m == d.unit_dimensions_m, "oversize rating adds full modules: " + kind)
 		check(big.land_area_m2 > d.land_area_m2 and big.installed_reference_rating >= big.requested_rating, "expanded installation remains full size")
 		check(not Spatial.profile(kind,{d.rating_parameter:-1}).valid, "negative rating rejected")
 		check(not Spatial.profile(kind,{d.rating_parameter:NAN}).valid, "nonfinite rating rejected")
+		var derated: Dictionary = Catalog.defaults(kind)
+		derated[d.rating_parameter] = float(d.reference_rating_per_module) * .25
+		var low := Spatial.profile(kind,derated)
+		check(low.valid and low.module_count==d.module_count and low.unit_dimensions_m==d.unit_dimensions_m and low.body_dimensions_m==d.body_dimensions_m and low.land_dimensions_m==d.land_dimensions_m, "current derating retains complete hardware and installation: " + kind)
+		var historical_enlarged := enlarged.duplicate(true)
+		historical_enlarged.visual_site_geometry_profile = ""
 		var definitions := Visual.rankine_port_definitions(kind)
 		check(Catalog.ports(kind).size() == definitions.size(), "catalog exact port count")
 		for port_id in definitions:
@@ -30,10 +39,14 @@ func _init() -> void:
 		var expected := Visual.thermal_asset_definition(kind)
 		check(expected.get("ports",{}).size() == definitions.size(), "manifest exact number of ports")
 		for imported in [false,true]:
-			for params in [{},enlarged]:
-				var profile := Spatial.profile(kind,params)
+			for params in [{},derated,historical_enlarged]:
+				var before: PackedByteArray = var_to_bytes(params)
+				var site_profile: String = str(params.get("visual_site_geometry_profile","reference_size_v1"))
+				var profile := Spatial.profile(kind,params,true,"flow_process_v2",site_profile)
 				var item = Visual.create(kind,params,imported)
 				root.add_child(item)
+				check(var_to_bytes(params)==before,"geometry never changes requested ratings: " + kind)
+				check(item.get_meta("site_geometry_profile")==site_profile,"current versus historical geometry identity: " + kind)
 				check(item.get_meta("visual_backend") == ("blender_glb" if imported else "metric_procedural_fallback"), "Rankine backend: " + kind)
 				check(item.scale == Vector3.ONE and item.get_meta("world_units_per_meter") == .1, "one conversion only")
 				check(item.get_meta("capacity_added") == 0 and item.get_meta("modules_share_simulation_limits"), "geometry does not add capacity")
@@ -42,6 +55,7 @@ func _init() -> void:
 				for port_id in definitions:
 					var spec: Array = definitions[port_id]
 					check(item.has_named_port(port_id), "explicit port exists: " + port_id)
+					if not item.named_ports.has(port_id): continue # failed assertion, not an invalid-key test hang
 					var port: Node3D = item.named_ports[port_id]
 					check(port.get_meta("carrier") == spec[3] and port.get_meta("direction") == spec[1], "typed direction: " + port_id)
 					check(port.get_meta("unit") == ("kg/s" if spec[3] == "water_steam" else "MWth" if spec[3] in ["heat_oil","heat_salt"] else "MW"), "mass/heat/electric units: " + port_id)

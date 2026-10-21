@@ -5,6 +5,7 @@ extends Window
 ## focus_selection(), reset_camera(), set_camera_view(yaw, pitch, distance), undo_edit().
 const UITheme = preload("res://scripts/ui_theme.gd")
 const Visual = preload("res://scripts/equipment_visual.gd")
+const Spatial = preload("res://scripts/spatial_dimensions.gd")
 const SpeedControl = preload("res://scripts/speed_control.gd")
 const Catalog = preload("res://scripts/device_catalog.gd")
 const INTERNAL_KINDS := ["steam_generator","steam_turbine","steam_condenser","feedwater_pump","electric_boiler", "fuel_boiler", "solar_thermal", "parabolic_trough", "high_temp_store", "oil_water_exchanger", "thermal_store", "heat_exchanger","solar_tower_receiver","molten_salt_store","salt_steam_generator"]
@@ -128,12 +129,13 @@ func _read_dimension_profile() -> void:
 		_connection_signature = ""
 		_build_world()
 
-func _footprint(kind: String, params: Dictionary = {}) -> float:
-	return Visual.footprint(kind, _visual_params(params))
+func _footprint(kind: String, params: Dictionary = {}, item: Dictionary = {}) -> float:
+	return Visual.footprint(kind, _visual_params(params, item))
 
-func _visual_params(params: Dictionary) -> Dictionary:
+func _visual_params(params: Dictionary, item: Dictionary = {}) -> Dictionary:
 	var value := params.duplicate(true)
 	value["visual_dimension_profile"] = dimension_profile
+	value["visual_site_geometry_profile"] = str(item.get("site_geometry_profile", "reference_size_v1" if item.is_empty() else ""))
 	return value
 
 func open_station(id: int) -> bool:
@@ -542,7 +544,7 @@ func reset_camera() -> void:
 		var maximum := Vector2(-INF, -INF)
 		for item in members:
 			var point := Vector2(float(item.get("interior_x", 0)), float(item.get("interior_z", 0)))
-			var extent := Vector2.ONE * _footprint(item.kind, item.get("params", {}))
+			var extent := Vector2.ONE * _footprint(item.kind, item.get("params", {}), item)
 			minimum = minimum.min(point - extent)
 			maximum = maximum.max(point + extent)
 		var middle := (minimum + maximum) * 0.5
@@ -558,7 +560,7 @@ func focus_selection() -> void:
 	var visual: Node3D = equipment_nodes[selected_id]
 	var bounds: AABB = visual.get_meta("pick_bounds")
 	camera_target = Vector3(float(item.get("interior_x", 0)), 1.7 * visual_scale, float(item.get("interior_z", 0)))
-	var span := maxf(bounds.size.length(), _footprint(item.kind, item.get("params", {})) * 2.0)
+	var span := maxf(bounds.size.length(), _footprint(item.kind, item.get("params", {}), item) * 2.0)
 	set_camera_view(camera_yaw, camera_pitch, span * 1.65 + 4.0 * visual_scale)
 	_set_status("已聚焦 #%d；全景按钮恢复全站视野。" % selected_id)
 
@@ -861,11 +863,12 @@ func _sync_equipment(members: Array) -> void:
 	for item in members:
 		var id := int(item.id)
 		present[id] = true
-		var signature := str(item.kind) + JSON.stringify(item.get("params", {}))
+		var visual_params := _visual_params(item.get("params", {}), item)
+		var signature := str(item.kind) + JSON.stringify(visual_params)
 		if not equipment_nodes.has(id) or _visual_signatures.get(id, "") != signature:
 			if equipment_nodes.has(id):
 				equipment_nodes[id].free()
-			var node: Node3D = Visual.create(item.kind, _visual_params(item.get("params", {})), true)
+			var node: Node3D = Visual.create(item.kind, visual_params, true)
 			node.name = "InternalDevice_%d" % id
 			equipment_root.add_child(node)
 			equipment_nodes[id] = node
@@ -1338,7 +1341,7 @@ func _sync_runtime(members: Array) -> void:
 			selected_label.text += host.solar_report_text(report)+"\n"+host.thermal_connection_status(selected_id)
 		"fuel_boiler":
 			selected_label.text += "天然气 → 90/60°C\n燃料输入 %.3f MW(LHV)\n热输出 %.3f MWth\n燃料转换散失 %.3f MW\n辅机用电 %.3f MW\n辅机电散失 %.3f MW\n燃气体积 %.2f Nm³/h\n燃料成本 %.2f 元/h（教学）\n%s" % [report.get("fuel_input_mw", 0), report.get("heat_output_mwth", 0), report.get("conversion_loss_mw", 0), report.get("auxiliary_electric_mw", 0), report.get("auxiliary_electric_loss_mw", 0), report.get("fuel_volume_nm3_per_h", 0), report.get("fuel_cost_per_h", 0), _fuel_supply_status()]
-			selected_label.text += "\n额定燃料 %.3f MW(LHV) · 效率 %.1f%%\n辅机比例 %.3f · 占地半径 %.1f 米" % [item.params.get("rated_fuel_mw", 0), float(item.params.get("thermal_efficiency", 0)) * 100.0, item.params.get("auxiliary_electric_ratio", 0), _footprint(item.kind, item.params) / 0.1]
+			selected_label.text += "\n额定燃料 %.3f MW(LHV) · 效率 %.1f%%\n辅机比例 %.3f · 占地半径 %.1f 米" % [item.params.get("rated_fuel_mw", 0), float(item.params.get("thermal_efficiency", 0)) * 100.0, item.params.get("auxiliary_electric_ratio", 0), _footprint(item.kind, item.params, item) / 0.1]
 			if host.has_method("thermal_connection_status"):
 				selected_label.text += "\n" + host.thermal_connection_status(selected_id)
 		"molten_salt_store", "thermal_store", "high_temp_store":
@@ -1379,6 +1382,13 @@ func set_interaction_mode(value: String) -> void:
 	refresh()
 
 func _check_build_space(kind: String, params: Dictionary) -> bool:
+	# Spatial merges Catalog defaults and validates the shared reference bounds.
+	# Invalid profiles have zero radius: never treat that sentinel as free space.
+	var dimensions: Dictionary = Spatial.profile(kind, params, false, "flow_process_v2", "reference_size_v1")
+	if not bool(dimensions.get("valid", false)):
+		set_interaction_mode("select")
+		_set_status("%s模板参数超出厂区支持范围，无法生成预览。请先调整为参数面板标明的安装规格。" % NAMES[kind])
+		return false
 	var radius := _footprint(kind, params)
 	if radius <= _half_extent() * visual_scale: return true
 	set_interaction_mode("select")
@@ -1470,14 +1480,15 @@ func placement_error(kind: String, point: Vector2, ignore_id: int = -1) -> Strin
 	if not is_finite(point.x) or not is_finite(point.y): return "无效位置。"
 	if host.has_method("can_place_internal"):
 		return host.can_place_internal(station_id, kind, point, ignore_id)
-	var params: Dictionary = _member(ignore_id).get("params", {}) if ignore_id >= 0 else host.templates.get(kind, {})
-	var radius := _footprint(kind, params)
+	var existing := _member(ignore_id) if ignore_id >= 0 else {}
+	var params: Dictionary = existing.get("params", {}) if ignore_id >= 0 else host.templates.get(kind, {})
+	var radius := _footprint(kind, params, existing)
 	if absf(point.x) + radius > _half_extent() * visual_scale or absf(point.y) + radius > _half_extent() * visual_scale:
 		return "设备占地超出站内边界。"
 	for item in _members():
 		if int(item.id) == ignore_id: continue
 		var center := Vector2(float(item.get("interior_x", 0)), float(item.get("interior_z", 0)))
-		if center.distance_to(point) < radius + _footprint(item.kind, item.get("params", {})):
+		if center.distance_to(point) < radius + _footprint(item.kind, item.get("params", {}), item):
 			return "与 #%d %s 占地重叠。" % [item.id, NAMES[item.kind]]
 	return ""
 
@@ -1500,7 +1511,7 @@ func _device_at(point: Vector2) -> int:
 	for item in _members():
 		var position_2d := Vector2(float(item.get("interior_x", 0)), float(item.get("interior_z", 0)))
 		var distance := point.distance_to(position_2d)
-		if distance <= _footprint(item.kind, item.get("params", {})) and distance < nearest:
+		if distance <= _footprint(item.kind, item.get("params", {}), item) and distance < nearest:
 			nearest = distance
 			chosen = int(item.id)
 	return chosen
@@ -1739,10 +1750,11 @@ func _update_preview(view_position: Vector2) -> void:
 	if kind not in INTERNAL_KINDS: return
 	var params: Dictionary = host.templates.get(kind, {}) if interaction_mode == "build" else item.get("params", {})
 	if interaction_mode == "build" and not _check_build_space(kind, params): return
-	var signature := kind + JSON.stringify(params) + dimension_profile
+	var visual_params := _visual_params(params, {} if interaction_mode == "build" else item)
+	var signature := kind + JSON.stringify(visual_params)
 	if not is_instance_valid(preview) or preview.get_meta("preview_signature", "") != signature:
 		_clear_preview()
-		preview = Visual.create(kind, _visual_params(params), true)
+		preview = Visual.create(kind, visual_params, true)
 		preview.name = "InteriorPlacementPreview"
 		preview.set_meta("preview_kind", kind)
 		preview.set_meta("preview_signature", signature)

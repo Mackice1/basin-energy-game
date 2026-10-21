@@ -2,6 +2,9 @@ extends RefCounted
 ## Pure, non-mutating validation before a scene replaces live state.
 ## Empty string means valid. Every rejected value produces a readable reason.
 ## Terrain exclusions/slope still require the controller's terrain-aware checks.
+const MapDomain=preload("res://scripts/map_domain.gd")
+const LedgerV2=preload("res://scripts/material_ledger_v2.gd")
+const Materials = preload("res://scripts/material_dispatch.gd")
 const Model = preload("res://scripts/energy_model.gd")
 const Series = preload("res://scripts/series_import.gd")
 const Catalog = preload("res://scripts/device_catalog.gd")
@@ -11,6 +14,15 @@ const HighTemp = preload("res://scripts/high_temp_thermal.gd")
 const Tower = preload("res://scripts/solar_tower_thermal.gd")
 const Solar = preload("res://scripts/solar_thermal.gd")
 const FuelSupply = preload("res://scripts/fuel_supply.gd")
+const SCHEMA13_KINDS := ["wind", "pv", "station", "load", "battery", "electric_boiler", "thermal_store", "heat_exchanger", "heat_demand", "fuel_boiler", "solar_thermal", "parabolic_trough", "high_temp_store", "oil_water_exchanger", "steam_generator", "steam_turbine", "steam_condenser", "feedwater_pump", "solar_tower_receiver", "molten_salt_store", "salt_steam_generator", "battery_sodium", "battery_flow", "caes_aboveground", "liquid_air_store", "hydrogen_storage_system", "solid_thermal_store"]
+const SCHEMA12_KINDS := ["wind", "pv", "station", "load", "battery", "electric_boiler", "thermal_store", "heat_exchanger", "heat_demand", "fuel_boiler", "solar_thermal", "parabolic_trough", "high_temp_store", "oil_water_exchanger", "steam_generator", "steam_turbine", "steam_condenser", "feedwater_pump", "solar_tower_receiver", "molten_salt_store", "salt_steam_generator"]
+const FLOW_ICON_GEOMETRY := "flow_icon_v1"
+const FLOW_PROCESS_GEOMETRY := "flow_process_v2"
+const MATERIAL_2C_KINDS := ["nitrogen_supply_boundary","co2_supply_boundary","ammonia_synthesis_station","methanol_synthesis_station"]
+const MATERIAL_2B_KINDS := ["hydrogen_liquid_store", "hydrogen_metal_hydride_store"]
+const MATERIAL_KINDS := ["water_supply_boundary", "electrolyzer_station", "hydrogen_gas_store", "fuel_cell_station"]
+# Schema17 is frozen independently of future Catalog additions.
+const SCHEMA17_KINDS := ["wind", "pv", "station", "load", "battery", "electric_boiler", "thermal_store", "heat_exchanger", "heat_demand", "fuel_boiler", "solar_thermal", "parabolic_trough", "high_temp_store", "oil_water_exchanger", "steam_generator", "steam_turbine", "steam_condenser", "feedwater_pump", "solar_tower_receiver", "molten_salt_store", "salt_steam_generator", "battery_sodium", "battery_flow", "caes_aboveground", "liquid_air_store", "hydrogen_storage_system", "solid_thermal_store", "water_supply_boundary", "electrolyzer_station", "hydrogen_gas_store", "fuel_cell_station", "hydrogen_liquid_store", "hydrogen_metal_hydride_store", "co2_liquid_cycle_store", "collector_substation"]
 const LEGACY_KINDS := ["wind", "pv", "station"]
 const ELECTRIC_KINDS := ["wind", "pv", "station", "load", "battery"]
 const THERMAL_KINDS := ["solid_thermal_store", "electric_boiler", "thermal_store", "heat_exchanger", "heat_demand", "fuel_boiler", "solar_thermal", "parabolic_trough", "high_temp_store", "oil_water_exchanger" ,"steam_generator", "steam_turbine", "steam_condenser", "feedwater_pump", "solar_tower_receiver", "molten_salt_store", "salt_steam_generator"]
@@ -36,6 +48,10 @@ const FIELD_HALF_WIDTH := 95.0
 const FIELD_HALF_DEPTH := 65.0
 const EPS := 0.000001
 
+static func _field_contains(state:Dictionary,position:Vector2,radius_world:float)->bool:
+	if int(state.get("schema",0))>=20:return MapDomain.contains(position,radius_world)
+	return absf(position.x)+radius_world<=FIELD_HALF_WIDTH+EPS and absf(position.y)+radius_world<=FIELD_HALF_DEPTH+EPS
+
 static func finite_number(value: Variant) -> bool:
 	return (value is int or value is float) and is_finite(float(value))
 
@@ -50,9 +66,14 @@ static func _identifier(value: Variant, allow_grid: bool = false) -> String:
 		return ""
 	return str(int(value))
 
-static func radius(kind: String, params: Dictionary = {}, dimension_profile: String = "legacy_illustrative") -> float:
+## Absence is an old icon-scale device, including when re-saved in schema18.
+## Never infer a built device's geometry from current construction defaults.
+static func geometry_profile_for_device(device: Dictionary) -> String:
+	return str(device.get("geometry_profile", FLOW_ICON_GEOMETRY)) if device.get("kind") == "battery_flow" else FLOW_PROCESS_GEOMETRY
+
+static func radius(kind: String, params: Dictionary = {}, dimension_profile: String = "legacy_illustrative", geometry_profile: String = FLOW_PROCESS_GEOMETRY, site_geometry_profile: String = "reference_size_v1") -> float:
 	if dimension_profile == Spatial.METRIC_PROFILE:
-		var dimensions: Dictionary = Spatial.profile(kind, params, false)
+		var dimensions: Dictionary = Spatial.profile(kind, params, false, geometry_profile, site_geometry_profile)
 		return float(dimensions.clearance_radius_world) if dimensions.valid else INF
 	if kind == "wind":
 		return maxf(7.0, float(params.get("rotor_diameter_m", Model.defaults("wind").rotor_diameter_m)) * 0.05 + 0.7)
@@ -61,11 +82,16 @@ static func radius(kind: String, params: Dictionary = {}, dimension_profile: Str
 static func validate(state: Variant) -> String:
 	if not state is Dictionary:
 		return "Save must be a JSON object."
-	if not integer_number(state.get("schema")) or not int(state.schema) in [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]:
-		return "Only rebuild save schemas 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 and 13 are supported."
+	if not integer_number(state.get("schema")) or not int(state.schema) in [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]:
+		return "Only rebuild save schemas 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19 and 20 are supported."
 	var legacy: bool = int(state.schema) == 3
 	var hierarchy: bool = int(state.schema) >= 6
 	var metric_schema: bool = int(state.schema) >= 7
+	var chemical_schema: bool = int(state.schema) >= 19
+	var reference_material_schema: bool = int(state.schema) >= 17
+	var collector_schema: bool = int(state.schema) >= 16
+	var co2_schema: bool = int(state.schema) >= 15
+	var material_schema: bool = int(state.schema) >= 14
 	var storage_schema: bool = int(state.schema) >= 13
 	var tower_schema: bool = int(state.schema) >= 12
 	var rankine_schema: bool = int(state.schema) >= 11
@@ -82,10 +108,10 @@ static func validate(state: Variant) -> String:
 	var interior_half_width: float = Spatial.STATION_INTERIOR_HALF_WORLD if dimension_profile == Spatial.METRIC_PROFILE else INTERIOR_HALF_WIDTH
 	var interior_half_depth: float = Spatial.STATION_INTERIOR_HALF_WORLD if dimension_profile == Spatial.METRIC_PROFILE else INTERIOR_HALF_DEPTH
 	var thermal: bool = int(state.schema) >= 5
-	var expected_model: int = 22 if storage_schema else 21 if tower_schema else 20 if rankine_schema else 19 if high_temp_schema else 18 if solar_schema else 17 if fuel_schema else (16 if metric_schema else (15 if hierarchy else (14 if thermal else (11 if legacy else 12))))
+	var expected_model: int = 27 if chemical_schema else 26 if reference_material_schema else 25 if collector_schema else 24 if co2_schema else 23 if material_schema else 22 if storage_schema else 21 if tower_schema else 20 if rankine_schema else 19 if high_temp_schema else 18 if solar_schema else 17 if fuel_schema else (16 if metric_schema else (15 if hierarchy else (14 if thermal else (11 if legacy else 12))))
 	if not integer_number(state.get("model_version")) or float(state.model_version) != expected_model:
 		return "Save schema %d requires energy-model version %d." % [int(state.schema), expected_model]
-	var kinds: Array = Catalog.implemented_kinds() if storage_schema else Catalog.implemented_kinds().filter(func(k): return not k in Catalog.NEW_STORAGE_KINDS) if tower_schema else HIGH_TEMP_KINDS + Catalog.RANKINE_KINDS if rankine_schema else HIGH_TEMP_KINDS if high_temp_schema else SOLAR_KINDS if solar_schema else CURRENT_KINDS if fuel_schema else (PRE_FUEL_KINDS if thermal else (LEGACY_KINDS if legacy else ELECTRIC_KINDS))
+	var kinds: Array = SCHEMA17_KINDS + MATERIAL_2C_KINDS if chemical_schema else SCHEMA17_KINDS if reference_material_schema else SCHEMA13_KINDS + MATERIAL_KINDS + ["co2_liquid_cycle_store", "collector_substation"] if collector_schema else SCHEMA13_KINDS + MATERIAL_KINDS + ["co2_liquid_cycle_store"] if co2_schema else SCHEMA13_KINDS + MATERIAL_KINDS if material_schema else SCHEMA13_KINDS if storage_schema else SCHEMA12_KINDS if tower_schema else HIGH_TEMP_KINDS + Catalog.RANKINE_KINDS if rankine_schema else HIGH_TEMP_KINDS if high_temp_schema else SOLAR_KINDS if solar_schema else CURRENT_KINDS if fuel_schema else (PRE_FUEL_KINDS if thermal else (LEGACY_KINDS if legacy else ELECTRIC_KINDS))
 	var energy_keys: Array = CURRENT_ENERGY_KEYS if thermal else (LEGACY_ENERGY_KEYS if legacy else ELECTRIC_ENERGY_KEYS)
 	if state.has("rebuild") and (not state.rebuild is bool or not state.rebuild):
 		return "Save is not a rebuild scene."
@@ -124,6 +150,17 @@ static func validate(state: Variant) -> String:
 	for key in state.energy:
 		if not key in energy_keys:
 			return "Unknown accumulated energy field: %s." % str(key)
+	if material_schema:
+		if not state.get("material_energy") is Dictionary: return "Material ledger must be an object."
+		if chemical_schema:
+			if state.material_energy.get("ledger_version") != 3 or state.material_energy.get("ledger_profile") != "material_reference_ledger_v3": return "Schema19 requires reference-state material ledger version3."
+		elif reference_material_schema:
+			if state.material_energy.get("ledger_version") != 2 or state.material_energy.get("ledger_profile") != "material_reference_ledger_v2": return "Schema17 requires reference-state material ledger version2."
+		elif state.material_energy.has("ledger_version") or state.material_energy.has("ledger_profile"): return "Legacy save schemas14–16 require the frozen v1 material ledger."
+		var material_errors: Array[String] = LedgerV2.validate_energy(state.material_energy,state.devices) if reference_material_schema and not chemical_schema else Materials.validate_energy(state.get("material_energy"), state.devices if reference_material_schema else null)
+		if not material_errors.is_empty(): return "Accumulated material ledger: " + "; ".join(material_errors)
+	elif state.has("material_energy"):
+		return "Material history requires schema14/model23."
 	if tower_schema:
 		var tower_error: String = Tower.validate_energy(state.get("tower_energy"))
 		if not tower_error.is_empty(): return "Accumulated tower energy: " + tower_error
@@ -161,6 +198,8 @@ static func validate(state: Variant) -> String:
 	# are recorded separately against stored inventory, never subtracted twice.
 	var supplied: float = float(state.energy.generated) + float(state.energy.get("discharge", 0.0))
 	var used: float = float(state.energy.delivered) + float(state.energy.curtailed) + float(state.energy.loss) + float(state.energy.get("served", 0.0)) + float(state.energy.get("charge", 0.0)) + float(state.energy.get("boiler_electric", 0.0))
+	if material_schema:
+		used += Materials.cumulative_electric_input_mwh(state.material_energy)
 	if fuel_schema:
 		used += float(state.fuel_energy.auxiliary_mwh)
 	if solar_schema:
@@ -207,18 +246,26 @@ static func validate(state: Variant) -> String:
 			return "Duplicate device ID %s." % key
 		if not device.get("kind") is String or not device.kind in kinds:
 			return "Device %s has an unsupported kind." % key
-		if (device.kind in Catalog.NEW_STORAGE_KINDS or device.kind == "solar_thermal" or Catalog.is_high_temp(device.kind) or Catalog.is_rankine(device.kind) or Catalog.is_tower(device.kind)) and dimension_profile != Spatial.METRIC_PROFILE:
-			return "Solar collectors require metric_v1 dimensions; explicitly migrate the legacy illustrative scene first."
+		if (device.kind in ["co2_liquid_cycle_store","collector_substation"] or Catalog.is_material(device.kind) or device.kind in Catalog.NEW_STORAGE_KINDS or device.kind == "solar_thermal" or Catalog.is_high_temp(device.kind) or Catalog.is_rankine(device.kind) or Catalog.is_tower(device.kind)) and dimension_profile != Spatial.METRIC_PROFILE:
+			return "This technology requires metric_v1 dimensions; explicitly migrate the legacy illustrative scene first."
+		if device.has("site_geometry_profile"):
+			if int(state.schema) < 20: return "site_geometry_profile requires save schema20."
+			if device.site_geometry_profile != "reference_size_v1": return "Unknown site_geometry_profile."
+		if device.has("geometry_profile"):
+			if int(state.schema) < 18: return "Device geometry_profile requires save schema18."
+			if device.kind != "battery_flow": return "geometry_profile is supported only for battery_flow."
+			if not device.geometry_profile is String or not device.geometry_profile in [FLOW_ICON_GEOMETRY, FLOW_PROCESS_GEOMETRY]: return "Unknown battery_flow geometry_profile."
 		if not device.get("params") is Dictionary:
 			return "Device %s parameters must be an object." % key
 		var errors: Array[String] = Model.validate(device.kind, device.params)
 		if not errors.is_empty():
 			return "Device %s parameters: %s" % [key, "; ".join(errors)]
-		if device.kind in THERMAL_KINDS:
+		if device.kind in THERMAL_KINDS or Catalog.is_material(device.kind) or device.kind in ["co2_liquid_cycle_store","collector_substation"]:
+			if (Catalog.is_material(device.kind) or device.kind in ["co2_liquid_cycle_store","collector_substation"]) and not device.has("model_profile_version"): return "Material/typed device requires explicit model_profile_version."
 			if not device.get("model_profile") is String or device.model_profile != Catalog.model_profile(device.kind):
 				return "Device %s requires thermal model_profile %s." % [key, Catalog.model_profile(device.kind)]
-			if device.has("model_profile_version") and (not integer_number(device.model_profile_version) or float(device.model_profile_version) != 1.0):
-				return "Device %s requires thermal model_profile_version 1." % key
+			if device.has("model_profile_version") and (not integer_number(device.model_profile_version) or float(device.model_profile_version) != float(Catalog.model_profile_version(device.kind))):
+				return "Device %s requires model_profile_version %d." % [key, Catalog.model_profile_version(device.kind)]
 		elif device.has("model_profile") or device.has("model_profile_version"):
 			return "Device %s has an unsupported model_profile for its electric kind." % key
 		var state_error: String = _validate_device_state(device)
@@ -233,7 +280,7 @@ static func validate(state: Variant) -> String:
 		if has_interior and not has_parent:
 			return "Device %s interior coordinates require a parent station." % key
 		var position := Vector2(float(device.x), float(device.z))
-		var site_radius := radius(device.kind, device.params, dimension_profile)
+		var site_radius := radius(device.kind, device.params, dimension_profile, geometry_profile_for_device(device), str(device.get("site_geometry_profile", "")))
 		if not is_finite(site_radius):
 			return "Device %s has invalid metric dimensions." % key
 		if device.kind == "solar_tower_receiver" and not has_parent:
@@ -269,7 +316,7 @@ static func validate(state: Variant) -> String:
 		else:
 			# Older flat thermal devices remain on the base. Parented devices retain
 			# finite world x/z as provenance, but only their interior has a footprint.
-			if absf(position.x) + site_radius > FIELD_HALF_WIDTH + EPS or absf(position.y) + site_radius > FIELD_HALF_DEPTH + EPS:
+			if not _field_contains(state,position,site_radius):
 				return "Device %s footprint extends outside the buildable field." % key
 			for other in footprints:
 				if position.distance_to(other.position) < site_radius + float(other.radius) - EPS:
@@ -309,9 +356,16 @@ static func validate(state: Variant) -> String:
 			outgoing[source] = true
 		if link.has("capacity_mw") and link.has("capacity_mwth"):
 			return "Line %d cannot contain both electric and thermal capacities." % index
+		var material_link: bool = str(link.get("carrier", "")) in Catalog.Materials.CARRIERS
+		if material_link:
+			if not material_schema: return "Material lines require schema14/model23."
+			if link.has("capacity_mw") or link.has("capacity_mwth"): return "Material lines cannot contain electric or thermal capacities."
+			for field in ["from_port", "to_port", "carrier", "unit", "grade_id", "species_id", "phase_id"]:
+				if not link.get(field) is String or str(link[field]).is_empty(): return "Material line requires explicit " + field
+			if link.unit != "kg/s" or not finite_number(link.get("loss_fraction")) or float(link.loss_fraction) != 0.0: return "Material line requires kg/s and loss_fraction=0."
 		var mass_link: bool = str(link.get("carrier",""))==Catalog.MASS_CARRIER
 		var heat_link: bool = link.has("capacity_mwth") or (devices_by_id[source].kind in THERMAL_KINDS and not Catalog.is_rankine(devices_by_id[source].kind))
-		var capacity_key: String = "mass_flow_capacity_kg_s" if mass_link else "capacity_mwth" if heat_link else "capacity_mw"
+		var capacity_key: String = "mass_flow_capacity_kg_s" if mass_link or material_link else "capacity_mwth" if heat_link else "capacity_mw"
 		if not finite_number(link.get(capacity_key)) or float(link[capacity_key]) <= 0.0:
 			return "Line %d %s capacity must be finite and positive." % [index, capacity_key]
 		if mass_link and not rankine_schema: return "Mass-flow cycle requires schema11"
@@ -392,7 +446,7 @@ static func _validate_stations(state: Dictionary, stations_by_id: Dictionary, fo
 		if not finite_number(station.get("x")) or not finite_number(station.get("z")):
 			return "Station %s coordinates must be finite numbers." % key
 		var position := Vector2(float(station.x), float(station.z))
-		if absf(position.x) + station_radius > FIELD_HALF_WIDTH + EPS or absf(position.y) + station_radius > FIELD_HALF_DEPTH + EPS:
+		if not _field_contains(state,position,station_radius):
 			return "Station %s footprint extends outside the buildable field." % key
 		for other in footprints:
 			if position.distance_to(other.position) < station_radius + float(other.radius) - EPS:
@@ -418,9 +472,9 @@ static func _validate_station_link(source: Dictionary, target: Dictionary) -> St
 	if target_parent == -1 and target.get("kind") == "molten_salt_store" and source.kind == "solar_tower_receiver": return ""
 	if source_parent == -1 and source.kind == "solid_thermal_store" and target.get("kind") == "heat_exchanger": return ""
 	if target_parent == -1 and target.get("kind") == "solid_thermal_store" and source.kind in ["electric_boiler", "fuel_boiler", "solar_thermal"]: return ""
-	if source_parent == -1 and source.kind == "station" and target.get("kind") in ["electric_boiler", "fuel_boiler", "solar_thermal", "parabolic_trough", "oil_water_exchanger", "steam_generator", "steam_condenser", "feedwater_pump", "solar_tower_receiver", "molten_salt_store", "salt_steam_generator"]:
+	if source_parent == -1 and Catalog.is_electric_station(source.kind) and target.get("kind") in ["electric_boiler", "fuel_boiler", "solar_thermal", "parabolic_trough", "oil_water_exchanger", "steam_generator", "steam_condenser", "feedwater_pump", "solar_tower_receiver", "molten_salt_store", "salt_steam_generator"]:
 		return ""
-	if target_parent == -1 and source.kind=="steam_turbine" and target.get("kind")=="station": return ""
+	if target_parent == -1 and source.kind=="steam_turbine" and Catalog.is_electric_station(str(target.get("kind",""))): return ""
 	if target_parent == -1 and source.kind == "heat_exchanger" and target.get("kind") == "heat_demand":
 		return ""
 	return "Station boundaries allow only external AC station to internal boiler, or internal heat exchanger to external heat demand."
@@ -465,7 +519,7 @@ static func _balanced(supplied: float, used: float) -> bool:
 
 static func _validate_device_state(device: Dictionary) -> String:
 	# Missing inventory must never silently reset a save to initial_soc.
-	if Catalog.is_storage(device.kind) and not device.get("state") is Dictionary:
+	if (Catalog.is_storage(device.kind) or device.kind in ["water_supply_boundary", "hydrogen_gas_store"]) and not device.get("state") is Dictionary:
 		return "Stored inventory state must be an object."
 	var errors: Array[String] = Catalog.validate_state(device.kind, device.params, device.get("state", {}))
 	return "; ".join(errors)

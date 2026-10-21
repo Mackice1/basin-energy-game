@@ -108,6 +108,13 @@ func test_existing_demand(dock: Control) -> void:
 	check(game.result.get("demand_mw", 0.0) == 3.5, "real-time dispatch reads the edited demand")
 
 func test_new_demand(dock: Control) -> void:
+	# New construction has its own explicitly supported metric fixture. The
+	# preceding legacy edit assertions remain untouched and preserve stable IDs.
+	var reference_scene := game.state()
+	reference_scene.dimension_profile = "metric_v1"
+	for item in reference_scene.devices: item.site_geometry_profile = "reference_size_v1"
+	check(game.validate_state(reference_scene).is_empty(), "new-demand metric reference fixture is valid")
+	game.restore(reference_scene)
 	var add := find_button(dock.panels.demand, "添加需求接入点")
 	check(add != null and add.is_visible_in_tree() and not add.disabled, "demand panel exposes a reachable add-connection-node action")
 	if add == null:
@@ -127,6 +134,7 @@ func test_new_demand(dock: Control) -> void:
 	game._unhandled_input(event)
 	check(game.devices.size() == before.devices.size() + 1, "demand action permits placing a connection node on the map")
 	check(game.device(31).get("kind", "") == "load", "new demand node retains save and solver kind load")
+	check(game.device(31).get("site_geometry_profile", "") == "reference_size_v1", "new demand node carries the current explicit geometry marker")
 	check(game.device(31).get("params", {}) == game.templates.load, "new demand node receives demand defaults")
 	check(game.links == before.links and game.device(22).state.energy_mwh == 2.75, "adding demand preserves network links and actual battery inventory")
 	game.set_mode("select")

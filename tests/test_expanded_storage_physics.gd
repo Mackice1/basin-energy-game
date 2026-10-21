@@ -62,7 +62,7 @@ func catalog_checks() -> void:
 	near(C.initial_state("battery").energy_mwh,5.0,"legacy lithium default inventory unchanged")
 	check(C.ports("solid_thermal_store").all(func(p): return p.carrier == C.THERMAL_CARRIER),"solid has no electric generation port")
 func electric_checks() -> void:
-	for kind in C.ELECTRIC_STORAGE_KINDS:
+	for kind in ["battery","battery_sodium","battery_flow","caes_aboveground","liquid_air_store","hydrogen_storage_system"]:
 		for reverse in [false,true]:
 			var ds := electric_devices(kind)
 			var ls := electric_links(reverse)
@@ -167,7 +167,7 @@ func thermal_checks() -> void:
 func mixed_tower_checks() -> void:
 	# Every electric technology can supply essential external auxiliary power.
 	var fixture := TowerFixture.new()
-	for kind in C.ELECTRIC_STORAGE_KINDS:
+	for kind in ["battery","battery_sodium","battery_flow","caes_aboveground","liquid_air_store","hydrogen_storage_system"]:
 		var ds: Array = fixture.ds(); var ls: Array = fixture.ls()
 		ds[0] = device(1,kind,{"initial_soc":1.0,"self_discharge_per_h":0.0})
 		ls[0].from_port = "ac"
@@ -181,8 +181,8 @@ func blank(schema: int) -> Dictionary:
 	var old := Old.new(); var s: Dictionary = old.blank(); old.free()
 	s.schema = schema; s.model_version = 22 if schema == 13 else 21
 	s.rankine_energy = R.initial_energy(); s.tower_energy = T.initial_energy()
-	for kind in C.implemented_kinds():
-		if schema == 13 or not kind in C.NEW_STORAGE_KINDS: s.templates[kind] = C.defaults(kind)
+	for kind in (V.SCHEMA13_KINDS if schema == 13 else V.SCHEMA12_KINDS):
+		s.templates[kind] = C.defaults(kind)
 	return s
 func save_checks() -> void:
 	var old := OldElectric.new()
@@ -212,7 +212,7 @@ func save_checks() -> void:
 	check(not V._validate_station_link({"kind":"solar_tower_receiver","parent_station_id":1000000},{"kind":"molten_salt_store","parent_station_id":1000001}).is_empty(),"unrelated internal crossing still blocked")
 func baseline_checks() -> void:
 	var controller := Opt.new()
-	for kind in C.ELECTRIC_STORAGE_KINDS:
+	for kind in ["battery","battery_sodium","battery_flow","caes_aboveground","liquid_air_store","hydrogen_storage_system"]:
 		var ds := electric_devices(kind)
 		var data: Dictionary = {"devices":ds,"links":electric_links(),"steps":[
 			{"time_s":0.0,"dt_h":1.0,"available_mw":{"1":5.0},"demand_mw":{"4":0.0},"heat_demand_mwth":{}},

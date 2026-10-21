@@ -1,10 +1,16 @@
 extends RefCounted
 ## Implemented teaching devices only. AC terminals include built-in PV/battery PCS.
 ## Fixed-grade hot-water service devices; no steam, hydraulics or pressure model.
+const Materials = preload("res://scripts/material_catalog.gd")
+const MATERIAL_KINDS = Materials.KINDS
 const SCHEMA_VERSION: int = 3
 const STORAGE_PROFILE_VERSION: int = 1
 const NEW_STORAGE_KINDS := ["battery_sodium", "battery_flow", "caes_aboveground", "liquid_air_store", "hydrogen_storage_system", "solid_thermal_store"]
-const ELECTRIC_STORAGE_KINDS := ["battery", "battery_sodium", "battery_flow", "caes_aboveground", "liquid_air_store", "hydrogen_storage_system"]
+const ELECTRIC_STORAGE_KINDS := ["battery", "battery_sodium", "battery_flow", "caes_aboveground", "liquid_air_store", "hydrogen_storage_system", "co2_liquid_cycle_store"]
+const CO2_STORAGE_KIND := "co2_liquid_cycle_store"
+const CO2_STORAGE_PROFILE := "co2_liquid_cycle_store_v1"
+const COLLECTOR_KIND := "collector_substation"
+const COLLECTOR_PROFILE := "collector_substation_v1"
 const THERMAL_STORAGE_KINDS := ["thermal_store", "solid_thermal_store", "high_temp_store", "molten_salt_store"]
 const HYDROGEN_LHV_KWH_PER_KG: float = 33.33
 const THERMAL_PROFILE_VERSION: int = 1
@@ -23,8 +29,52 @@ const CARRIER: String = "electricity_ac"
 const VOLTAGE_LEVEL: String = "AC_BUS"
 const GRID_CAPACITY_MW: float = 4.0
 
-static func implemented_kinds() -> Array[String]:
+static func legacy_implemented_kinds() -> Array[String]:
 	return ["wind", "pv", "station", "load", "battery", "electric_boiler", "thermal_store", "heat_exchanger", "heat_demand", "fuel_boiler", "solar_thermal", "parabolic_trough", "high_temp_store", "oil_water_exchanger", "steam_generator", "steam_turbine", "steam_condenser", "feedwater_pump", "solar_tower_receiver", "molten_salt_store", "salt_steam_generator", "battery_sodium", "battery_flow", "caes_aboveground", "liquid_air_store", "hydrogen_storage_system", "solid_thermal_store"]
+
+static func phase2a_implemented_kinds() -> Array[String]:
+	var kinds: Array[String] = legacy_implemented_kinds()
+	kinds.append_array(Materials.LEGACY_KINDS)
+	return kinds
+
+static func co2_stage_implemented_kinds() -> Array[String]:
+	var kinds: Array[String] = phase2a_implemented_kinds()
+	kinds.append(CO2_STORAGE_KIND)
+	return kinds
+
+static func collector_stage_implemented_kinds() -> Array[String]:
+	var kinds: Array[String] = co2_stage_implemented_kinds()
+	kinds.append(COLLECTOR_KIND)
+	return kinds
+
+static func phase2b_implemented_kinds() -> Array[String]:
+	var kinds: Array[String] = collector_stage_implemented_kinds()
+	kinds.append_array(Materials.PHASE_KINDS)
+	return kinds
+
+static func implemented_kinds() -> Array[String]:
+	var kinds: Array[String] = phase2b_implemented_kinds()
+	kinds.append_array(Materials.CHEMICAL_KINDS)
+	return kinds
+
+static func inventory_capacity(kind: String, params: Dictionary = {}) -> float:
+	return Materials.inventory_capacity(kind,params) if is_material_inventory(kind) else 0.0
+
+static func model_profile_version(kind: String) -> int:
+	return Materials.model_profile_version(kind) if is_material(kind) else 1
+
+static func is_electric_station(kind: String) -> bool:
+	return kind in ["station", COLLECTOR_KIND]
+
+## Routing role only, never a persisted device identity or visual type.
+static func dispatch_role(kind: String) -> String:
+	return "station" if is_electric_station(kind) else kind
+
+static func is_material(kind: String) -> bool:
+	return kind in Materials.KINDS
+
+static func is_material_inventory(kind: String) -> bool:
+	return kind in Materials.INVENTORY_KINDS
 
 static func is_thermal(kind: String) -> bool:
 	return kind in TOWER_KINDS or kind in RANKINE_KINDS or kind in ["electric_boiler", "thermal_store", "solid_thermal_store", "heat_exchanger", "heat_demand", "fuel_boiler", "solar_thermal", "parabolic_trough", "high_temp_store", "oil_water_exchanger"]
@@ -48,6 +98,7 @@ static func storage_technology(kind: String) -> Dictionary:
 		"battery": {"name":"锂离子电池储能", "inventory_basis":"electrochemical useful energy", "charge_stage":"AC/PCS → 锂离子电芯", "discharge_stage":"电芯 → PCS/AC", "assumptions":"集中参数锂离子教学储能；不模拟电化学、老化或热失控。旧存档battery库存与效率不变。"},
 		"battery_sodium": {"name":"钠离子电池储能", "inventory_basis":"electrochemical useful energy", "charge_stage":"AC/PCS → 钠离子电芯", "discharge_stage":"电芯 → PCS/AC", "assumptions":"钠离子而非高温钠硫电池；净AC效率教学假设，不模拟寿命或低温性能。"},
 		"battery_flow": {"name":"液流电池储能", "inventory_basis":"electrolyte useful energy", "charge_stage":"AC → 电堆/电解液", "discharge_stage":"电解液/电堆 → AC", "assumptions":"电解液库存与电堆功率独立设置；泵和PCS耗能并入净效率，不模拟液流、压降或化学反应。"},
+		"co2_liquid_cycle_store": {"name":"闭式二氧化碳气液储能站", "inventory_basis":"internal_equivalent_mwh", "energy_basis":"internal_equivalent_mwh", "working_fluid":"CO2", "closed_inventory":true, "working_inventory_calibrated":false, "charge_stage":"AC → 压缩/内部蓄热 → CO₂液相储存", "discharge_stage":"CO₂气化/内部回热 → 膨胀发电 → 封闭气仓", "assumptions":"独立闭式CO₂气液与内部蓄热成套站；794.24MWh内部等效库存、0.8/约0.773效率是教学拼合算术参考，非同循环实测或木垒性能复现。无外部免费热/燃料、CO₂买卖/排放或独立可售热。CO₂总装填质量未标定，SOC不是质量/液位；不模拟压力、物相瞬态或安全。静置损失默认0仅为无校准数据简化。"},
 		"caes_aboveground": {"name":"地上压缩空气储能", "inventory_basis":"recoverable mechanical/thermal energy", "charge_stage":"AC → 压缩机/地上压力罐", "discharge_stage":"压力罐/回热 → 膨胀机/AC", "assumptions":"仅地上压力罐，不使用地下洞穴。闭合无燃料等效系统，压缩/回热/膨胀损失并入净效率；无外部免费热源，不计算压力流体瞬态。"},
 		"liquid_air_store": {"name":"液态空气储能", "inventory_basis":"recoverable cryogenic energy", "charge_stage":"AC → 液化/低温储罐", "discharge_stage":"储罐/内置冷热回收 → 膨胀机/AC", "assumptions":"完整液化—低温储存—复热发电设备；冷热回收与辅机并入净效率，静置损失代表等效冷量损失；无外部余热增益或低温流体瞬态。"},
 		"hydrogen_storage_system": {"name":"制氢储氢回电系统", "inventory_basis":"hydrogen lower heating value (LHV)", "charge_stage":"AC → 电解/压缩 → H₂低位热值库存", "discharge_stage":"H₂库存 → 燃料电池/逆变器 → AC", "assumptions":"集成电解槽、地上储氢和燃料电池；充电效率含制氢与压缩，放电效率含燃料电池与逆变器。按33.33 kWh/kg LHV计量；水/氧与压力不做动态库存，不输出未计量余热或外售氢。"},
@@ -57,7 +108,7 @@ static func storage_technology(kind: String) -> Dictionary:
 		"high_temp_store": {"name":"导热油储热", "inventory_basis":"usable hot-oil heat", "assumptions":"沿用300/200°C导热油热库。"}}
 	if not details.has(kind): return {}
 	var result: Dictionary = details[kind].duplicate(true)
-	result.profile = "lumped_storage_v1"
+	result.profile = CO2_STORAGE_PROFILE if kind == CO2_STORAGE_KIND else "lumped_storage_v1"
 	result.profile_version = STORAGE_PROFILE_VERSION
 	result.energy_unit = "MWhth" if is_thermal_storage(kind) else "MWh"
 	result.power_unit = "MWth" if is_thermal_storage(kind) else "MW AC"
@@ -67,6 +118,8 @@ static func storage_technology(kind: String) -> Dictionary:
 static func storage_stage_metrics(kind: String, p: Dictionary, charge_mw: float, discharge_mw: float, next_energy_mwh: float) -> Dictionary:
 	var result: Dictionary = {"charge_conversion_loss_mw": charge_mw * (1.0 - p.charge_efficiency),
 		"discharge_conversion_loss_mw": discharge_mw * (1.0 / p.discharge_efficiency - 1.0)}
+	if kind == CO2_STORAGE_KIND:
+		result.merge({"model_profile":CO2_STORAGE_PROFILE,"model_profile_version":1,"inventory_basis":"internal_equivalent_mwh","working_fluid":"CO2","working_inventory_calibrated":false})
 	if kind == "hydrogen_storage_system":
 		result.merge({"hydrogen_charge_loss_mw":result.charge_conversion_loss_mw,
 			"hydrogen_discharge_loss_mw":result.discharge_conversion_loss_mw,
@@ -86,6 +139,9 @@ static func is_high_temp(kind: String) -> bool:
 	return kind in HIGH_TEMP_KINDS
 
 static func model_profile(kind: String) -> String:
+	if kind == COLLECTOR_KIND: return COLLECTOR_PROFILE
+	if kind == CO2_STORAGE_KIND: return CO2_STORAGE_PROFILE
+	if is_material(kind): return Materials.model_profile(kind)
 	return "tower_stage1_v1" if is_tower(kind) else "rankine_stage1_v1" if is_rankine(kind) else "high_temp_stage1_v1" if is_high_temp(kind) else ("thermal_stage1_v1" if is_thermal(kind) else "")
 
 static func temperature_grade(grade_id: String) -> Dictionary:
@@ -101,6 +157,7 @@ static func temperature_grade(grade_id: String) -> Dictionary:
 	return {}
 
 static func defaults(kind: String) -> Dictionary:
+	if is_material(kind): return Materials.defaults(kind)
 	match kind:
 		"solar_tower_receiver": return {"mirror_area_m2":1600.0,"optical_efficiency":0.6,"receiver_efficiency":0.9,"auxiliary_electric_ratio":0.02,"supply_temp_c":565.0,"return_temp_c":290.0}
 		"molten_salt_store": return {"capacity_mwhth":0.5,"charge_mwth":0.8,"discharge_mwth":0.1,"charge_efficiency":0.98,"discharge_efficiency":0.98,"self_discharge_per_h":0.005,"initial_soc":0.0,"auxiliary_electric_ratio":0.01}
@@ -120,12 +177,16 @@ static func defaults(kind: String) -> Dictionary:
 				"dc_loss_fraction": 0.02, "cell_delta_c_at_1000": 3.0}
 		"station":
 			return {"capacity_mw": 4.0, "loss_fraction": 0.01}
+		"collector_substation":
+			return {"capacity_mw":200.0,"loss_fraction":0.01}
 		"load":
 			return {"demand_mw": 2.0, "priority": 10}
 		"battery_sodium":
 			return {"capacity_mwh":6.0,"charge_mw":2.0,"discharge_mw":2.0,"charge_efficiency":0.92,"discharge_efficiency":0.92,"self_discharge_per_h":0.0001,"initial_soc":0.0}
 		"battery_flow":
 			return {"capacity_mwh":12.0,"charge_mw":2.0,"discharge_mw":2.0,"charge_efficiency":0.85,"discharge_efficiency":0.85,"self_discharge_per_h":0.0002,"initial_soc":0.0}
+		"co2_liquid_cycle_store":
+			return {"capacity_mwh":794.24,"charge_mw":146.0,"discharge_mw":100.0,"charge_efficiency":0.8,"discharge_efficiency":614.0/794.24,"self_discharge_per_h":0.0,"initial_soc":0.0}
 		"caes_aboveground":
 			return {"capacity_mwh":0.25,"charge_mw":0.1,"discharge_mw":0.1,"charge_efficiency":0.75,"discharge_efficiency":0.70,"self_discharge_per_h":0.002,"initial_soc":0.0}
 		"liquid_air_store":
@@ -183,6 +244,8 @@ static func _mass_port(id: String, direction: String, grade: String) -> Dictiona
 	return {"id":id,"direction":direction,"carrier":MASS_CARRIER,"unit":"kg/s","grade_id":grade}
 
 static func ports(kind: String) -> Array:
+	if is_electric_station(kind): return [_port("in", "input"), _port("out", "output")]
+	if is_material(kind): return Materials.ports(kind)
 	match kind:
 		"solar_tower_receiver": return [_salt_port("heat_out","output"),_port("ac_in","input")]
 		"molten_salt_store": return [_salt_port("heat_in","input"),_salt_port("heat_out","output"),_port("ac_in","input")]
@@ -195,9 +258,8 @@ static func ports(kind: String) -> Array:
 		"high_temp_store": return [_oil_port("heat_in","input"), _oil_port("heat_out","output")]
 		"oil_water_exchanger": return [_port("ac_in","input"), _oil_port("hot_in","input"), _heat_port("warm_out","output",PRIMARY_GRADE)]
 		"wind", "pv": return [_port("out", "output")]
-		"station": return [_port("in", "input"), _port("out", "output")]
 		"load", "grid": return [_port("in", "input")]
-		"battery", "battery_sodium", "battery_flow", "caes_aboveground", "liquid_air_store", "hydrogen_storage_system": return [_port("ac", "bidirectional")]
+		"battery", "battery_sodium", "battery_flow", "caes_aboveground", "liquid_air_store", "hydrogen_storage_system", "co2_liquid_cycle_store": return [_port("ac", "bidirectional")]
 		"electric_boiler", "fuel_boiler", "solar_thermal": return [_port("ac_in", "input"), _heat_port("heat_out", "output", PRIMARY_GRADE)]
 		"thermal_store", "solid_thermal_store": return [_heat_port("heat_in", "input", PRIMARY_GRADE), _heat_port("heat_out", "output", PRIMARY_GRADE)]
 		"heat_exchanger": return [_heat_port("hot_in", "input", PRIMARY_GRADE), _heat_port("warm_out", "output", SECONDARY_GRADE)]
@@ -238,9 +300,9 @@ static func validate_storage_load(kind: String, params: Dictionary) -> Array[Str
 		if _number(p.priority) and not _integer(p.priority):
 			errors.append("priority must be an integer; lower values are served first")
 	else:
-		_range(errors, p, "capacity_mwh", 0.0, 10.0 if kind == "caes_aboveground" else 100000.0, true)
-		_range(errors, p, "charge_mw", 0.0, 2.0 if kind == "caes_aboveground" else 10000.0)
-		_range(errors, p, "discharge_mw", 0.0, 2.0 if kind == "caes_aboveground" else 10000.0)
+		_range(errors, p, "capacity_mwh", 0.0, 10.0 if kind == "caes_aboveground" else 794.24 if kind == CO2_STORAGE_KIND else 100000.0, true)
+		_range(errors, p, "charge_mw", 0.0, 2.0 if kind == "caes_aboveground" else 146.0 if kind == CO2_STORAGE_KIND else 10000.0)
+		_range(errors, p, "discharge_mw", 0.0, 2.0 if kind == "caes_aboveground" else 100.0 if kind == CO2_STORAGE_KIND else 10000.0)
 		_range(errors, p, "charge_efficiency", 0.0, 1.0, true)
 		_range(errors, p, "discharge_efficiency", 0.0, 1.0, true)
 		_range(errors, p, "self_discharge_per_h", 0.0, 1.0)
@@ -341,9 +403,11 @@ static func validate_thermal(kind: String, params: Dictionary) -> Array[String]:
 	return errors
 
 static func validate_state(kind: String, params: Dictionary, state: Variant) -> Array[String]:
+	if is_material(kind): return Materials.validate_state(kind, params, state)
 	var errors: Array[String] = []
 	if not state is Dictionary:
 		return ["state must be a dictionary"]
+	if kind == COLLECTOR_KIND and not state.is_empty(): return ["Collector is a throughput node with no inventory"]
 	if not is_storage(kind):
 		if not state.is_empty():
 			errors.append("Only storage devices may have runtime state")
@@ -362,6 +426,7 @@ static func validate_state(kind: String, params: Dictionary, state: Variant) -> 
 	return errors
 
 static func initial_state(kind: String, params: Dictionary = {}) -> Dictionary:
+	if is_material(kind): return Materials.initial_state(kind, params)
 	if is_electric_storage(kind) and validate_storage_load(kind, params).is_empty():
 		var p: Dictionary = defaults(kind)
 		p.merge(params, true)
@@ -405,15 +470,19 @@ static func connection_ports(devices: Array, candidate: Dictionary) -> Dictionar
 			kinds[str(int(d.id))] = str(d.get("kind", ""))
 	var a: String = str(int(candidate.get("from", -2)))
 	var b: String = str(int(candidate.get("to", -2)))
-	return {"from_port": str(candidate.get("from_port", "ac" if is_electric_storage(str(kinds.get(a, ""))) else ("ac_out" if kinds.get(a)=="steam_turbine" else "out"))),
-		"to_port": str(candidate.get("to_port", "ac" if is_electric_storage(str(kinds.get(b, ""))) else ("ac_in" if kinds.get(b) in ["electric_boiler", "fuel_boiler", "solar_thermal", "parabolic_trough", "oil_water_exchanger", "steam_generator", "steam_condenser", "feedwater_pump", "solar_tower_receiver", "molten_salt_store", "salt_steam_generator"] else "in"))),
+	var result: Dictionary = {"from_port": str(candidate.get("from_port", "ac" if is_electric_storage(str(kinds.get(a, ""))) else ("ac_out" if kinds.get(a) in ["steam_turbine", "fuel_cell_station"] else "out"))),
+		"to_port": str(candidate.get("to_port", "ac" if is_electric_storage(str(kinds.get(b, ""))) else ("ac_in" if kinds.get(b) in ["electrolyzer_station", "hydrogen_gas_store", "hydrogen_liquid_store", "hydrogen_metal_hydride_store", "ammonia_synthesis_station", "methanol_synthesis_station", "electric_boiler", "fuel_boiler", "solar_thermal", "parabolic_trough", "oil_water_exchanger", "steam_generator", "steam_condenser", "feedwater_pump", "solar_tower_receiver", "molten_salt_store", "salt_steam_generator"] else "in"))),
 		"carrier": str(candidate.get("carrier", CARRIER)),
 		"unit": str(candidate.get("unit", "MW")), "grade_id": str(candidate.get("grade_id", ""))}
+	if result.carrier in Materials.CARRIERS:
+		result.species_id = str(candidate.get("species_id", ""))
+		result.phase_id = str(candidate.get("phase_id", ""))
+	return result
 
 ## Shared UI, save and simulation topology check. Existing links excludes candidate.
 ## Leaves have one station attachment, stations fan out; no station-station/rings.
 static func validate_link(devices: Array, links: Array, candidate: Dictionary) -> String:
-	for field in ["from_port", "to_port", "carrier", "unit", "grade_id", "voltage_level"]:
+	for field in ["from_port", "to_port", "carrier", "unit", "grade_id", "voltage_level", "species_id", "phase_id"]:
 		if candidate.has(field) and not candidate[field] is String:
 			return "连接类型字段必须为字符串：" + field
 	if not _integer(candidate.get("from")) or not _integer(candidate.get("to")):
@@ -430,6 +499,7 @@ static func validate_link(devices: Array, links: Array, candidate: Dictionary) -
 		return "连接端点设备不存在"
 	var ak: String = nodes[a]
 	var bk: String = "grid" if b == -1 else str(nodes[b])
+	if is_electric_station(ak) and is_electric_station(bk): return "当前容量流网络仅支持单站星形连接，站与汇集站之间不能直接级联"
 	var names: Dictionary = connection_ports(devices, candidate)
 	var ap: Dictionary = port(ak, names.from_port)
 	var bp: Dictionary = port(bk, names.to_port)
@@ -441,7 +511,11 @@ static func validate_link(devices: Array, links: Array, candidate: Dictionary) -
 		return "电口与热口不可互连，载体必须一致"
 	var thermal: bool = names.carrier in [THERMAL_CARRIER,OIL_CARRIER,SALT_CARRIER]
 	var mass: bool = names.carrier == MASS_CARRIER
-	if mass:
+	var material: bool = names.carrier in Materials.CARRIERS
+	if material:
+		var material_error: String = Materials.validate_link(ak, bk, candidate, ap, bp)
+		if not material_error.is_empty(): return material_error
+	elif mass:
 		for field in ["from_port","to_port","carrier","unit","grade_id","mass_flow_capacity_kg_s","loss_fraction"]:
 			if not candidate.has(field): return "循环质量连接缺少字段："+field
 		for field in ["capacity_mw","capacity_mwth","voltage_level"]:
@@ -469,11 +543,11 @@ static func validate_link(devices: Array, links: Array, candidate: Dictionary) -
 		if not _number(candidate.loss_fraction) or float(candidate.loss_fraction) != 0.0:
 			return "首版固定温区热线路loss_fraction必须为0"
 	else:
-		if bk in ["electric_boiler", "fuel_boiler", "solar_thermal", "parabolic_trough", "oil_water_exchanger", "steam_generator", "steam_condenser", "feedwater_pump", "solar_tower_receiver", "molten_salt_store", "salt_steam_generator"]:
+		if bk in ["electrolyzer_station", "hydrogen_gas_store", "hydrogen_liquid_store", "hydrogen_metal_hydride_store", "ammonia_synthesis_station", "methanol_synthesis_station", "electric_boiler", "fuel_boiler", "solar_thermal", "parabolic_trough", "oil_water_exchanger", "steam_generator", "steam_condenser", "feedwater_pump", "solar_tower_receiver", "molten_salt_store", "salt_steam_generator"]:
 			for field in ["from_port", "to_port", "carrier", "unit"]:
 				if not candidate.has(field):
 					return "锅炉电输入必须显式指定字段：" + field
-		var legal: bool = ((ak in ["wind", "pv", "steam_turbine"] or is_electric_storage(ak)) and bk == "station") or (ak == "station" and bk in ["load", "battery", "battery_sodium", "battery_flow", "caes_aboveground", "liquid_air_store", "hydrogen_storage_system", "grid", "electric_boiler", "fuel_boiler", "solar_thermal", "parabolic_trough", "oil_water_exchanger", "steam_generator", "steam_condenser", "feedwater_pump", "solar_tower_receiver", "molten_salt_store", "salt_steam_generator"])
+		var legal: bool = ((ak in ["wind", "pv", "steam_turbine", "fuel_cell_station"] or is_electric_storage(ak)) and is_electric_station(bk)) or (is_electric_station(ak) and bk in ["electrolyzer_station", "hydrogen_gas_store", "hydrogen_liquid_store", "hydrogen_metal_hydride_store", "ammonia_synthesis_station", "methanol_synthesis_station", "load", "battery", "battery_sodium", "battery_flow", "caes_aboveground", "liquid_air_store", "hydrogen_storage_system", "co2_liquid_cycle_store", "grid", "electric_boiler", "fuel_boiler", "solar_thermal", "parabolic_trough", "oil_water_exchanger", "steam_generator", "steam_condenser", "feedwater_pump", "solar_tower_receiver", "molten_salt_store", "salt_steam_generator"])
 		if not legal:
 			return "电连接仅支持电源/电池→站→负荷/电池/锅炉电输入/电网"
 		if candidate.has("capacity_mwth") or (candidate.has("grade_id") and not str(candidate.grade_id).is_empty()):
@@ -486,7 +560,7 @@ static func validate_link(devices: Array, links: Array, candidate: Dictionary) -
 			return "电线路容量必须为有限非负数"
 		if not _number(candidate.get("loss_fraction", 0.01)) or float(candidate.get("loss_fraction", 0.01)) < 0.0 or float(candidate.get("loss_fraction", 0.01)) >= 1.0:
 			return "电线路损耗率必须为[0,1)内有限数"
-	var leaf: int = a if ak != "station" else b
+	var leaf: int = a if not is_electric_station(ak) else b
 	for old in links:
 		if not old is Dictionary or not _integer(old.get("from")) or not _integer(old.get("to")):
 			continue
@@ -495,7 +569,9 @@ static func validate_link(devices: Array, links: Array, candidate: Dictionary) -
 			continue
 		var x: int = int(old.from)
 		var y: int = int(old.to)
-		if mass:
+		if material:
+			if a == x and b == y and names.from_port == old_names.from_port and names.to_port == old_names.to_port: return "Duplicate material port connection"
+		elif mass:
 			if (a==x and names.from_port==old_names.from_port) or (b==y and names.to_port==old_names.to_port): return "每个循环质量端口仅允许一条连接"
 		elif thermal:
 			if a == x and b == y and old_names.from_port == names.from_port and old_names.to_port == names.to_port:

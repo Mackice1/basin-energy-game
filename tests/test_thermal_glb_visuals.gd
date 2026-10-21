@@ -41,9 +41,10 @@ func _test_equipment(kind: String) -> Dictionary:
 		return {}
 	var params: Dictionary = Model.defaults(kind)
 	params.visual_dimension_profile = "metric_v1"
+	params.visual_site_geometry_profile = ""
 	var original := params.duplicate(true)
 	var definition: Dictionary = Visual.thermal_asset_definition(kind)
-	var dimensions: Dictionary = Spatial.profile(kind, params)
+	var dimensions: Dictionary = Spatial.profile(kind, params, true, "flow_process_v2", "")
 	var ports: Dictionary = definition.ports
 	var item = Visual.create(kind, params, true)
 	root.add_child(item)
@@ -54,7 +55,7 @@ func _test_equipment(kind: String) -> Dictionary:
 	check(params == original, kind + ": parameters remain untouched")
 	check(not item.get_meta("temperature_is_dynamic"), kind + ": no invented temperature state")
 	check(item.get_meta("thermal_boundary").contains("已充水") and item.get_meta("thermal_boundary").contains("循环辅机"), kind + ": thermal boundary is preserved")
-	var fallback = Visual.create(kind)
+	var fallback = Visual.create(kind, {"visual_site_geometry_profile":""})
 	check(fallback.get_meta("visual_backend") == "procedural", kind + ": default API retains procedural geometry")
 	for key in ["representation", "geometry_assumption", "thermal_boundary", "temperature_is_dynamic", "fixed_temperature_profile"]:
 		check(item.get_meta(key) == fallback.get_meta(key), kind + ": shared metadata matches fallback " + key)
@@ -226,15 +227,20 @@ func _test_preview(item: Node3D, snapshots: Array, label: String) -> void:
 	_check_unchanged_materials(item, snapshots, label + ": legacy preview-disable")
 
 func _test_facade() -> void:
-	if not _check_raw_asset(Facade.BLENDER_ASSET, "facade"):
-		return
 	var station = Facade.new()
-	var data := {"visual_dimension_profile": "metric_v1", "id": 100, "name": "北区电热储能站", "devices": [{"kind": "thermal_store", "stored_mwhth": 123.0}]}
+	var members: Array = []
+	for i in KINDS.size():
+		var params: Dictionary = Model.defaults(KINDS[i])
+		if KINDS[i] == "thermal_store": params.capacity_mwhth = .2
+		members.append({"id": i+1, "kind": KINDS[i], "parent_station_id": 100, "interior_x": -1.4+i*1.4, "interior_z": -.7 if i%2==0 else .7, "params": params, "state": Catalog.initial_state(KINDS[i],params)})
+	var data := {"visual_dimension_profile": "metric_v1", "id": 100, "name": "北区电热储能站", "installed_devices": members}
 	var original := data.duplicate(true)
 	station.setup(data)
 	root.add_child(station)
-	check(station.get_meta("visual_backend", "") == "blender_glb", "facade: explicit metric setup uses actual GLB")
-	check(station.get_meta("asset_source", "") == Facade.BLENDER_ASSET, "facade: source recorded")
+	check(station.get_meta("visual_backend", "") == "metric_installed_equipment", "facade: metric site uses actual installed members")
+	check(station.get_meta("asset_source", "") == "installed_devices", "facade: real member source recorded")
+	check(not station.has_node("BlenderAsset") and not station.has_node("PlantBuilding") and not station.has_node("TankSilhouette1"), "facade: no fixed fake process building or tanks")
+	check(station.installed_device_nodes.size() == members.size(), "facade: all installed members appear exactly once")
 	check(station.get_meta("visual_only") and station.get_meta("capacity_added") == 0.0, "facade: adds no capacity")
 	check(station.get("devices") == null and station.get("stored_mwhth") == null, "facade: retains no simulation state")
 	check(not station.is_processing() and not station.is_physics_processing(), "facade: runs no simulation")
@@ -243,14 +249,14 @@ func _test_facade() -> void:
 	for port_id in Facade.PORT_LOCALS:
 		check(station.has_named_port(port_id), "facade: named port exists")
 		var terminal: Node3D = station.named_ports[port_id]
-		check(terminal.name == "Port_" + port_id, "facade: authored empty reused")
-		check(terminal.global_position.is_equal_approx(Visual._vector3(Visual.thermal_asset_definition("thermal_station").ports[port_id])), "facade: Blender axes and endpoint preserved")
+		check(terminal.name == "Port_" + port_id, "facade: stable named boundary retained")
+		check(terminal.global_position.is_equal_approx(Visual._vector3(Visual.thermal_asset_definition("thermal_station").ports[port_id])), "facade: prior metric endpoint coordinates preserved")
 		check(station.get_port_position(port_id).is_equal_approx(terminal.global_position), "facade: port API matches geometry")
 		check(terminal.get_node("PortLabel").text == ("AC 输入" if port_id == "ac_in" else "热70/40 输出"), "facade: runtime caption")
 	check(station.named_ports.ac_in.get_meta("carrier") == "electricity_ac" and station.named_ports.ac_in.get_meta("direction") == "input", "facade: AC input semantics")
 	check(station.named_ports.heat_out.get_meta("grade_id") == "hw_secondary_70_40" and station.named_ports.heat_out.get_meta("direction") == "output", "facade: 70/40 output semantics")
 	check(not station.has_named_port("hot_in"), "facade: no internal exchanger port")
-	_check_geometry(station, float(Spatial.profile("thermal_station").clearance_radius_world), "facade")
+	_check_installed_facade_geometry(station, members)
 	var originals := _material_snapshot(station)
 	_test_preview(station, originals, "facade")
 	station.set_preview(false)
@@ -265,7 +271,7 @@ func _test_facade() -> void:
 	var mesh_count: int = station.surfaces.size()
 	var child_count: int = station.get_child_count()
 	station.set_preview(false)
-	station.setup({"title": "南区热站", "visual_dimension_profile": "metric_v1"})
+	station.setup({"id":100, "title": "南区热站", "visual_dimension_profile": "metric_v1", "installed_devices":members})
 	check(station.surfaces.size() == mesh_count and station.get_child_count() == child_count, "facade: rebuild never duplicates geometry")
 	check(station.preview_enabled and station.selected and not station.selection_ring.visible and not station.status_label.visible, "facade: rebuild preserves preview")
 	check(station.title_label.text == "南区热站", "facade: rebuild updates title")
@@ -284,6 +290,45 @@ func _test_facade() -> void:
 	check(station.get_port_position("missing").is_equal_approx(station.global_position), "facade: unknown endpoint stays neutral")
 	check(data == original, "facade: display never mutates authoritative input")
 	holder.free()
+
+func _check_installed_facade_geometry(station: Node3D, members: Array) -> void:
+	var dimensions: Dictionary = Spatial.profile("thermal_station")
+	var radius: float = dimensions.clearance_radius_world
+	check(station.surfaces.size() == station.base_materials.size(), "facade: every civil and installed mesh is pickable and restorable")
+	check(station.get_node("FacilityFoundation").mesh.size == Vector3(8,.05,6), "facade: 80x60 metre civil footprint, no enlarged symbol")
+	check(station.get_node("Courtyard").mesh.size == Vector3(4.8,.008,4.8), "facade: inner 48x48 metre placement area")
+	var triangles := 0
+	var mesh_count := 0
+	for surface: MeshInstance3D in station.surfaces:
+		if surface == station.selection_ring or not surface.visible: continue
+		mesh_count += 1
+		for slot in surface.mesh.get_surface_count():
+			check(surface.get_active_material(slot) != null, "facade: actual civil/equipment material populated")
+			var arrays: Array = surface.mesh.surface_get_arrays(slot)
+			var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+			var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+			triangles += indices.size()/3 if not indices.is_empty() else vertices.size()/3
+			for vertex in vertices:
+				var point: Vector3 = surface.global_transform * vertex
+				check(point.y >= -.0501, "facade: real geometry above footing underside")
+				check(Vector2(point.x,point.z).length() <= radius+.0001, "facade: installed geometry inside shared siting radius")
+	check(mesh_count > members.size() and mesh_count < 100, "facade: bounded civil yard plus actual installed meshes")
+	check(triangles > 500 and triangles < 60000, "facade: bounded sum of installed geometry, not a fixed symbol")
+	for member in members:
+		var child: Node3D = station.installed_device_nodes[member.id]
+		var params: Dictionary = member.params.duplicate(true); params.visual_dimension_profile="metric_v1"; params.visual_site_geometry_profile=str(member.get("site_geometry_profile",""))
+		var reference: Node3D = Visual.create(member.kind,params,true); root.add_child(reference)
+		check(child.get_meta("visual_backend") == "blender_glb" and child.get_meta("asset_source")==Visual.BLENDER_ASSETS[member.kind], "facade: each installed member uses actual imported device asset")
+		check(child.position.is_equal_approx(Vector3(member.interior_x,0,member.interior_z)) and child.scale==Vector3.ONE, "facade: actual interior coordinates and unit scale")
+		check(child.surfaces.size()==reference.surfaces.size(), "facade: same full device mesh set as standalone view")
+		for index in child.surfaces.size():
+			var actual: MeshInstance3D = child.surfaces[index]
+			var expected: MeshInstance3D = reference.surfaces[index]
+			check(actual.mesh.get_aabb().is_equal_approx(expected.mesh.get_aabb()), "facade: authored device bounds unchanged")
+			check((child.global_transform.affine_inverse()*actual.global_transform).is_equal_approx(reference.global_transform.affine_inverse()*expected.global_transform), "facade: authored device transforms unchanged")
+		check(child.named_port_locals==reference.named_port_locals, "facade: all actual internal ports retain exact coordinates")
+		reference.free()
+	check(station.find_children("*", "CollisionObject3D", true, false).is_empty(), "facade: no runtime physics bodies")
 
 func _test_metric_electrical() -> void:
 	for kind in ["pv", "battery", "station"]:
@@ -338,7 +383,7 @@ func _test_safe_fallbacks() -> void:
 		var path: String = Visual.BLENDER_ASSETS[kind]
 		var saved: Variant = Visual._blender_scenes.get(path)
 		Visual._blender_scenes[path] = malformed
-		var item = Visual.create(kind, {"visual_dimension_profile": "metric_v1"}, true)
+		var item = Visual.create(kind, {"visual_dimension_profile": "metric_v1", "visual_site_geometry_profile":""}, true)
 		check(item.get_meta("visual_backend") == "metric_procedural_fallback" and item.has_meta("asset_fallback"), kind + ": invalid import safely falls back")
 		check(not item.has_node("BlenderAsset") and item.named_ports.size() == 2, kind + ": no partial imported remnants")
 		item.free()
@@ -350,7 +395,7 @@ func _test_safe_fallbacks() -> void:
 	Facade._blender_scene = malformed
 	var station = Facade.new()
 	station.setup({"visual_dimension_profile": "metric_v1"})
-	check(station.has_node("PlantBuilding") and station.has_node("TankSilhouette1") and not station.has_node("BlenderAsset"), "facade: invalid import uses whole-site fallback")
-	check(station.has_meta("asset_fallback") and station.named_ports.size() == 2, "facade: explicit fallback retains ports")
+	check(station.has_node("Courtyard") and not station.has_node("PlantBuilding") and not station.has_node("TankSilhouette1") and not station.has_node("BlenderAsset"), "facade: obsolete whole-site import cannot fabricate process equipment")
+	check(station.get_meta("visual_backend")=="metric_installed_equipment" and station.named_ports.size()==2 and station.installed_device_nodes.is_empty(), "facade: empty installed yard keeps boundary ports despite malformed obsolete asset")
 	station.free()
 	Facade._blender_scene = saved_facade

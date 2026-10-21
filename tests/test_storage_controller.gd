@@ -14,6 +14,24 @@ class Fixture:
 	func set_mode(value:String):mode=value;pending_link=-2
 	func select_device(id:int):selected_id=id
 	func weather_at(_t:float)->Dictionary:return {"wind_speed_mps":12.0,"irradiance_wm2":1000.0,"air_temp_c":25.0}
+
+	# Explicit historical data setup, NOT a replacement for the production build
+	# API. Legacy UI construction is now rejected; these fixtures retain their
+	# old ratings/coordinates and no site_geometry_profile for ledger/save tests.
+	func append_legacy_device(kind:String, at:Vector2, record:bool=true, parent_id:int=-1)->bool:
+		if record: checkpoint()
+		var id:int=next_id
+		while not station(id).is_empty() or not device(id).is_empty(): id+=1
+		var values:Dictionary=templates[kind].duplicate(true)
+		var item:Dictionary={"id":id,"kind":kind,"x":at.x,"z":at.y,"params":values,"state":Catalog.initial_state(kind,values)}
+		if kind in THERMAL_KINDS:item.model_profile=Catalog.model_profile(kind)
+		if parent_id>=0:
+			var parent:Dictionary=station(parent_id)
+			item.x=parent.x;item.z=parent.z;item.parent_station_id=parent_id
+			item.interior_x=at.x;item.interior_z=at.y
+		devices.append(item);selected_id=id;next_id=id+1;normalize_id_cursors();refresh()
+		return true
+
 var game:Fixture
 var checks:=0
 var failures:Array[String]=[]
@@ -24,7 +42,8 @@ func _initialize():call_deferred("run")
 func run():
 	game=Fixture.new();check(game.footprint("load")==5.5,"load placement matches visual footprint");game.cfg={"max_build_slope_degrees":8.0};game.booted=true
 	for kind in game.KINDS:game.templates[kind]=game.model.defaults(kind)
-	for spec in [["pv",Vector2(-30,0)],["station",Vector2(0,0)],["load",Vector2(20,0)],["battery",Vector2(40,0)]]:check(game.add_equipment(spec[0],spec[1]),"place "+spec[0])
+	check(not game.add_equipment("pv",Vector2(-30,0)),"legacy UI new construction rejected without migration")
+	for spec in [["pv",Vector2(-30,0)],["station",Vector2(0,0)],["load",Vector2(20,0)],["battery",Vector2(40,0)]]:check(game.append_legacy_device(spec[0],spec[1]),"prepare historical "+spec[0])
 	game.devices[0].params={"dc_capacity_mw":12.0,"inverter_capacity_mw":10.0}
 	game.devices[1].params={"capacity_mw":20.0,"loss_fraction":0.0}
 	game.devices[2].params={"demand_mw":2.0,"priority":10.0}

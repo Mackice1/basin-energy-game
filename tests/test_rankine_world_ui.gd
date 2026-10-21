@@ -1,4 +1,5 @@
 extends SceneTree
+const CurrentWorldVersion = preload("res://scripts/world_game.gd")
 var game
 var checks:=0
 var failures:Array[String]=[]
@@ -11,7 +12,7 @@ func run():
  game=load("res://main.tscn").instantiate();root.add_child(game);await process_frame
  game.rankine_example()
  check(game.result.get("valid",false),"example dispatch valid "+str(game.result.get("errors",[])))
- check(game.state().schema==13 and game.state().model_version==22,"new version")
+ check(game.state().schema==CurrentWorldVersion.CURRENT_SAVE_SCHEMA and game.state().model_version==CurrentWorldVersion.CURRENT_MODEL_VERSION,"new version")
  check(game.validate_state(game.state())=="","new example valid save: "+game.validate_state(game.state()))
  check(game.devices.filter(func(d):return d.kind in game.RANKINE_KINDS).size()==4,"four independent cycle devices")
  var ids:Dictionary={}

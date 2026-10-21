@@ -1,4 +1,5 @@
 extends SceneTree
+const CurrentWorldVersion = preload("res://scripts/world_game.gd")
 ## Exercise migration at the real controller boundary without booting terrain/UI.
 const Validator = preload("res://scripts/save_validator.gd")
 const Model = preload("res://scripts/energy_model.gd")
@@ -55,7 +56,7 @@ func _initialize() -> void:
 		check(game.energy.has(key) and game.energy[key] == 0.0, "legacy migration initializes only missing %s cumulative energy" % key)
 	check(is_equal_approx(game.energy.generated, 0.04) and is_equal_approx(game.energy.curtailed, 0.04), "migration preserves old generation and curtailment")
 	var saved: Dictionary = game.state()
-	check(saved.schema == 13 and saved.model_version == 22, "next save upgrades to paired schema 13/model 22")
+	check(saved.schema == CurrentWorldVersion.CURRENT_SAVE_SCHEMA and saved.model_version == CurrentWorldVersion.CURRENT_MODEL_VERSION, "next save upgrades to paired schema 15/model 24")
 	check(Validator.validate(saved).is_empty(), "migrated scene saves as a valid current scene")
 	check(Validator.validate(JSON.parse_string(JSON.stringify(saved))).is_empty(), "migrated save survives JSON round trip")
 

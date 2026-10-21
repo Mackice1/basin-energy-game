@@ -18,8 +18,8 @@ func blank() -> Dictionary:
 	var s: Dictionary = old.blank()
 	old.free()
 	s.schema = 12; s.model_version = 21; s.rankine_energy = R.initial_energy(); s.tower_energy = T.initial_energy()
-	for kind in C.implemented_kinds():
-		if not kind in C.NEW_STORAGE_KINDS: s.templates[kind] = C.defaults(kind)
+	for kind in V.SCHEMA12_KINDS:
+		s.templates[kind] = C.defaults(kind)
 	s.stations = [{"id":1000000,"name":"塔式热链","kind":"tower_station","x":0.0,"z":0.0}]
 	s.next_station_id = 1000001
 	return s

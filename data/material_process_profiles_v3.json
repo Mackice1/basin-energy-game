@@ -1,0 +1,104 @@
+{
+  "profile_id": "material_chemical_2c_v3",
+  "profile_version": 3,
+  "reference_temperature_k": 298.15,
+  "atomic_mass_kg_per_kmol": {
+    "H": 1.008,
+    "O": 15.999,
+    "N": 14.007,
+    "C": 12.011
+  },
+  "molar_mass_kg_per_kmol": {
+    "H2": 2.016,
+    "O2": 31.998,
+    "H2O": 18.015,
+    "N2": 28.014,
+    "CO2": 44.009,
+    "NH3": 17.031,
+    "CH3OH": 32.042
+  },
+  "formation_enthalpy_kj_per_kmol": {
+    "H2": 0.0,
+    "O2": 0.0,
+    "H2O": -285830.0,
+    "N2": 0.0,
+    "CO2": -393510.0,
+    "NH3": -45940.0,
+    "CH3OH": -238400.0
+  },
+  "process_constants": {
+    "ammonia_synthesis_station": {
+      "auxiliary_kwh_per_kg": 0.25,
+      "process_heat_kwh_per_kg": 0.5,
+      "heater_efficiency": 0.95
+    },
+    "methanol_synthesis_station": {
+      "auxiliary_kwh_per_kg": 0.15,
+      "process_heat_kwh_per_kg": 0.6,
+      "heater_efficiency": 0.95
+    }
+  },
+  "defaults": {
+    "nitrogen_supply_boundary": {
+      "capacity_kg": 1000.0,
+      "initial_inventory_kg": 1000.0,
+      "max_outflow_kg_s": 0.05
+    },
+    "co2_supply_boundary": {
+      "capacity_kg": 1000.0,
+      "initial_inventory_kg": 1000.0,
+      "max_outflow_kg_s": 0.05
+    },
+    "ammonia_synthesis_station": {
+      "capacity_kg": 200.0,
+      "initial_inventory_kg": 0.0,
+      "max_product_kg_s": 0.02,
+      "rated_electric_mw": 0.2,
+      "heater_electric_mw": 0.15,
+      "heat_rejection_mwth": 0.4
+    },
+    "methanol_synthesis_station": {
+      "capacity_kg": 1000.0,
+      "initial_inventory_kg": 0.0,
+      "max_product_kg_s": 0.02,
+      "rated_electric_mw": 0.2,
+      "heater_electric_mw": 0.15,
+      "heat_rejection_mwth": 0.4
+    }
+  },
+  "maximums": {
+    "nitrogen_supply_boundary": {
+      "capacity_kg": 1000.0,
+      "initial_inventory_kg": 1000.0,
+      "max_outflow_kg_s": 0.1
+    },
+    "co2_supply_boundary": {
+      "capacity_kg": 1000.0,
+      "initial_inventory_kg": 1000.0,
+      "max_outflow_kg_s": 0.1
+    },
+    "ammonia_synthesis_station": {
+      "capacity_kg": 200.0,
+      "initial_inventory_kg": 0.0,
+      "max_product_kg_s": 0.05,
+      "rated_electric_mw": 0.2,
+      "heater_electric_mw": 0.15,
+      "heat_rejection_mwth": 0.4
+    },
+    "methanol_synthesis_station": {
+      "capacity_kg": 1000.0,
+      "initial_inventory_kg": 0.0,
+      "max_product_kg_s": 0.05,
+      "rated_electric_mw": 0.2,
+      "heater_electric_mw": 0.15,
+      "heat_rejection_mwth": 0.4
+    }
+  },
+  "assumptions": "Finite externally prepared25C N2/CO2gas supply boundaries are not air separation or capture plants. Their explicit construction imports carry mass/reference enthalpy, no fuel LHV or electricity gain. Fixed-purity net-reaction whole ammonia/methanol teaching facilities, no pressure, catalyst, recycle/purge, startup or kinetics dynamics. NH3product is gas25C, methanolandbyproductwaterareliquid25C. All auxiliary/electricheat draw actual bounded AC; total reaction enthalpy is not exportable electricity/heat. Products remain in finite local buffers, no automatic sale/power/clearing. Performance coefficients are teaching assumptions, not vendor calibration.",
+  "sources": [
+    "https://webbook.nist.gov/cgi/cbook.cgi?ID=C7664417&Mask=1",
+    "https://webbook.nist.gov/cgi/cbook.cgi?ID=C124389&Mask=1",
+    "https://webbook.nist.gov/cgi/cbook.cgi?ID=C67561&Mask=2",
+    "https://webbook.nist.gov/cgi/cbook.cgi?ID=C7732185&Mask=2"
+  ]
+}

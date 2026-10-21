@@ -1,5 +1,6 @@
 extends SceneTree
-## Photo-reference and geometry contract. Runs headlessly, without user saves.
+## Historical photo-reference contract plus explicit new-reference support boundary.
+## Runs headlessly, without user saves.
 const Visual = preload("res://scripts/equipment_visual.gd")
 const Catalog = preload("res://scripts/device_catalog.gd")
 const Spatial = preload("res://scripts/spatial_dimensions.gd")
@@ -12,8 +13,12 @@ func _initialize() -> void: call_deferred("run")
 func run() -> void:
  for params in [Catalog.defaults("caes_aboveground"), {"capacity_mwh":1.0,"charge_mw":.2,"discharge_mw":.2}, {"capacity_mwh":10.0,"charge_mw":2.0,"discharge_mw":2.0}]:
   var before: Dictionary = params.duplicate(true)
-  var shape: Dictionary = Spatial.profile("caes_aboveground", params)
-  var item := Visual.create("caes_aboveground", params)
+  # These larger historical teaching fleets predate finite reference-size support.
+  # Preserve their full old geometry, rather than silently treating them as new sites.
+  var shape: Dictionary = Spatial.profile("caes_aboveground", params, true, "flow_process_v2", "")
+  var visual_params: Dictionary = params.duplicate(true)
+  visual_params.visual_site_geometry_profile = ""
+  var item := Visual.create("caes_aboveground", visual_params)
   root.add_child(item)
   check(params == before, "visual never mutates parameters")
   check(shape.unit_dimensions_m == Vector3(24,6,18), "existing module dimensions unchanged")
@@ -49,5 +54,9 @@ func run() -> void:
   for label in ["CAESMachineHallLabel","CAESHeatRecoveryLabel","CAESAbovegroundAirLabel"]:
    check(item.find_children(label,"Label3D",true,false).size() == 1, "one uncluttered identification " + label)
   item.free()
+ var reference := Spatial.profile("caes_aboveground",Catalog.defaults("caes_aboveground"),true,"flow_process_v2","reference_size_v1")
+ check(reference.valid and reference.module_count==1,"new reference CAES supports its finite default module")
+ for historical in [{"capacity_mwh":1.0,"charge_mw":.2,"discharge_mw":.2},{"capacity_mwh":10.0,"charge_mw":2.0,"discharge_mw":2.0}]:
+  check(not Spatial.profile("caes_aboveground",historical,true,"flow_process_v2","reference_size_v1").valid,"new reference CAES rejects historical oversized fleet instead of shrinking it")
  print("CAES_REFERENCE_VISUAL_1003 checks=",checks," failures=",failures.size())
  quit(0 if failures.is_empty() else 1)

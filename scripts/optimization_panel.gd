@@ -6,6 +6,17 @@ signal solve_requested(options: Dictionary)
 signal cancel_requested
 
 const Chart = preload("res://scripts/optimization_chart.gd")
+const MaterialCatalog=preload("res://scripts/material_catalog.gd")
+const ReadoutCard=preload("res://scripts/right_metric_card.gd")
+const MATERIAL_RATES=[
+	["water_withdrawn_kg_s","取水"],["hydrogen_produced_kg_s","制氢"],["hydrogen_consumed_kg_s","燃料电池用氢"],["hydrogen_charged_kg_s","充氢"],["hydrogen_discharged_kg_s","放氢"],["oxygen_vented_kg_s","排氧"],["oxygen_from_air_kg_s","空气取氧"],["water_released_kg_s","排水"]]
+const MATERIAL_POWERS=[
+	["electrolyzer_electric_mw","电解用电","MW","MWh"],["compression_electric_mw","压缩用电","MW","MWh"],["fuel_cell_output_mw","燃料电池净出电","MW","MWh"],["heat_rejected_mwth","环境排热","MWth","MWhth"]]
+const PHASE_POWERS=[["phase_store_electric_mw","液态/固态储氢用电","MW","MWh"],["environment_heat_in_mwth","环境吸热","MWth","MWhth"]]
+const CHEMICAL_RATES=[
+	["nitrogen_withdrawn_kg_s","N2(g) 供料"],["co2_withdrawn_kg_s","CO2(g) 供料"],["chemical_hydrogen_consumed_kg_s","化工耗氢"],["ammonia_produced_kg_s","NH3(g) 生成"],["methanol_produced_kg_s","CH3OH(l) 生成"],["chemical_water_released_kg_s","化工排水（总排水子项）"]]
+const CHEMICAL_STOCKS=[
+	["nitrogen_inventory_kg","N2(g) 供料库存"],["co2_inventory_kg","CO2(g) 供料库存"],["ammonia_inventory_kg","NH3(g) 产品库存"],["methanol_inventory_kg","CH3OH(l) 产品库存"]]
 const INK := Color("edf3f6")
 const MUTED := Color("a5b7c4")
 const BORDER := Color("344b59")
@@ -65,6 +76,22 @@ var _step_choice: OptionButton
 var _tabs: TabContainer
 var _previous: Button
 var _next: Button
+var _material_enabled:=false
+var _material_tab_index:=-1
+var _material_targets:VBoxContainer
+var _material_target_note:Label
+var _material_summary:Label
+var _material_controls:Dictionary={}
+var _material_context:Array=[]
+var _pending_material_targets:Dictionary={}
+var _material_invalidated_targets:Array[String]=[]
+var _product_enabled:=false
+var _product_section:VBoxContainer
+var _product_targets:VBoxContainer
+var _product_target_note:Label
+var _product_controls:Dictionary={}
+var _pending_product_targets:Dictionary={}
+var _product_invalidated_targets:Array[String]=[]
 
 func _init() -> void:
 	visible = false
@@ -106,6 +133,14 @@ func configure(options: Dictionary = {}) -> void:
 			_terminal_heat.value = float(heat_target)
 	_heat_weight.value = float(options.get("heat_service_weight", _heat_weight.value))
 	_terminal_heat.editable = _terminal_heat_enabled.button_pressed and not _busy
+	if options.get("terminal_hydrogen_kg") is Dictionary:
+		_pending_material_targets=options.terminal_hydrogen_kg.duplicate(true)
+		_apply_material_targets(_pending_material_targets)
+		if _material_enabled:_pending_material_targets.clear()
+	if options.get("terminal_product_kg") is Dictionary:
+		_pending_product_targets=options.terminal_product_kg.duplicate(true)
+		_apply_product_targets(_pending_product_targets)
+		if _product_enabled:_pending_product_targets.clear()
 	# SpinBox redraws its LineEdit later; keep immediate get_options() from
 	# applying the previous text over freshly configured values.
 	for editor in _editors:
@@ -129,6 +164,8 @@ func get_options() -> Dictionary:
 	if _thermal_enabled:
 		options.terminal_heat_soc_fraction = _terminal_heat.value if _terminal_heat_enabled.button_pressed else null
 		options.heat_service_weight = _heat_weight.value
+	if _material_enabled:options.terminal_hydrogen_kg=_material_options()
+	if _product_enabled:options.terminal_product_kg=_product_options()
 	return options
 
 func set_thermal_context(enabled: bool) -> void:
@@ -150,6 +187,7 @@ func set_busy(value: bool) -> void:
 			editor.disabled = value
 	_terminal.editable = not value and _terminal_enabled.button_pressed
 	_terminal_heat.editable = not value and _terminal_heat_enabled.button_pressed
+	for controls in _material_controls.values()+_product_controls.values():controls.amount.editable=not value and controls.enabled.button_pressed
 	if value:
 		_clear_result("正在计算当前任务…")
 		_error.hide()
@@ -192,6 +230,7 @@ func show_result(result: Dictionary, baseline: Dictionary = {}) -> void:
 	_steps = _result.steps
 	if _has_thermal_data(_steps):
 		set_thermal_context(true)
+	_tabs.set_tab_hidden(_material_tab_index,not (_material_enabled or _has_material_data(_steps)))
 	_error.hide()
 	_power_chart.set_steps(_steps)
 	_soc_chart.set_steps(_steps)
@@ -315,6 +354,8 @@ func _build_ui() -> void:
 	_build_detail_tab()
 	_build_thermal_chart_tab()
 	_tabs.set_tab_hidden(_thermal_tab_index, true)
+	_build_material_tab()
+	_tabs.set_tab_hidden(_material_tab_index,true)
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 10)
 	column.add_child(actions)
@@ -559,6 +600,7 @@ func _clear_result(message: String) -> void:
 		_comparison.remove_child(child)
 		child.queue_free()
 	_comparison_note.text = message
+	if is_instance_valid(_material_summary):_material_summary.text=message
 
 func _select_step(index: int) -> void:
 	if _steps.is_empty():
@@ -588,6 +630,7 @@ func _select_step(index: int) -> void:
 	_append_high_temp(lines,step_data,dt)
 	_append_tower(lines,step_data,dt)
 	_append_rankine(lines,step_data,dt)
+	_append_material(lines,step_data,dt)
 	_append_devices(lines, step_data, dt)
 	_detail.text = "\n".join(lines)
 
@@ -654,6 +697,9 @@ func _append_devices(lines: Array[String], step_data: Dictionary, dt: float) -> 
 		if not device is Dictionary:
 			continue
 		device = device.duplicate(true)
+		if device.get("kind") in MaterialCatalog.KINDS:
+			_append_material_device(lines,device,dt)
+			continue
 		if device.get("kind") == "electric_boiler":
 			device.electric_input_mw = device.get("electric_input_mw", device.get("boiler_electric_mw", device.get("input_mw")))
 			device.heat_output_mwth = device.get("heat_output_mwth", device.get("boiler_heat_mwth", device.get("output_mwth")))
@@ -734,6 +780,7 @@ func _build_comparison() -> void:
 		_build_thermal_comparison(baseline_steps, comparable)
 	if _has_fuel_data(_steps):
 		_build_fuel_comparison(baseline_steps, comparable)
+	if _has_material_data(_steps):_build_material_comparison(baseline_steps,comparable)
 	if _steps[0].get("solar") is Dictionary:
 		for spec in [["incident_mw","太阳能入射 / MWh"],["optical_rejection_mw","光学未捕获 / MWh"],["thermal_loss_mw","集热散热 / MWh"],["available_mwth","可用集热 / MWhth"],["useful_mwth","有用集热 / MWhth"],["curtailed_mwth","弃热 / MWhth"],["auxiliary_electric_mw","集热辅机 / MWh"]]:
 			_comparison_row(spec[1],_solar_total(_steps,spec[0]),_solar_total(baseline_steps,spec[0]) if comparable else null)
@@ -997,3 +1044,217 @@ func _append_tower(lines:Array[String],step_data:Dictionary,dt:float)->void:
 		var value:Variant=salt.get(spec[0])
 		lines.append("%s：%s kW / %s kWh"%[spec[1],_display(float(value)*1000 if _valid_number(value) else null),_display(float(value)*dt*1000 if _valid_number(value) else null)])
 	lines.append("盐库存 %s MWhth · 自损 %s MWhth · 守恒差 %s MWth；SOC0=290°C基线。"%[_value(salt,"energy_mwhth"),_value(salt,"self_discharge_mwhth"),_value(salt,"balance_error_mwth")])
+
+## IDs and kg targets are forecast-only. Never retain references to live devices.
+func set_material_context(devices:Array)->void:
+	_build_ui()
+	var context:Array=[]
+	for device in devices:
+		if not device is Dictionary or not device.get("kind","") in MaterialCatalog.KINDS:continue
+		var item:Dictionary={"id":int(device.get("id",-1)),"kind":device.kind}
+		if device.kind in MaterialCatalog.HYDROGEN_STORE_KINDS or device.kind in MaterialCatalog.SYNTHESIS_KINDS:
+			var params:Dictionary=MaterialCatalog.defaults(device.kind).merged(device.get("params",{}),true)
+			item.capacity=MaterialCatalog.inventory_capacity(device.kind,params)
+			item.stock=float(device.get("state",{}).get("material_inventory_kg",{}).get(MaterialCatalog.species(device.kind),params.get("initial_inventory_kg",0)))
+		context.append(item)
+	if context==_material_context:return
+	var previous:=_material_options()
+	var product_previous:=_product_options()
+	if not _pending_material_targets.is_empty():previous=_pending_material_targets.duplicate(true)
+	if not _pending_product_targets.is_empty():product_previous=_pending_product_targets.duplicate(true)
+	_pending_material_targets.clear();_pending_product_targets.clear()
+	_material_context=context.duplicate(true);_material_enabled=not context.is_empty()
+	_product_enabled=context.any(func(item):return item.kind in MaterialCatalog.SYNTHESIS_KINDS)
+	_product_section.visible=_product_enabled
+	_tabs.set_tab_hidden(_material_tab_index,not _material_enabled)
+	for controls in _material_controls.values()+_product_controls.values():_editors.erase(controls.enabled);_editors.erase(controls.amount)
+	_material_controls.clear();_product_controls.clear()
+	for parent in [_material_targets,_product_targets]:
+		for child in parent.get_children():parent.remove_child(child);child.queue_free()
+	for item in context:
+		if item.kind in MaterialCatalog.HYDROGEN_STORE_KINDS:_add_inventory_target(item,_material_targets,_material_controls,_hydrogen_store_name(item.kind))
+		elif item.kind in MaterialCatalog.SYNTHESIS_KINDS:_add_inventory_target(item,_product_targets,_product_controls,_product_store_name(item.kind))
+	var was_updating:=_updating;_updating=true
+	_apply_material_targets(previous);_apply_product_targets(product_previous)
+	_updating=was_updating
+	if not _steps.is_empty():mark_stale()
+
+func _add_inventory_target(item:Dictionary,parent:VBoxContainer,controls_by_id:Dictionary,caption:String)->void:
+	if item.id<0 or not _valid_number(item.get("capacity")) or item.capacity<=0 or not _valid_number(item.get("stock")):return
+	var id:=str(item.id)
+	if controls_by_id.has(id):return
+	var card:=ReadoutCard.new();parent.add_child(card)
+	var content:VBoxContainer=card.setup(caption+" #"+id)
+	var note:=_label("当前库存 %s kg / 容量 %s kg"%[_num(item.stock),_num(item.capacity)],13,MUTED);note.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;content.add_child(note)
+	var row:=HBoxContainer.new();row.add_theme_constant_override("separation",8);content.add_child(row)
+	var enabled:=CheckBox.new();enabled.text="启用期末下限";enabled.size_flags_horizontal=Control.SIZE_EXPAND_FILL;row.add_child(enabled)
+	var amount:=SpinBox.new();amount.min_value=0;amount.max_value=item.capacity;amount.step=0.001;amount.value=clampf(item.stock,0,item.capacity);amount.custom_minimum_size=Vector2(120,36);amount.alignment=HORIZONTAL_ALIGNMENT_RIGHT;amount.editable=false;row.add_child(amount)
+	row.add_child(_label("kg",12,MUTED));_editors.append(enabled);_editors.append(amount)
+	controls_by_id[id]={"enabled":enabled,"amount":amount}
+	enabled.disabled=_busy
+	enabled.toggled.connect(func(value):amount.editable=value and not _busy;_options_changed())
+	amount.value_changed.connect(func(_value):_options_changed())
+
+func _inventory_options(controls_by_id:Dictionary)->Dictionary:
+	var targets:Dictionary={}
+	for id in controls_by_id:
+		var controls:Dictionary=controls_by_id[id]
+		if controls.enabled.button_pressed:targets[id]=controls.amount.value
+	return targets
+
+func _material_options()->Dictionary:return _inventory_options(_material_controls)
+func _product_options()->Dictionary:return _inventory_options(_product_controls)
+
+func _hydrogen_store_name(kind:String)->String:
+	return {"hydrogen_gas_store":"气态储氢站","hydrogen_liquid_store":"液氢储罐站","hydrogen_metal_hydride_store":"LaNi5 固态储氢站"}.get(kind,"储氢站")
+
+func _product_store_name(kind:String)->String:
+	return "合成氨 · NH3(g) 产品缓冲" if kind=="ammonia_synthesis_station" else "合成甲醇 · CH3OH(l) 产品缓冲"
+
+func _apply_inventory_targets(targets:Dictionary,controls_by_id:Dictionary)->Array[String]:
+	var invalidated:Array[String]=[]
+	for raw_id in targets:
+		var id:=str(raw_id)
+		var value:Variant=targets[raw_id]
+		if not raw_id is String or not controls_by_id.has(id) or not _valid_number(value) or float(value)<0.0 or float(value)>controls_by_id[id].amount.max_value:invalidated.append("#"+id)
+	for id in controls_by_id:
+		var controls:Dictionary=controls_by_id[id]
+		var target:Variant=targets.get(id)
+		var valid:bool=_valid_number(target) and float(target)>=0.0 and float(target)<=controls.amount.max_value
+		controls.enabled.set_pressed_no_signal(valid)
+		if valid:controls.amount.set_value_no_signal(float(target));controls.amount.get_line_edit().text=str(target)
+		controls.amount.editable=valid and not _busy
+	return invalidated
+
+func _target_notice(note:Label,base:String,invalidated:Array[String])->void:
+	note.text=base
+	if not invalidated.is_empty():
+		var warning:="目标已失效："+"、".join(invalidated)+"。设备已删除、容量改变或数值无效；已停用，未截断到新容量。请检查后重新设定。"
+		note.text+="\n"+warning;_status.text=warning
+	note.add_theme_color_override("font_color",AMBER if not invalidated.is_empty() else MUTED)
+
+func _apply_material_targets(targets:Dictionary)->void:
+	_material_invalidated_targets=_apply_inventory_targets(targets,_material_controls)
+	_target_notice(_material_target_note,"只约束勾选的气态 / 液态 / LaNi5 储氢站；默认关闭。目标不修改实时库存，固定策略基线不强制此目标。" if not _material_controls.is_empty() else "当前没有已安装储氢站；没有期末氢目标。",_material_invalidated_targets)
+
+func _apply_product_targets(targets:Dictionary)->void:
+	_product_invalidated_targets=_apply_inventory_targets(targets,_product_controls)
+	_target_notice(_product_target_note,"NH3(g) 与 CH3OH(l) 分别按设备ID设定kg下限，默认关闭。目标只约束隔离优化，不修改实时库存；实时/固定策略基线不保证期末目标。资源不足时求解应明确不可行。产品缓冲满则停产，无外售或自动清空。",_product_invalidated_targets)
+
+func _build_material_tab()->void:
+	_material_tab_index=_tabs.get_tab_count()
+	var body:=_scroll_tab("物质与库存")
+	body.add_child(_label("储氢站期末目标 · 可选",18))
+	_material_target_note=_label("默认无期末目标；只影响隔离优化，不修改实时库存。",13,MUTED);_material_target_note.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;body.add_child(_material_target_note)
+	_material_targets=VBoxContainer.new();_material_targets.add_theme_constant_override("separation",12);body.add_child(_material_targets)
+	_product_section=VBoxContainer.new();_product_section.add_theme_constant_override("separation",10);_product_section.hide();body.add_child(_product_section)
+	_product_section.add_child(_label("化工产品期末目标 · 可选",18))
+	_product_target_note=_label("",13,MUTED);_product_target_note.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;_product_section.add_child(_product_target_note)
+	_product_targets=VBoxContainer.new();_product_targets.add_theme_constant_override("separation",12);_product_section.add_child(_product_targets)
+	var card:=ReadoutCard.new();body.add_child(card);var content:VBoxContainer=card.setup("所选时段 · 物质账本")
+	_material_summary=_label("尚无求解结果",14);_material_summary.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;content.add_child(_material_summary)
+	var note:=_label("流量 kg/s × 秒 = kg；电功率 MW × 小时 = MWh；排热 MWth × 小时 = MWhth。泄漏已是本时段 kg，不再次积分。库存为时段末 kg，不能按时长累计。完整设备与守恒分项见逐时详情。",12,MUTED);note.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;body.add_child(note)
+
+func _has_material_data(steps:Array)->bool:
+	return steps.any(func(row):return row is Dictionary and row.get("material") is Dictionary and not row.material.is_empty())
+
+func _material_total(steps:Array,key:String)->Variant:
+	if steps.is_empty():return null
+	# Stocks are snapshots; do not sum them. LHV inventory is not electric energy.
+	if key in ["hydrogen_inventory_kg","water_inventory_kg","hydrogen_lhv_mwh","phase_enthalpy_mwh","nitrogen_inventory_kg","co2_inventory_kg","ammonia_inventory_kg","methanol_inventory_kg"]:
+		if not steps[-1].get("material") is Dictionary:return null
+		var last:Variant=steps[-1].material.get(key)
+		return last if _valid_number(last) else null
+	var total:=0.0
+	for row in steps:
+		if not row.get("material") is Dictionary or not _valid_number(row.material.get(key)) or not _valid_number(row.get("dt_h")):return null
+		var multiplier:=1.0
+		if key.ends_with("_kg_s"):multiplier=float(row.dt_h)*3600.0
+		elif key.ends_with("_mw") or key.ends_with("_mwth"):multiplier=float(row.dt_h)
+		total+=float(row.material[key])*multiplier
+	return total
+
+func _has_phase_material_row(row:Dictionary)->bool:
+	var devices:Variant=row.get("devices",{})
+	return devices is Dictionary and devices.values().any(func(device):return device is Dictionary and device.get("kind") in MaterialCatalog.PHASE_KINDS)
+
+func _has_chemical_material_row(row:Dictionary)->bool:
+	var devices:Variant=row.get("devices",{})
+	return devices is Dictionary and devices.values().any(func(device):return device is Dictionary and device.get("kind") in MaterialCatalog.CHEMICAL_KINDS)
+
+func _append_material(lines:Array[String],row:Dictionary,dt:float)->void:
+	if not row.get("material") is Dictionary:
+		_material_summary.text="当前时段未返回物质账本；不以零替代。";return
+	var material:Dictionary=row.material
+	var summary:Array[String]=["物质流量 / 时段总量（不是库存）"]
+	for spec in MATERIAL_RATES:
+		var amount:Variant=float(material[spec[0]])*dt*3600.0 if _valid_number(material.get(spec[0])) else null
+		summary.append("%s：%s kg/s  ·  %s kg"%[spec[1],_material_value(material,spec[0]),ReadoutCard.number(float(amount)) if _valid_number(amount) else "—"])
+	summary.append("\n时段末氢库存：%s kg"%_material_value(material,"hydrogen_inventory_kg"))
+	summary.append("时段末水库存：%s kg"%_material_value(material,"water_inventory_kg"))
+	summary.append("库存低位热值：%s MWh(LHV)（非电量）"%_material_value(material,"hydrogen_lhv_mwh"))
+	summary.append("本时段泄漏：%s kg（不再乘时长）"%_material_value(material,"hydrogen_leaked_kg"))
+	summary.append("泄漏低位热值：%s MWh(LHV)"%_material_value(material,"hydrogen_leak_lhv_mwh"))
+	for spec in MATERIAL_POWERS:
+		var amount:Variant=float(material[spec[0]])*dt if _valid_number(material.get(spec[0])) else null
+		summary.append("%s：%s %s  ·  %s %s"%[spec[1],_material_value(material,spec[0]),spec[2],ReadoutCard.number(float(amount)) if _valid_number(amount) else "—",spec[3]])
+	if _has_phase_material_row(row):
+		for spec in PHASE_POWERS:
+			var amount:Variant=float(material[spec[0]])*dt if _valid_number(material.get(spec[0])) else null
+			summary.append("%s：%s %s  ·  %s %s"%[spec[1],_material_value(material,spec[0]),spec[2],ReadoutCard.number(float(amount)) if _valid_number(amount) else "—",spec[3]])
+		summary.append("期末相态/结合焓：%s MWh；本时段变化：%s MWh（参考态账本，非可用电量/热库存）"%[_material_value(material,"phase_enthalpy_mwh"),_material_value(material,"phase_enthalpy_change_mwh")])
+		var by_reference:Variant=material.get("inventory_by_reference_kg",{})
+		if by_reference is Dictionary:
+			for spec in [["H2_gas_25c","气态氢库存"],["H2_liquid_20k","液氢库存"],["H2_bound_lani5","LaNi5 结合氢库存"]]:summary.append("%s：%s kg"%[spec[1],_material_value(by_reference,spec[0])])
+	if _has_chemical_material_row(row):
+		summary.append("\n化工供料与产品 · 有限库存，无自动外售/清空")
+		for spec in CHEMICAL_RATES:
+			var amount:Variant=float(material[spec[0]])*dt*3600.0 if _valid_number(material.get(spec[0])) else null
+			summary.append("%s：%s kg/s  ·  %s kg"%[spec[1],_material_value(material,spec[0]),ReadoutCard.number(float(amount)) if _valid_number(amount) else "—"])
+		for spec in CHEMICAL_STOCKS:summary.append("时段末 %s：%s kg"%[spec[1],_material_value(material,spec[0])])
+		var chemical_energy:Variant=float(material.chemical_electric_mw)*dt if _valid_number(material.get("chemical_electric_mw")) else null
+		summary.append("化工用电：%s MW  ·  %s MWh"%[_material_value(material,"chemical_electric_mw"),ReadoutCard.number(float(chemical_energy)) if _valid_number(chemical_energy) else "—"])
+		summary.append("化工排热已包含在环境排热中；化工排水是总排水子项，不重复累计。")
+		for spec in [["carbon_element_error_kg","碳元素差"],["nitrogen_element_error_kg","氮元素差"]]:summary.append("%s：%s kg"%[spec[1],_material_value(material,spec[0])])
+	for spec in [["mass_balance_error_kg","质量守恒差","kg"],["hydrogen_element_error_kg","氢元素差","kg"],["oxygen_element_error_kg","氧元素差","kg"],["enthalpy_balance_error_mw","参考态焓差","MW"]]:summary.append("%s：%s %s"%[spec[1],_material_value(material,spec[0]),spec[2]])
+	lines.append("\n独立物质账本");lines.append_array(summary)
+	_material_summary.text="\n".join(summary)
+	_selection.text+="\n氢库存 %s kg · 制氢 %s kg/s · 本时段泄漏 %s kg"%[_material_value(material,"hydrogen_inventory_kg"),_material_value(material,"hydrogen_produced_kg_s"),_material_value(material,"hydrogen_leaked_kg")]
+
+func _append_material_device(lines:Array[String],device:Dictionary,dt:float)->void:
+	var names:Dictionary={"water_supply_boundary":"有限水源","electrolyzer_station":"电解制氢站","hydrogen_gas_store":"氢气库","hydrogen_liquid_store":"液氢储罐站","hydrogen_metal_hydride_store":"LaNi5 固态储氢站","fuel_cell_station":"燃料电池站","nitrogen_supply_boundary":"有限 N2(g) 氮源","co2_supply_boundary":"有限 CO2(g) 碳源","ammonia_synthesis_station":"合成氨 · NH3(g)","methanol_synthesis_station":"合成甲醇 · CH3OH(l)"}
+	lines.append("\n%s #%s"%[names.get(device.get("kind",""),"物质设备"),str(device.get("id",""))])
+	for spec in [["nitrogen_in_kg_s","N2(g) 进料"],["nitrogen_out_kg_s","N2(g) 出料"],["co2_in_kg_s","CO2(g) 进料"],["co2_out_kg_s","CO2(g) 出料"],["product_produced_kg_s","产品生成"],["water_in_kg_s","进水"],["water_out_kg_s","出水"],["hydrogen_in_kg_s","进氢"],["hydrogen_out_kg_s","出氢"],["oxygen_vented_kg_s","排氧"],["oxygen_from_air_kg_s","空气取氧"],["water_released_kg_s","排水"]]:
+		if _valid_number(device.get(spec[0])):lines.append("%s：%s kg/s / %s kg"%[spec[1],_material_value(device,spec[0]),ReadoutCard.number(float(device[spec[0]])*dt*3600.0)])
+	for spec in [["electric_input_mw","设备用电","MW","MWh"],["electric_output_mw","设备出电","MW","MWh"],["heat_rejected_mwth","环境排热","MWth","MWhth"],["environment_heat_in_mwth","环境吸热","MWth","MWhth"]]:
+		if _valid_number(device.get(spec[0])):lines.append("%s：%s %s / %s %s"%[spec[1],_material_value(device,spec[0]),spec[2],ReadoutCard.number(float(device[spec[0]])*dt),spec[3]])
+	if device.get("kind") in MaterialCatalog.INVENTORY_KINDS:
+		lines.append("库存：%s → 泄漏后 %s → 时段末 %s kg；本时段泄漏 %s kg"%[_material_value(device,"inventory_before_kg"),_material_value(device,"inventory_after_leak_kg"),_material_value(device,"next_inventory_kg"),_material_value(device,"leaked_kg")])
+	if device.get("kind") in MaterialCatalog.PHASE_KINDS:
+		for spec in [["phase_enthalpy_mwh","期末相态/结合焓","MWh"],["phase_enthalpy_change_mwh","本时段相态/结合焓变化","MWh"],["host_dry_mass_kg","固定宿主干质量","kg"]]:
+			if _valid_number(device.get(spec[0])):lines.append("%s：%s %s"%[spec[1],_material_value(device,spec[0]),spec[2]])
+		lines.append("相态/结合焓是独立参考态账本，不是可用电量或额外热库存。")
+
+func _build_material_comparison(reference:Array,comparable:bool)->void:
+	_comparison_note.text+=" 物质流量按秒积分；泄漏kg直接相加，库存仅比较末值。基线不强制期末氢目标，也不强制期末化工产品目标。"
+	for heading in ["物质指标 / 各行单位","固定策略基线","GLPK","变化"]:_add_metric_cell(heading,true)
+	for spec in MATERIAL_RATES:_material_comparison_row(spec[1]+" / kg",_material_total(_steps,spec[0]),_material_total(reference,spec[0]) if comparable else null)
+	for spec in MATERIAL_POWERS:_material_comparison_row(spec[1]+" / "+spec[3],_material_total(_steps,spec[0]),_material_total(reference,spec[0]) if comparable else null)
+	if _steps.any(func(row):return row is Dictionary and _has_phase_material_row(row)):
+		for spec in PHASE_POWERS:_material_comparison_row(spec[1]+" / "+spec[3],_material_total(_steps,spec[0]),_material_total(reference,spec[0]) if comparable else null)
+		for spec in [["phase_enthalpy_mwh","期末相态/结合焓 / MWh（非电量）"],["phase_enthalpy_change_mwh","相态/结合焓变化 / MWh（非电量）"]]:_material_comparison_row(spec[1],_material_total(_steps,spec[0]),_material_total(reference,spec[0]) if comparable else null)
+	if _steps.any(func(row):return row is Dictionary and _has_chemical_material_row(row)):
+		for spec in CHEMICAL_RATES:_material_comparison_row(spec[1]+" / kg",_material_total(_steps,spec[0]),_material_total(reference,spec[0]) if comparable else null)
+		_material_comparison_row("化工用电 / MWh",_material_total(_steps,"chemical_electric_mw"),_material_total(reference,"chemical_electric_mw") if comparable else null)
+		for spec in CHEMICAL_STOCKS:_material_comparison_row("期末 "+spec[1]+" / kg",_material_total(_steps,spec[0]),_material_total(reference,spec[0]) if comparable else null)
+	for spec in [["hydrogen_leaked_kg","氢泄漏 / kg"],["hydrogen_leak_lhv_mwh","泄漏低位热值 / MWh(LHV)"],["hydrogen_inventory_kg","期末氢库存 / kg"],["water_inventory_kg","期末水库存 / kg"],["hydrogen_lhv_mwh","期末氢低位热值 / MWh(LHV)"]]:_material_comparison_row(spec[1],_material_total(_steps,spec[0]),_material_total(reference,spec[0]) if comparable else null)
+
+func _material_value(data:Dictionary,key:String)->String:
+	return ReadoutCard.number(float(data[key])) if _valid_number(data.get(key)) else "—"
+
+func _material_comparison_row(caption:String,optimized:Variant,reference:Variant)->void:
+	var delta:Variant=float(optimized)-float(reference) if _valid_number(optimized) and _valid_number(reference) else null
+	_add_metric_cell(caption)
+	for value in [reference,optimized,delta]:
+		_add_metric_cell(ReadoutCard.number(float(value)) if _valid_number(value) else "—")
+		_comparison.get_child(_comparison.get_child_count()-1).tooltip_text=str(value) if _valid_number(value) else "没有有效物质账本，不以零替代。"

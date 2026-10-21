@@ -1,6 +1,6 @@
 # 版本命名
 
-集中版本源为 project.godot 的 application/config/version，当前为 1.0.0.3；运行窗口从该字段读取并显示版本，不另存第二份版本常量。
+集中版本源为 project.godot 的 application/config/version，当前为 1.0.0.4；运行窗口从该字段读取并显示版本，不另存第二份版本常量。
 
 格式：主版本.功能版本.修订版本.构建号。
 - 主版本：重大架构或兼容性变化。

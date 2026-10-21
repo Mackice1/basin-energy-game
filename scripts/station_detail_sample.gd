@@ -5,6 +5,7 @@ extends Node3D
 var device_kind := "station"
 var _parts: Dictionary = {}
 var _materials: Dictionary = {}
+static var _shared_materials: Dictionary = {}
 var _component_count := 0
 
 func _init() -> void:
@@ -12,6 +13,11 @@ func _init() -> void:
  set_meta("representative_only", true)
  set_meta("representation", "representative_mv_transformer_switchgear")
  set_meta("voltage_is_simulated", false)
+ set_meta("visual_revision", "photo_referenced_compact_mv_phase2")
+ set_meta("reference_ids", ["SMA_SUCCESSOR_SITE_PLATFORM", "SMA_MVPS_DIMENSION_ENVELOPE"])
+ set_meta("identity", "compact_mv_transformer_switchgear_not_hv_collector")
+ set_meta("has_pv_inverters", false)
+ set_meta("visible_roles", ["raised_steel_frame", "concrete_supports", "service_platform", "radiator_fins", "three_phase_bushings", "transformer_mesh_guard", "enclosed_switchgear"])
  set_meta("geometry_assumption", "One illustrative MV transformer and enclosed switchgear; not OEM CAD, capacity, voltage rating or protection design.")
  _mat("tank", "778e87", 0.32, 0.48)
  _mat("edge", "556d67", 0.40, 0.50)
@@ -22,10 +28,65 @@ func _init() -> void:
  _mat("concrete", "aeb3af", 0.0, 0.93)
  _mat("warning", "e4b947", 0.05, 0.65)
  _mat("glass", "254450", 0.25, 0.26)
+ _platform()
  _transformer()
  _switchgear()
  _connections()
+ _mesh_guard()
  _bake()
+
+
+func _platform() -> void:
+ # Photo-inspected SMA field platform vocabulary only. There are deliberately
+ # no PV inverters, HV busbars or additional conversion stages in this unit.
+ for x in [-3.12,0.0,3.12]:
+  for z in [-2.40,2.40]:
+   _box("OuterSupportPier",Vector3(.42,.18,.50),Vector3(x,.09,z),"concrete")
+ for z in [-2.67,2.67]:
+  _box("OuterLongitudinalChannel",Vector3(6.80,.16,.18),Vector3(0,.25,z),"steel")
+ for x in [-3.31,0,3.31]:
+  _box("PlatformCrossBeam",Vector3(.18,.16,5.52),Vector3(x,.25,0),"steel")
+ for z in [-2.16,2.16]:
+  _box("ServiceWalkway",Vector3(6.62,.055,.82),Vector3(0,.34,z),"edge")
+  for x in range(25):
+   _box("WalkwayGratingRib",Vector3(.025,.012,.80),Vector3(-3.18+x*.265,.374,z),"steel")
+ for x in [-2.9,2.9]:
+  _box("AccessTread",Vector3(.65,.13,.28),Vector3(x,.065,-2.60),"edge")
+ for z in [-2.63,2.63]:
+  for x in [-3.15,3.15]:
+   _box("PlatformAnchorPlate",Vector3(.24,.035,.24),Vector3(x,.35,z),"steel")
+   _cylinder("AnchorBolt",.025,.025,.045,Vector3(x,.39,z),"steel",8)
+
+func _mesh_guard() -> void:
+ # Thin explicit mesh rods instead of an opaque rectangle. Their proportions
+ # echo the viewed galvanized guard, but are not certified electrical clearance.
+ var left:float=-3.30
+ var right:float=.28
+ for x in [left,right]:
+  for z in [-1.55,1.55]:
+   _box("GuardCornerPost",Vector3(.065,2.54,.065),Vector3(x,1.63,z),"steel")
+ for z in [-1.55,1.55]:
+  for y in [.39,2.85]:_box("GuardHorizontalRail",Vector3(right-left,.055,.055),Vector3((left+right)*.5,y,z),"steel")
+  for i in 15:
+   var x:float=left+.10+i*(right-left-.2)/14
+   _tube("GuardVerticalMeshWire",Vector3(x,.42,z),Vector3(x,2.82,z),.007,"steel",6)
+  for i in 11:
+   var y:float=.43+i*.235
+   _tube("GuardHorizontalMeshWire",Vector3(left+.04,y,z),Vector3(right-.04,y,z),.007,"steel",6)
+ # Outer side guard; cabinet side is closed by the switchgear/cable passage.
+ for y in [.39,2.85]:_box("GuardSideRail",Vector3(.055,.055,3.10),Vector3(left,y,0),"steel")
+ for i in 13:
+  var z:float=-1.45+i*2.9/12
+  _tube("GuardSideVerticalWire",Vector3(left,.42,z),Vector3(left,2.82,z),.007,"steel",6)
+ for i in 11:
+  var y:float=.43+i*.235
+  _tube("GuardSideHorizontalWire",Vector3(left,y,-1.50),Vector3(left,y,1.50),.007,"steel",6)
+ _box("GuardDoorCenterStile",Vector3(.04,2.43,.065),Vector3(-1.51,1.63,-1.55),"steel")
+ _box("GuardDoorLatch",Vector3(.14,.045,.08),Vector3(-1.43,1.5,-1.59),"dark")
+ _box("GuardWarningPlate",Vector3(.27,.21,.025),Vector3(-1.90,1.8,-1.59),"warning")
+ _box("GuardWarningMark",Vector3(.018,.10,.008),Vector3(-1.90,1.81,-1.608),"dark")
+ # Structural cross bracing at the enclosure side, not a live conductor.
+ _tube("PlatformDiagonalBrace",Vector3(3.01,.37,1.36),Vector3(3.01,2.70,-.90),.025,"steel",8)
 
 func _transformer() -> void:
  # Local equipment foundations, not a site-sized platform or display ground.
@@ -145,12 +206,17 @@ func _cable(points: Array) -> void:
  _tube("InsulatedMVLead",previous,points[-1],.025,"dark")
 
 func _mat(key: String, color: String, metallic: float, roughness: float) -> void:
+ if _shared_materials.has(key):
+  _materials[key] = _shared_materials[key]
+  _parts[key] = []
+  return
  var m := StandardMaterial3D.new()
  m.resource_name = "MV_"+key
  m.albedo_color = Color(color)
  m.metallic = metallic
  m.roughness = roughness
  _materials[key] = m
+ _shared_materials[key] = m
  _parts[key] = []
 
 func _mesh(label: String, mesh: Mesh, at: Vector3, mat: String) -> MeshInstance3D:

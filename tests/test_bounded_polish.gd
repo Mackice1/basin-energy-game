@@ -1,4 +1,5 @@
 extends SceneTree
+const CurrentWorldVersion = preload("res://scripts/world_game.gd")
 ## V16.2 bounded presentation regression. Deterministic terrain and pointer
 ## fixtures keep these checks about UI isolation, not native mouse coverage.
 const Previous = preload("res://tests/test_interaction_polish.gd")
@@ -163,5 +164,5 @@ func test_repeated_save_reads() -> void:
 		check(FileAccess.get_sha256(path) == digest, "cycle %d read and presentation never rewrites input file" % iteration)
 		check(game.paused and game.speed == 1 and game.accumulator == 0, "cycle %d restore resets only playback controls" % iteration)
 	check(game.device(STORE).state.energy_mwhth == 0.625 and game.device(BATTERY).state.energy_mwh == 0.25 and game.elapsed_s == 123.5, "all repeated flows retain both nonzero stocks and clock")
-	check(game.state().schema == 13 and game.state().model_version == 22 and game.state().dimension_profile == "metric_v1", "bounded UI polish preserves model/schema and metric dimension profile")
+	check(game.state().schema == CurrentWorldVersion.CURRENT_SAVE_SCHEMA and game.state().model_version == CurrentWorldVersion.CURRENT_MODEL_VERSION and game.state().dimension_profile == "metric_v1", "bounded UI polish preserves model/schema and metric dimension profile")
 	DirAccess.remove_absolute(path)
