@@ -1,0 +1,22 @@
+{
+  "assets/models/electric_boiler.glb": {
+    "before": "51712092b7b9b17797b1edbcda97327e3d8631a8b23762cdaf0c09c5752cbe75",
+    "after": "5d679d1b23815f941ae564915b830ec377130afea2ece185fac471ffa379899b"
+  },
+  "assets/models/thermal_store.glb": {
+    "before": "aff2ea780bfee355eb84e1ddef0b2724a6bae2cf83fe02484001c73c82ad99d1",
+    "after": "fca65c8ff27d3d0e32e1f1d44376f0c79940959fe3723b3a16c922a6408f3493"
+  },
+  "assets/models/heat_exchanger.glb": {
+    "before": "94844fc18bb04d1e813728d243eca23fcd107cc42120d9fcfa389db610cf1de6",
+    "after": "5b2faebd7f18eac36acad6a84fec26ca913bd174a89a8fe13fdb5d51b80a9ede"
+  },
+  "assets/models/thermal_station.glb": {
+    "before": "9f49cd83571290b5ef8d502c3b9919daeb929e3656cbe63a45ae23f73f66783b",
+    "after": "46e65584d8591f021aeeaa5b8c0a536d0258acf5a2a188ea558499a524c7809f"
+  },
+  "assets/models/wind_turbine.glb": {
+    "before": "d4d90874aa735175ed8b9881f36e98d670451e098833c782b93a3165ee1e12c8",
+    "after": "ce372c5112834873258ba590708ae1abbadcae2e7b23780b9d7cc0de694353c8"
+  }
+}

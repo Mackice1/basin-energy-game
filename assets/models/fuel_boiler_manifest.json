@@ -1,0 +1,113 @@
+{
+  "generator": "art_source/blender/build_fuel_boiler.py",
+  "blender": "4.3.2",
+  "world_units_per_meter": 0.1,
+  "visual_dimension_profile": "metric_v1",
+  "assets": {
+    "fuel_boiler": {
+      "glb": "assets/models/fuel_boiler.glb",
+      "source": "art_source/blender/fuel_boiler.blend",
+      "source_scene": "fuel_boiler",
+      "triangles": 4168,
+      "mesh_objects": 1,
+      "materials": 7,
+      "material_surfaces": 7,
+      "bytes": 186248,
+      "bounds_godot": [
+        [
+          -0.25,
+          0.0,
+          -0.15
+        ],
+        [
+          0.25,
+          0.45,
+          0.15
+        ]
+      ],
+      "bounds_m": [
+        [
+          -2.5,
+          0.0,
+          -1.5
+        ],
+        [
+          2.5,
+          4.5,
+          1.5
+        ]
+      ],
+      "horizontal_radius": 0.2892581,
+      "footprint_radius": 0.570087712549569,
+      "ports_godot": {
+        "Port_ac_in": [
+          -0.015,
+          0.056,
+          -0.149
+        ],
+        "Port_heat_out": [
+          0.184,
+          0.063,
+          -0.144
+        ]
+      },
+      "ports": {
+        "ac_in": [
+          -0.015,
+          0.056,
+          -0.149
+        ],
+        "heat_out": [
+          0.184,
+          0.063,
+          -0.144
+        ]
+      },
+      "anchors_godot": {
+        "ProfileLabelAnchor": [
+          0.0,
+          0.262,
+          -0.025
+        ]
+      },
+      "profile_anchor": [
+        0.0,
+        0.262,
+        -0.025
+      ],
+      "dimensions_m": [
+        5.0,
+        3.0,
+        4.5
+      ],
+      "body_dimensions_m": [
+        5.0,
+        3.0,
+        4.5
+      ],
+      "world_units_per_meter": 0.1,
+      "visual_dimension_profile": "metric_v1",
+      "root": "FuelBoiler",
+      "root_transform": "identity",
+      "coordinate_system": "Godot Y-up",
+      "textures": 0,
+      "visual_only": true,
+      "capacity_added": 0.0,
+      "generator": "art_source/blender/build_fuel_boiler.py",
+      "source_reference": "docs/FUEL_BOILER_SOURCES.md",
+      "reference_boiler_casing_m": [
+        3.48,
+        1.51,
+        1.73
+      ],
+      "recognition_features": [
+        "combustion_door",
+        "forced_draft_burner",
+        "gas_train",
+        "flue_stack",
+        "hot_water_supply_return"
+      ]
+    }
+  },
+  "source_bytes": 1085748
+}

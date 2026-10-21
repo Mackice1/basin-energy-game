@@ -1,0 +1,63 @@
+{
+  "license": "CC0-1.0",
+  "authorship": "Original procedural generation; no third-party imagery or elevation data.",
+  "generator": "scripts/generate_landscape.py",
+  "seed": 240514,
+  "heightfield": {
+    "file": "height.raw",
+    "format": "IEEE754 float32 little-endian, row-major",
+    "shape": [
+      1024,
+      1024
+    ],
+    "spacing_world_units": 0.25,
+    "bounds_world_units": {
+      "x_min": -128,
+      "z_min": -128,
+      "x_max_exclusive": 128,
+      "z_max_exclusive": 128
+    },
+    "axis": "row increases +Z south; column increases +X east; elevation is +Y",
+    "world_meters_per_unit": 25,
+    "minimum": -0.8860114812850952,
+    "maximum": 23.028018951416016,
+    "byte_count": 4194304
+  },
+  "materials": {
+    "resolution": [
+      512,
+      512
+    ],
+    "tileable": true,
+    "names": [
+      "gravel",
+      "bedrock",
+      "sand",
+      "salt"
+    ],
+    "normal_convention": "RGB tangent normal, +Y; invert green if a consumer requires -Y",
+    "material_ids": {
+      "gravel": 0,
+      "bedrock": 1,
+      "sand": 2,
+      "salt": 3
+    },
+    "albedo_alpha": "height",
+    "normal_alpha": "roughness 230/255",
+    "albedo_color_space": "sRGB",
+    "normal_color_space": "linear"
+  },
+  "landforms": {
+    "northwest_mountains": "Compact eroded groups, not perimeter walls; northernmost main peaks Z=-48.",
+    "construction_plain": "Central and southern gravel plain has broad regional slope and very low relief.",
+    "playa_center": [
+      32,
+      38
+    ],
+    "dry_channel": "x=-28+0.2*z+7*sin(0.065*z)",
+    "southeast_dunes_center": [
+      74,
+      40
+    ]
+  }
+}

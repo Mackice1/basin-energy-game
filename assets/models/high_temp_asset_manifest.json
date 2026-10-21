@@ -1,0 +1,123 @@
+{
+  "generator": "tools/build_high_temp_assets.py",
+  "assets": {
+    "parabolic_trough": {
+      "glb": "assets/models/parabolic_trough.glb",
+      "source": "art_source/blender/high_temp_assets.blend",
+      "world_units_per_meter": 0.1,
+      "bounds_m": [
+        [
+          -2.9067108631134033,
+          0.0,
+          -6.300000190734863
+        ],
+        [
+          2.9067108631134033,
+          5.245001792907715,
+          6.300000190734863
+        ]
+      ],
+      "ports": {
+        "ac_in": [
+          -0.1,
+          0.05,
+          -0.63
+        ],
+        "heat_out": [
+          0.1,
+          0.05,
+          -0.63
+        ]
+      },
+      "bytes": 208640,
+      "profile_anchor": [
+        0,
+        0.5545001792907714,
+        0
+      ]
+    },
+    "high_temp_store": {
+      "glb": "assets/models/high_temp_store.glb",
+      "source": "art_source/blender/high_temp_assets.blend",
+      "world_units_per_meter": 0.1,
+      "bounds_m": [
+        [
+          -2.8142123222351074,
+          0.0,
+          -1.3036589622497559
+        ],
+        [
+          2.8142123222351074,
+          2.2622122764587402,
+          0.9081060886383057
+        ]
+      ],
+      "ports": {
+        "heat_in": [
+          -0.0906106100015457,
+          0.034999999999999996,
+          -0.1206106100015457
+        ],
+        "heat_out": [
+          0.0906106100015457,
+          0.034999999999999996,
+          -0.1206106100015457
+        ]
+      },
+      "bytes": 277856,
+      "profile_anchor": [
+        0,
+        0.256221227645874,
+        0
+      ]
+    },
+    "oil_water_exchanger": {
+      "glb": "assets/models/oil_water_exchanger.glb",
+      "source": "art_source/blender/high_temp_assets.blend",
+      "world_units_per_meter": 0.1,
+      "bounds_m": [
+        [
+          -1.5,
+          0.0,
+          -1.0
+        ],
+        [
+          1.5,
+          1.5,
+          1.0
+        ]
+      ],
+      "ports": {
+        "hot_in": [
+          -0.125,
+          0.045000000000000005,
+          -0.09000000000000001
+        ],
+        "warm_out": [
+          0.125,
+          0.045000000000000005,
+          -0.09000000000000001
+        ],
+        "ac_in": [
+          0.0,
+          0.04000000000000001,
+          -0.09000000000000001
+        ]
+      },
+      "bytes": 316924,
+      "profile_anchor": [
+        0,
+        0.18000000000000002,
+        0
+      ]
+    }
+  },
+  "aperture_m2": 69.24,
+  "focal_length_m": 1.71,
+  "axis_height_m": 3.5,
+  "sweep_radius_m": 3.25,
+  "tank_reference_capacity_mwhth": 0.2,
+  "enthalpy_difference_kj_kg": 238,
+  "hot_density_kg_m3": 809,
+  "freeboard_fraction": 0.2
+}

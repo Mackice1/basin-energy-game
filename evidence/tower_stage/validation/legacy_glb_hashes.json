@@ -1,0 +1,82 @@
+[
+  {
+    "path": "assets/models/electric_boiler.glb",
+    "sha256": "51712092b7b9b17797b1edbcda97327e3d8631a8b23762cdaf0c09c5752cbe75",
+    "unchanged": true
+  },
+  {
+    "path": "assets/models/feedwater_pump.glb",
+    "sha256": "2f7794b951a5156b1e057ba0489b48fac40a740d1a48560e5f86ca36f9e951d2",
+    "unchanged": true
+  },
+  {
+    "path": "assets/models/fuel_boiler.glb",
+    "sha256": "24e9691e03d1c40852bae40c8d5ee1d1aaafcc01b6f6f476ebe6befe5e97706a",
+    "unchanged": true
+  },
+  {
+    "path": "assets/models/heat_exchanger.glb",
+    "sha256": "94844fc18bb04d1e813728d243eca23fcd107cc42120d9fcfa389db610cf1de6",
+    "unchanged": true
+  },
+  {
+    "path": "assets/models/high_temp_store.glb",
+    "sha256": "cab477a5dc47b978ea0921a2ebcd51ea8f8efe1c4c33408b0ed99ca2cc960dfa",
+    "unchanged": true
+  },
+  {
+    "path": "assets/models/oil_water_exchanger.glb",
+    "sha256": "0c0d7989ff85295520816b8fda19fe9fefacad0863b95ba0f235d8727608c8ff",
+    "unchanged": true
+  },
+  {
+    "path": "assets/models/parabolic_trough.glb",
+    "sha256": "def72054c1b76a42257195cf897171b1e349b3195d5b45bded9f5c03c426181c",
+    "unchanged": true
+  },
+  {
+    "path": "assets/models/solar_array.glb",
+    "sha256": "8caa78ae076f2b67e305c6c16e45190ffbfbe2a70da04de1e20b6b0377ed765f",
+    "unchanged": true
+  },
+  {
+    "path": "assets/models/solar_thermal.glb",
+    "sha256": "2d0e7c304740401d46c0e2a379fa6c859af870365344c6dfbf425d4be3c55b60",
+    "unchanged": true
+  },
+  {
+    "path": "assets/models/steam_condenser.glb",
+    "sha256": "e6e7cd82903ba8aa9e9a12f1908c6a25e3c2e7c331814f2bde426751b0bf577b",
+    "unchanged": true
+  },
+  {
+    "path": "assets/models/steam_generator.glb",
+    "sha256": "9755ed50bd151ae3c408241cf6c30360f85d935aae96cd527ef7d97aca6d6188",
+    "unchanged": true
+  },
+  {
+    "path": "assets/models/steam_turbine.glb",
+    "sha256": "f3e48bf08c8090c4650e9f591726bfbcad6cd7a1d7737b152e783d798a48eb88",
+    "unchanged": true
+  },
+  {
+    "path": "assets/models/thermal_station.glb",
+    "sha256": "9f49cd83571290b5ef8d502c3b9919daeb929e3656cbe63a45ae23f73f66783b",
+    "unchanged": true
+  },
+  {
+    "path": "assets/models/thermal_store.glb",
+    "sha256": "aff2ea780bfee355eb84e1ddef0b2724a6bae2cf83fe02484001c73c82ad99d1",
+    "unchanged": true
+  },
+  {
+    "path": "assets/models/tower_station_preview.glb",
+    "sha256": "37ee52446bf1d58141f1c6e7056ab81e730c75912737100602a5eb6253939f2e",
+    "unchanged": true
+  },
+  {
+    "path": "assets/models/wind_turbine.glb",
+    "sha256": "d4d90874aa735175ed8b9881f36e98d670451e098833c782b93a3165ee1e12c8",
+    "unchanged": true
+  }
+]

@@ -1,0 +1,58 @@
+{
+  "assets": {
+    "salt_steam_generator": {
+      "glb": "assets/models/salt_steam_generator.glb",
+      "source": "art_source/blender/rankine_assets.blend",
+      "world_units_per_meter": 0.1,
+      "bounds_m": [
+        [
+          -2.0,
+          0.0,
+          -1.25
+        ],
+        [
+          2.0,
+          3.0,
+          1.25
+        ]
+      ],
+      "ports": {
+        "ac_in": [
+          -0.07500000000000001,
+          0.05,
+          -0.11000000000000001
+        ],
+        "feed_in": [
+          0.05,
+          0.05,
+          -0.11000000000000001
+        ],
+        "steam_out": [
+          0.17500000000000002,
+          0.265,
+          -0.11000000000000001
+        ],
+        "salt_in": [
+          -0.17500000000000002,
+          0.05500000000000001,
+          -0.11000000000000001
+        ]
+      },
+      "bytes": 46676,
+      "profile_anchor": [
+        0,
+        0.33,
+        0
+      ],
+      "rating_parameter": "capacity_mwth",
+      "reference_rating": 0.1,
+      "unit_dimensions_m": [
+        4,
+        3,
+        2.5
+      ],
+      "geometry_assumption": "Original teaching skid envelope shared with oil SG; separately typed molten salt/water ports; no vendor sizing or alloy qualification claim.",
+      "generator": "tools/build_salt_sg_asset.py"
+    }
+  }
+}

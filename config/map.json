@@ -1,0 +1,16 @@
+{
+  "title": "荒原 / BASIN 01",
+  "seed": 241014,
+  "world_size": [
+    200,
+    140
+  ],
+  "meters_per_unit": 25,
+  "max_build_slope_degrees": 8.0,
+  "water_supply_m3_day": 4800,
+  "grid_export_mw": 4,
+  "gas_capacity_m3_hour": 90000,
+  "coal_capacity_t_day": 8000,
+  "note": "合成场景。资源、供应容量和建设阈值均为玩法示意，不代表真实场址或工程标准。",
+  "low_spec": true
+}

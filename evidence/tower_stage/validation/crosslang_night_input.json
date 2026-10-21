@@ -1,0 +1,247 @@
+{
+  "schema_version": 6,
+  "devices": [
+    {
+      "id": 0,
+      "kind": "wind",
+      "params": {}
+    },
+    {
+      "id": 1,
+      "kind": "station",
+      "params": {
+        "capacity_mw": 10,
+        "loss_fraction": 0
+      }
+    },
+    {
+      "id": 2,
+      "kind": "solar_tower_receiver",
+      "params": {},
+      "model_profile": "tower_stage1_v1",
+      "model_profile_version": 1
+    },
+    {
+      "id": 3,
+      "kind": "salt_steam_generator",
+      "params": {},
+      "model_profile": "tower_stage1_v1",
+      "model_profile_version": 1
+    },
+    {
+      "id": 4,
+      "kind": "steam_turbine",
+      "params": {},
+      "model_profile": "rankine_stage1_v1",
+      "model_profile_version": 1
+    },
+    {
+      "id": 5,
+      "kind": "steam_condenser",
+      "params": {},
+      "model_profile": "rankine_stage1_v1",
+      "model_profile_version": 1
+    },
+    {
+      "id": 6,
+      "kind": "feedwater_pump",
+      "params": {},
+      "model_profile": "rankine_stage1_v1",
+      "model_profile_version": 1
+    },
+    {
+      "id": 7,
+      "kind": "load",
+      "params": {}
+    },
+    {
+      "id": 8,
+      "kind": "molten_salt_store",
+      "params": {},
+      "model_profile": "tower_stage1_v1",
+      "model_profile_version": 1,
+      "state": {
+        "energy_mwhth": 0.5
+      }
+    }
+  ],
+  "links": [
+    {
+      "from": 0,
+      "to": 1,
+      "capacity_mw": 10,
+      "loss_fraction": 0
+    },
+    {
+      "from": 1,
+      "to": 2,
+      "capacity_mw": 10,
+      "loss_fraction": 0,
+      "from_port": "out",
+      "to_port": "ac_in",
+      "carrier": "electricity_ac",
+      "unit": "MW",
+      "voltage_level": "AC_BUS"
+    },
+    {
+      "from": 1,
+      "to": 3,
+      "capacity_mw": 10,
+      "loss_fraction": 0,
+      "from_port": "out",
+      "to_port": "ac_in",
+      "carrier": "electricity_ac",
+      "unit": "MW",
+      "voltage_level": "AC_BUS"
+    },
+    {
+      "from": 1,
+      "to": 5,
+      "capacity_mw": 10,
+      "loss_fraction": 0,
+      "from_port": "out",
+      "to_port": "ac_in",
+      "carrier": "electricity_ac",
+      "unit": "MW",
+      "voltage_level": "AC_BUS"
+    },
+    {
+      "from": 1,
+      "to": 6,
+      "capacity_mw": 10,
+      "loss_fraction": 0,
+      "from_port": "out",
+      "to_port": "ac_in",
+      "carrier": "electricity_ac",
+      "unit": "MW",
+      "voltage_level": "AC_BUS"
+    },
+    {
+      "from": 4,
+      "to": 1,
+      "capacity_mw": 10,
+      "loss_fraction": 0,
+      "from_port": "ac_out",
+      "to_port": "in",
+      "carrier": "electricity_ac",
+      "unit": "MW"
+    },
+    {
+      "from": 1,
+      "to": 7,
+      "capacity_mw": 10,
+      "loss_fraction": 0
+    },
+    {
+      "from": 1,
+      "to": 8,
+      "capacity_mw": 10,
+      "loss_fraction": 0,
+      "from_port": "out",
+      "to_port": "ac_in",
+      "carrier": "electricity_ac",
+      "unit": "MW",
+      "voltage_level": "AC_BUS"
+    },
+    {
+      "from_port": "heat_out",
+      "to_port": "salt_in",
+      "carrier": "heat_salt",
+      "unit": "MWth",
+      "grade_id": "salt_565_290",
+      "capacity_mwth": 1.0,
+      "loss_fraction": 0,
+      "from": 2,
+      "to": 3
+    },
+    {
+      "from_port": "heat_out",
+      "to_port": "heat_in",
+      "carrier": "heat_salt",
+      "unit": "MWth",
+      "grade_id": "salt_565_290",
+      "capacity_mwth": 1.0,
+      "loss_fraction": 0,
+      "from": 2,
+      "to": 8
+    },
+    {
+      "from_port": "heat_out",
+      "to_port": "salt_in",
+      "carrier": "heat_salt",
+      "unit": "MWth",
+      "grade_id": "salt_565_290",
+      "capacity_mwth": 1.0,
+      "loss_fraction": 0,
+      "from": 8,
+      "to": 3
+    },
+    {
+      "from": 3,
+      "to": 4,
+      "from_port": "steam_out",
+      "to_port": "steam_in",
+      "carrier": "water_steam",
+      "unit": "kg/s",
+      "grade_id": "rankine_live_v1",
+      "mass_flow_capacity_kg_s": 0.05,
+      "loss_fraction": 0
+    },
+    {
+      "from": 4,
+      "to": 5,
+      "from_port": "exhaust_out",
+      "to_port": "exhaust_in",
+      "carrier": "water_steam",
+      "unit": "kg/s",
+      "grade_id": "rankine_exhaust_v1",
+      "mass_flow_capacity_kg_s": 0.05,
+      "loss_fraction": 0
+    },
+    {
+      "from": 5,
+      "to": 6,
+      "from_port": "condensate_out",
+      "to_port": "condensate_in",
+      "carrier": "water_steam",
+      "unit": "kg/s",
+      "grade_id": "rankine_condensate_v1",
+      "mass_flow_capacity_kg_s": 0.05,
+      "loss_fraction": 0
+    },
+    {
+      "from": 6,
+      "to": 3,
+      "from_port": "feed_out",
+      "to_port": "feed_in",
+      "carrier": "water_steam",
+      "unit": "kg/s",
+      "grade_id": "rankine_feedwater_v1",
+      "mass_flow_capacity_kg_s": 0.05,
+      "loss_fraction": 0
+    }
+  ],
+  "steps": [
+    {
+      "time_s": 0,
+      "dt_h": 1.0,
+      "available_mw": {
+        "0": 0.02
+      },
+      "demand_mw": {
+        "7": 1.0
+      },
+      "heat_demand_mwth": {},
+      "weather": {
+        "dni_wm2": 800,
+        "solar_altitude_deg": -10,
+        "solar_azimuth_deg": 180,
+        "air_temp_c": 25,
+        "is_day": false
+      }
+    }
+  ],
+  "options": {
+    "timeout_s": 30
+  }
+}

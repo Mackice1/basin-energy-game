@@ -1,0 +1,32 @@
+.godot/
+*.tmp
+__pycache__/
+*.py[cod]
+*.log
+*.orig
+*.bak
+.DS_Store
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Local user state and machine-only configuration.
+user_data/
+user-data/
+saves/
+savegames/
+export_credentials.cfg
+
+# Generated QA outputs stay local. Only reviewed synthetic fixtures are kept.
+evidence/**
+!evidence/**/
+!evidence/**/.gitkeep
+!evidence/README.md
+!evidence/tower_stage/validation/legacy_glb_hashes.json
+!evidence/tower_stage/validation/crosslang_day_input.json
+!evidence/tower_stage/validation/crosslang_day_output.json
+!evidence/tower_stage/validation/crosslang_night_input.json
+!evidence/tower_stage/validation/crosslang_night_output.json
+!evidence/polish/performance/xorg_perf.conf

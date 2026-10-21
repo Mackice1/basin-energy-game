@@ -1,0 +1,404 @@
+{
+  "generator": "tools/build_thermal_assets.py",
+  "blender": "4.3.2",
+  "world_units_per_meter": 0.1,
+  "visual_dimension_profile": "metric_v1",
+  "assets": {
+    "electric_boiler": {
+      "glb": "assets/models/electric_boiler.glb",
+      "source": "art_source/blender/thermal_assets.blend",
+      "source_scene": "electric_boiler",
+      "triangles": 4124,
+      "mesh_objects": 1,
+      "materials": 7,
+      "material_surfaces": 7,
+      "bytes": 194188,
+      "bounds_godot": [
+        [
+          -0.2,
+          0.0,
+          -0.125
+        ],
+        [
+          0.2,
+          0.25,
+          0.125
+        ]
+      ],
+      "bounds_m": [
+        [
+          -2.0,
+          0.0,
+          -1.25
+        ],
+        [
+          2.0,
+          2.5,
+          1.25
+        ]
+      ],
+      "horizontal_radius": 0.2341854,
+      "footprint_radius": 0.275,
+      "ports_godot": {
+        "Port_ac_in": [
+          -0.15273,
+          0.05642,
+          -0.125
+        ],
+        "Port_heat_out": [
+          0.16,
+          0.05642,
+          -0.125
+        ]
+      },
+      "ports": {
+        "ac_in": [
+          -0.15273,
+          0.05642,
+          -0.125
+        ],
+        "heat_out": [
+          0.16,
+          0.05642,
+          -0.125
+        ]
+      },
+      "anchors_godot": {
+        "Return_heat_out": [
+          0.1330909,
+          0.0347222,
+          -0.125
+        ],
+        "ProfileLabelAnchor": [
+          0.0,
+          0.2560764,
+          0.0123239
+        ]
+      },
+      "profile_anchor": [
+        0.0,
+        0.2560764,
+        0.0123239
+      ],
+      "dimensions_m": [
+        4.0,
+        2.5,
+        2.5
+      ],
+      "body_dimensions_m": [
+        4.0,
+        2.5,
+        2.5
+      ],
+      "world_units_per_meter": 0.1,
+      "visual_dimension_profile": "metric_v1",
+      "root": "ElectricBoiler",
+      "root_transform": "identity",
+      "coordinate_system": "Godot Y-up",
+      "textures": 0,
+      "visual_only": true,
+      "capacity_added": 0.0
+    },
+    "thermal_store": {
+      "glb": "assets/models/thermal_store.glb",
+      "source": "art_source/blender/thermal_assets.blend",
+      "source_scene": "thermal_store",
+      "triangles": 7928,
+      "mesh_objects": 1,
+      "materials": 6,
+      "material_surfaces": 6,
+      "bytes": 326400,
+      "bounds_godot": [
+        [
+          -0.425,
+          0.0,
+          -0.25
+        ],
+        [
+          0.425,
+          0.7635,
+          0.25
+        ]
+      ],
+      "bounds_m": [
+        [
+          -4.25,
+          0.0,
+          -2.5
+        ],
+        [
+          4.25,
+          7.635,
+          2.5
+        ]
+      ],
+      "horizontal_radius": 0.4908108,
+      "footprint_radius": 0.55,
+      "ports_godot": {
+        "Port_heat_in": [
+          -0.37,
+          0.075,
+          -0.25
+        ],
+        "Port_heat_out": [
+          0.37,
+          0.075,
+          -0.25
+        ]
+      },
+      "ports": {
+        "heat_in": [
+          -0.37,
+          0.075,
+          -0.25
+        ],
+        "heat_out": [
+          0.37,
+          0.075,
+          -0.25
+        ]
+      },
+      "anchors_godot": {
+        "Return_heat_in": [
+          -0.37,
+          0.047,
+          -0.25
+        ],
+        "Return_heat_out": [
+          0.37,
+          0.047,
+          -0.25
+        ],
+        "ThermalSOCAnchor": [
+          0.0,
+          0.16,
+          -0.223
+        ],
+        "ProfileLabelAnchor": [
+          0.0,
+          0.805,
+          -0.0
+        ]
+      },
+      "profile_anchor": [
+        0.0,
+        0.805,
+        -0.0
+      ],
+      "dimensions_m": [
+        8.5,
+        5.0,
+        7.635
+      ],
+      "body_dimensions_m": [
+        8.5,
+        5.0,
+        7.635
+      ],
+      "world_units_per_meter": 0.1,
+      "visual_dimension_profile": "metric_v1",
+      "root": "ThermalStore",
+      "root_transform": "identity",
+      "coordinate_system": "Godot Y-up",
+      "textures": 0,
+      "visual_only": true,
+      "capacity_added": 0.0,
+      "soc_anchor": [
+        0.0,
+        0.16,
+        -0.223
+      ]
+    },
+    "heat_exchanger": {
+      "glb": "assets/models/heat_exchanger.glb",
+      "source": "art_source/blender/thermal_assets.blend",
+      "source_scene": "heat_exchanger",
+      "triangles": 6516,
+      "mesh_objects": 1,
+      "materials": 7,
+      "material_surfaces": 7,
+      "bytes": 352196,
+      "bounds_godot": [
+        [
+          -0.15,
+          0.0,
+          -0.1
+        ],
+        [
+          0.15,
+          0.18,
+          0.1
+        ]
+      ],
+      "bounds_m": [
+        [
+          -1.5,
+          0.0,
+          -1.0
+        ],
+        [
+          1.5,
+          1.8,
+          1.0
+        ]
+      ],
+      "horizontal_radius": 0.1789746,
+      "footprint_radius": 0.225,
+      "ports_godot": {
+        "Port_hot_in": [
+          -0.11727,
+          0.04014,
+          -0.1
+        ],
+        "Port_warm_out": [
+          0.11727,
+          0.04014,
+          -0.1
+        ]
+      },
+      "ports": {
+        "hot_in": [
+          -0.11727,
+          0.04014,
+          -0.1
+        ],
+        "warm_out": [
+          0.11727,
+          0.04014,
+          -0.1
+        ]
+      },
+      "anchors_godot": {
+        "Return_hot_in": [
+          -0.0970909,
+          0.0246998,
+          -0.1
+        ],
+        "Return_warm_out": [
+          0.0970909,
+          0.0246998,
+          -0.1
+        ],
+        "ProfileLabelAnchor": [
+          0.0,
+          0.1975986,
+          0.0026316
+        ]
+      },
+      "profile_anchor": [
+        0.0,
+        0.1975986,
+        0.0026316
+      ],
+      "dimensions_m": [
+        3.0,
+        2.0,
+        1.8
+      ],
+      "body_dimensions_m": [
+        3.0,
+        2.0,
+        1.8
+      ],
+      "world_units_per_meter": 0.1,
+      "visual_dimension_profile": "metric_v1",
+      "root": "HeatExchanger",
+      "root_transform": "identity",
+      "coordinate_system": "Godot Y-up",
+      "textures": 0,
+      "visual_only": true,
+      "capacity_added": 0.0
+    },
+    "thermal_station": {
+      "glb": "assets/models/thermal_station.glb",
+      "source": "art_source/blender/thermal_assets.blend",
+      "source_scene": "thermal_station",
+      "triangles": 10008,
+      "mesh_objects": 1,
+      "materials": 7,
+      "material_surfaces": 7,
+      "bytes": 492752,
+      "bounds_godot": [
+        [
+          -4.0,
+          0.0,
+          -3.0
+        ],
+        [
+          4.0,
+          0.91,
+          3.0
+        ]
+      ],
+      "bounds_m": [
+        [
+          -40.0,
+          0.0,
+          -30.0
+        ],
+        [
+          40.0,
+          9.1,
+          30.0
+        ]
+      ],
+      "horizontal_radius": 4.9952041,
+      "footprint_radius": 5.0,
+      "ports_godot": {
+        "Port_ac_in": [
+          -3.9,
+          0.105,
+          0.8
+        ],
+        "Port_heat_out": [
+          3.9,
+          0.105,
+          0.8
+        ]
+      },
+      "ports": {
+        "ac_in": [
+          -3.9,
+          0.105,
+          0.8
+        ],
+        "heat_out": [
+          3.9,
+          0.105,
+          0.8
+        ]
+      },
+      "anchors_godot": {
+        "ProfileLabelAnchor": [
+          0.0,
+          1.0,
+          -0.0
+        ]
+      },
+      "profile_anchor": [
+        0.0,
+        1.0,
+        -0.0
+      ],
+      "dimensions_m": [
+        80.0,
+        60.0,
+        9.1
+      ],
+      "body_dimensions_m": [
+        80.0,
+        60.0,
+        9.1
+      ],
+      "world_units_per_meter": 0.1,
+      "visual_dimension_profile": "metric_v1",
+      "root": "ThermalStation",
+      "root_transform": "identity",
+      "coordinate_system": "Godot Y-up",
+      "textures": 0,
+      "visual_only": true,
+      "capacity_added": 0.0
+    }
+  },
+  "source_bytes": 4765544
+}
