@@ -101,6 +101,7 @@ func run() -> void:
 	test_selection_camera_and_entry()
 	test_drag_transactions()
 	test_link_and_build_previews()
+	test_right_click_cancel_placement()
 	await test_station_navigation()
 	test_disk_roundtrip()
 	for key in ["terrain","infrastructure","overlay","confirmation","param_dialog","param_errors","param_target","data_dialog","data_list","line_dialog","line_capacity","line_loss","line_choice","station_interior"]:
@@ -204,6 +205,33 @@ func test_link_and_build_previews() -> void:
 	game.cancel_interaction(); game.cancel_interaction()
 	check(game.ghost == null and game.placement_outline == null and game.selected_id == -2, "repeated cancel leaves no preview or stale selection")
 	snapshot_unchanged(before,revision,undos,"build preview and repeated cancel")
+
+func test_right_click_cancel_placement() -> void:
+	var before := frozen(); var revision := game.scene_revision; var undos := game.undo_states.size()
+	var right := InputEventMouseButton.new()
+	right.button_index = MOUSE_BUTTON_RIGHT; right.position = Vector2(500,400)
+	for kind in ["wind", "pv", "battery", "thermal_station"]:
+		game.start_build(kind)
+		check(game.mode == "build" and is_instance_valid(game.ghost), "pending placement created for " + kind)
+		right.pressed = true; game._input(right)
+		check(game.mode == "select" and game.build_kind.is_empty() and game.ghost == null and game.placement_outline == null, "right-click clears pending tool and preview for " + kind)
+		var previous_yaw := game.yaw
+		game._unhandled_input(motion(Vector2(540,400),MOUSE_BUTTON_MASK_RIGHT))
+		check(game.yaw == previous_yaw and game.camera_drag_blocked, "cancel press cannot also rotate camera")
+		right.pressed = false; game._input(right)
+		check(not game.camera_drag_blocked, "right release restores ordinary camera input")
+		snapshot_unchanged(before,revision,undos,"right-click cancelled " + kind)
+	var yaw_before := game.yaw
+	right.pressed = true; game._input(right)
+	game._unhandled_input(motion(Vector2(540,400),MOUSE_BUTTON_MASK_RIGHT))
+	check(game.yaw != yaw_before, "ordinary select-mode right drag still rotates")
+	right.pressed = false; game._input(right)
+	game.start_build("wind"); game.blocked_modal = true
+	right.pressed = true; game._input(right)
+	check(game.mode == "build" and is_instance_valid(game.ghost), "modal right click does not cancel underlying placement")
+	right.pressed = false; game._input(right); game.blocked_modal = false
+	game.cancel_interaction()
+	snapshot_unchanged(before,revision,undos,"modal and ordinary right click")
 
 func test_disk_roundtrip() -> void:
 	var before: Dictionary = game.state()

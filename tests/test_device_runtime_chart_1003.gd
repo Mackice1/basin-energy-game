@@ -37,13 +37,13 @@ func run():
 	check(chart.history()[0].values[0]==1.2,"wind uses dispatched output, not potential 5MW")
 	check(chart.target_name=="风机 #0","Chinese target title")
 	chart.capture_step(report,1.5,1250);check(chart.sample_count==1,"simulation sample throttle")
-	chart.capture_step(report,2.0,1100);check(chart.sample_count==1,"wall-time sample throttle")
-	chart.capture_step(report,2.0,1400);check(chart.sample_count==2,"next genuine sample")
+	chart.capture_step(report,2.0,1100);check(chart.sample_count==2,"accelerated genuine sample retained independently of wall time")
+	chart.capture_step(report,2.0,1400);check(chart.sample_count==2,"duplicate simulation time rejected")
 	for index in 300: chart.capture_step(report,float(index+3),2000+index*250)
-	check(chart.sample_count==240 and chart.samples.size()==240,"bounded actual ring")
-	var points:=chart.history();check(points[0].t==63.0 and points[-1].t==302.0,"ring chronological order")
+	check(chart.sample_count==302 and chart.samples.size()==14401,"bounded actual ring")
+	var points:=chart.history();check(points[0].t==1.0 and points[-1].t==302.0,"ring chronological order")
 	host.paused=true;chart.sync_target();check(not chart.visible,"pause hides")
-	check(chart.sample_count==240,"pause invents no data")
+	check(chart.sample_count==302,"pause invents no data")
 	host.paused=false;host.selected_id=7;chart.sync_target();check(chart.sample_count==0 and not chart.visible,"deselection/deletion clears")
 	host.devices.append({"id":7,"kind":"battery","params":Catalog.defaults("battery"),"state":{"energy_mwh":2.5}})
 	var stored := {"devices":{"7":{"valid":true,"charge_mw":0.4,"discharge_mw":0.0}}}
@@ -67,8 +67,8 @@ func run():
 	check(chart.sample_count==1 and chart.reset_generation==before,"failed step adds no point")
 	chart.dirty=true;chart.redraw_accumulator=0.0;chart._process(0.1);check(chart.dirty,"redraw capped below4Hz")
 	chart._process(0.2);check(not chart.dirty,"low-frequency redraw scheduled")
-	chart.size=Vector2(310,170);chart.queue_redraw();await process_frame
-	check(chart.size.y==170.0,"compact actual draw no minimum overflow")
+	chart.size=Vector2(310,230);chart.queue_redraw();await process_frame
+	check(chart.size.y==230.0,"compact actual draw no minimum overflow")
 	host.build_tray_open=true;chart.sync_target();check(not chart.visible,"tray hides graph")
 	host.build_tray_open=false;host.runtime_chart_layout_available=false;chart.sync_target();check(not chart.visible,"tiny viewport hides graph")
 	host.runtime_chart_layout_available=true

@@ -47,6 +47,10 @@ var next_id := 0
 var selected_id := -2
 var mode := "select"
 var build_kind := "wind"
+# A tool preference, not a simulation parameter or scene change.
+var repeat_build := true
+var repeat_build_button: Button
+var base_workflow_panel: Window
 var pending_link := -2
 var physical_lines := true
 var nodes: Dictionary = {}
@@ -83,6 +87,9 @@ var editing_line := -1
 var scene_revision := 0
 var paused := true
 var speed := 1.0
+# Ephemeral UI playback mode; never saved or applied to unrelated imported data.
+var weather_replay := false
+var replay_last_steps := 0
 var speed_control: Control
 var weather_orb: Control
 var accumulator := 0.0
@@ -388,6 +395,8 @@ func make_ui():
 	quick_station_enter=button("进入设备详情 →",func():self.open_device_details(self.selected_id),selection_row);quick_station_enter.action_mode=BaseButton.ACTION_MODE_BUTTON_PRESS;quick_station_enter.visible=false
 	for command in [["select","选择 / Esc"],["move","移动"],["link","连线"]]:
 		var b:=button(command[1],set_mode.bind(command[0]),selection_row);b.name="Tool_"+command[0];b.toggle_mode=true;hud_actions[command[0]]=b
+	repeat_build_button=button("连续建造",toggle_repeat_build,selection_row);repeat_build_button.name="RepeatBuild";repeat_build_button.toggle_mode=true
+	repeat_build_button.tooltip_text="开启：每次放置后继续同类设备。关闭：成功放置一次后返回选择。右键 / Esc 随时退出。"
 	hud_actions.parameters=button("参数",func():open_parameters(false),selection_row)
 	hud_actions.undo=button("撤销",undo,selection_row)
 	for command in selection_row.get_children():
@@ -503,6 +512,7 @@ func make_ui():
 	button("新建设备模板",func():open_parameters(true),storage)
 	var template_info:=label("参数模板只影响之后新建的设备，不会批量改动已有设备。",14);template_info.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;template_info.add_theme_font_size_override("font_size",12);template_info.add_theme_color_override("font_color",UITheme.MUTED);storage.add_child(template_info)
 	storage=sidebar_card(library,"教学示例","scene_examples")
+	button("入门：风光储氢外送与容量比较",open_base_workflow,storage).name="OpenBaseWorkflow"
 	button("塔式熔盐昼夜发电示例 · 1600 m²",func():ask("替换为100镜塔站、0.5MWh熔盐储热及闭式蒸汽循环？自动教学昼夜天气，风机与电池供辅机，可撤销。",tower_example),storage)
 	button("槽式蒸汽发电示例 · 闭式循环",func():ask("替换为槽式导热油、储热、蒸汽发生器、汽轮发电机、冷凝器和给水泵闭环？外部风光提供预热后运行辅电，可撤销。",rankine_example),storage)
 	button("槽式聚光示例 · 69.24 m²",func():ask("替换为300/200°C导热油、储热和两级换热链？25 kW需求；可撤销。",trough_example),storage)
@@ -552,7 +562,7 @@ func make_ui():
 	build_row=HBoxContainer.new();build_row.name="ConstructionDevices";build_scroll.add_child(build_row);build_row.add_theme_constant_override("separation",6)
 	for k in BUILDABLE_KINDS:
 		var b:=button(BUILD_SHORT_NAMES[k],start_build.bind(k),build_row)
-		b.name="Build_"+k;b.tooltip_text=DEVICE_NAMES.get(k,k)+" · 独立放置；Esc取消";b.icon=icon_texture(k)
+		b.name="Build_"+k;b.tooltip_text=DEVICE_NAMES.get(k,k)+" · 独立放置；右键 / Esc取消";b.icon=icon_texture(k)
 		b.icon_alignment=HORIZONTAL_ALIGNMENT_CENTER;b.vertical_icon_alignment=VERTICAL_ALIGNMENT_TOP
 		compact_button_style(b,92);b.add_theme_font_size_override("font_size",15);b.toggle_mode=true;b.expand_icon=true;b.add_theme_constant_override("icon_max_width",48)
 		b.add_theme_stylebox_override("normal",UITheme.panel(Color("344956"),8,9));b.add_theme_stylebox_override("hover",UITheme.panel(Color("405c69"),8,9))
@@ -653,9 +663,9 @@ func _layout_workspace():
 	if is_instance_valid(runtime_chart):
 		var chart_top:=hud_views.position.y+hud_views.size.y+6.0
 		var available_chart_height:=extent.y-(h-context_y)-chart_top-4.0
-		runtime_chart_layout_available=extent.x-124.0>=310.0 and available_chart_height>=170.0
-		var chart_height:=minf(220.0,maxf(170.0,available_chart_height))
-		runtime_chart.custom_minimum_size=Vector2(310.0,170.0)
+		runtime_chart_layout_available=extent.x-124.0>=310.0 and available_chart_height>=230.0
+		var chart_height:=minf(280.0,maxf(230.0,available_chart_height))
+		runtime_chart.custom_minimum_size=Vector2(310.0,230.0)
 		runtime_chart.position=Vector2(12,chart_top);runtime_chart.size=Vector2(minf(350.0,w-124.0),chart_height)
 	weather_orb.position=Vector2(w-74,94)
 	hud_brand_subtitle.visible=true
@@ -683,7 +693,9 @@ func set_mode(value:String):
 	cancel_camera_drag()
 	if value=="move" and device(selected_id).has("parent_station_id"):selected_id=int(device(selected_id).parent_station_id)
 	drag_candidate=-2;drag_active=false
-	mode=value;pending_link=-2;clear_link_preview();clear_ghost();update_status()
+	mode=value
+	if mode!="build":build_kind=""
+	pending_link=-2;clear_link_preview();clear_ghost();update_status()
 	if mode=="move":
 		var d:=device(selected_id)
 		if not station(selected_id).is_empty():
@@ -691,9 +703,32 @@ func set_mode(value:String):
 		if d.is_empty():mode="select";tell("先选择要移动的设备。");update_status();return
 		ghost=Visual.create(d.kind,visual_params(d.params,d),true);equipment.add_child(ghost);ghost.set_preview(false)
 
+func toggle_repeat_build()->void:
+	repeat_build=not repeat_build
+	update_status()
+	tell("连续建造已开启：放置后继续同类；右键 / Esc 退出。" if repeat_build else "单次建造：放置成功后返回选择；未放置前可右键 / Esc 取消。")
+
+func commit_build_at(point:Vector2)->bool:
+	if mode!="build" or build_kind.is_empty():return false
+	var kind:=build_kind
+	if not add_equipment(kind,point):return false
+	if repeat_build:
+		start_build(kind)
+		tell("已放置 %s；继续左键放置，右键 / Esc 退出。"%DEVICE_NAMES.get(kind,kind))
+	else:
+		set_mode("select")
+		tell("已放置 %s；单次建造已结束。"%DEVICE_NAMES.get(kind,kind))
+	return true
+
+func workflow_caption()->String:
+	if mode=="build":return "%s · %s · 左键放置 · 右键 / Esc 退出"%[DEVICE_NAMES.get(build_kind,build_kind),"连续建造" if repeat_build else "单次建造"]
+	if mode=="link":return "连线 1/2：选择起点 · 右键 / Esc 退出" if pending_link==-2 else "连线 2/2：选择终点 · 右键 / Esc 退出"
+	if mode=="move":return "移动设备 · 左键确认 · 右键 / Esc 取消"
+	return "选择设备 · 左键拖动平移 · 右键拖动转视角"
+
 func start_demand_node():
 	start_build("load")
-	tell("设置外部需求接入点；这是需求标记，不是建设工厂。Esc取消。")
+	tell("设置外部需求接入点；这是需求标记，不是建设工厂。右键 / Esc 取消。")
 
 func edit_selected_demand():
 	if not device(selected_id).get("kind","") in ["load","heat_demand"]:tell("请先从需求清单选择一个需求节点。");return
@@ -930,7 +965,7 @@ func link_to(id:int):
 	if candidate.is_empty():tell("不能连接：电/热端口或温区不匹配；90/60热须经过换热器才能供70/40需求。");return
 	var error:String=Catalog.validate_link(devices,links,candidate)
 	if error!="":tell("未连接："+error);return
-	checkpoint();links.append(candidate);pending_link=-2;clear_link_preview();refresh();rebuild_cables();tell("连接完成；容量、损耗和真实连通关系已计入。")
+	checkpoint();links.append(candidate);pending_link=-2;clear_link_preview();refresh();rebuild_cables();tell("连接完成；可继续选择新起点，右键 / Esc 退出。容量与损耗已计入。")
 
 func move_selected(p:Vector2)->bool:
 	if device(selected_id).has("parent_station_id"):
@@ -1021,7 +1056,7 @@ func restore(s:Dictionary):
 	for d in devices:
 		if Catalog.is_storage(d.kind) and not d.has("state"):d.state=Catalog.initial_state(d.kind,d.params)
 	scene_revision+=1;dispatch_dt_s=1.0
-	paused=true;speed=1.0;accumulator=0;selected_id=-2;set_mode("select");rebuild_equipment();refresh()
+	paused=true;speed=1.0;weather_replay=false;accumulator=0;selected_id=-2;set_mode("select");rebuild_equipment();refresh()
 
 func undo():
 	if undo_states.is_empty():tell("没有可撤销的操作。");return
@@ -1184,6 +1219,13 @@ func sampled(t:float)->Dictionary:
 			if not src.has(field):weather.erase(field)
 		weather["weather_state"]="measured_fields"
 		weather["source"]="CSV全局气象；未绑定出力字段采用教学值"
+	if real_weather_active():
+		var historical:Dictionary=load("res://scripts/real_weather_source.gd").sample(t)
+		if historical.get("valid",false):
+			weather.merge(historical,true)
+			weather["weather_state"]="reanalysis_hourly"
+			for field in ["wind_speed_mps","irradiance_wm2","air_temp_c"]:src[field]="ERA5小时再分析 / 派生GTI"
+		else:err=str(historical.get("error","历史气象无值，不外推。"))
 	weather["time_s"]=t
 	weather["field_sources"]=src.duplicate(true)
 	weather["valid"]=err==""
@@ -1299,14 +1341,38 @@ func advance(dt:float)->bool:
 	if displayed.get("error","")=="":result=displayed
 	return true
 
+func real_weather_active()->bool:
+	return load("res://scripts/real_weather_source.gd").matches_imports(imports)
+
+func start_weather_replay()->bool:
+	if not real_weather_active():tell("请先载入有来源的真实气象示例；未启动回放。");return false
+	weather_replay=true;paused=false
+	tell("ERA5小时资料加速回放：每步仍≤1秒积分，每帧最多30步/约25ms预算；实际速度随机器变化。小时内阶梯保持，不是秒级实测。暂停按钮可随时暂停；调倍速退出此模式。")
+	return true
+
+func advance_frame(delta:float)->void:
+	if paused:return
+	if not weather_replay:advance(delta*speed);return
+	if not real_weather_active():weather_replay=false;paused=true;return
+	var began:=Time.get_ticks_usec()
+	replay_last_steps=0
+	while replay_last_steps<30:
+		if not advance(1.0):break
+		replay_last_steps+=1
+		if Time.get_ticks_usec()-began>=25000:break
+
+func runtime_curve_source_caption()->String:
+	if not real_weather_active():return ""
+	return str(weather_snapshot.get("local_datetime", "")).replace("T"," ").left(16)+" UTC+8 · 小时阶梯"
+
 func set_simulation_speed(value:float)->bool:
 	if not is_finite(value) or value!=floor(value) or value<1.0 or value>60.0:return false
-	speed=value
+	speed=value;weather_replay=false
 	update_status()
 	return true
 
 func speed_text()->String:
-	return str(int(speed))
+	return "逐秒加速回放" if weather_replay else str(int(speed))
 
 func simulation_clock()->String:
 	var whole:=int(floor(elapsed_s))
@@ -1323,7 +1389,7 @@ func toggle_run():
 func update_status():
 	update_scene_identity()
 	if not is_instance_valid(status_label):return
-	run_button.text=("▶ 运行  ×%s" if paused else "Ⅱ 暂停  ×%s")%speed_text()
+	run_button.text=(("▶ 继续小时回放" if paused else "Ⅱ 暂停小时回放") if weather_replay else (("▶ 运行  ×%s" if paused else "Ⅱ 暂停  ×%s")%speed_text()))
 	if is_instance_valid(speed_control):speed_control.set_speed(speed)
 	var dat:Dictionary=sampled(elapsed_s)
 	weather_snapshot=dat.weather.duplicate(true)
@@ -1334,7 +1400,9 @@ func update_status():
 	if not dat.direct.is_empty():origin+="；设备直接导入出力优先，不由天气重算"
 	if imports.any(func(series):return str(series.target_device)!="" and series.field!="power"):origin+="；设备专属气象只影响绑定设备，不代表全局实景天气"
 	if dat.sources.has("precipitation_mm_h") and not dat.sources.has("irradiance_wm2"):origin+="；雨强来自CSV，辐照仍是教学值，不额外扣雨损"
-	origin+="；CSV风高未映射，未自动10m→轮毂换算"
+	if real_weather_active():
+		origin=load("res://scripts/real_weather_source.gd").source_label()+"；100m风经既有0.14幂律折算90m轮毂，PV冷却用10m风；气压采用地面压力；30°朝南GTI为服务商派生，非实测POA；小时零阶保持，云雨未知。"
+	else:origin+="；CSV风高未映射，未自动10m→轮毂换算"
 	if is_instance_valid(weather_orb):weather_orb.set_weather(weather_snapshot if dat.error=="" else {},elapsed_s,origin if dat.error=="" else "数据区间无效，已暂停；未外推")
 	if is_instance_valid(climate_panel):
 		climate_panel.set_snapshot(weather_snapshot);climate_panel.live.hide()
@@ -1359,6 +1427,10 @@ func update_status():
 	if hud_actions.has("parameters"):hud_actions.parameters.disabled=device(selected_id).is_empty()
 	if hud_actions.has("move"):hud_actions.move.disabled=device(selected_id).is_empty() and station(selected_id).is_empty()
 	if hud_actions.has("undo"):hud_actions.undo.disabled=undo_states.is_empty()
+	if is_instance_valid(repeat_build_button):
+		repeat_build_button.visible=mode=="build"
+		repeat_build_button.set_pressed_no_signal(repeat_build)
+		repeat_build_button.text="连续建造" if repeat_build else "单次建造"
 	var vals={"net":result.get("delivered_mw",0),"generated":result.get("generated_mw",0)-result.get("curtailed_mw",0),"available":result.get("generated_mw",0),"curtailed":result.get("curtailed_mw",0),"loss":result.get("loss_mw",0),"energy":energy.delivered,"balance":result.get("balance_error_mw",0),"energy_balance":energy.generated+energy.get("discharge",0)-energy.delivered-energy.curtailed-energy.loss-energy.get("served",0)-energy.get("charge",0)-energy.get("boiler_electric",0)}
 	vals.energy_balance-=float(fuel_energy.get("auxiliary_mwh",0))+float(solar_energy.get("auxiliary_mwh",0))+float(high_temp_energy.get("auxiliary_mwh",0))+float(high_temp_energy.get("oil_auxiliary_mwh",0))+float(rankine_energy.get("auxiliary_electric_mwh",0))+float(tower_energy.get("auxiliary_mwh",0))+Materials.cumulative_electric_input_mwh(material_energy)
 	update_material_sidebar()
@@ -1425,8 +1497,11 @@ func update_status():
 	update_thermal_display(d,report)
 	update_station_display()
 	update_dimension_display()
-	mode_label.text="%s · Esc 返回"%{"select":"选择设备","build":"放置 "+DEVICE_NAMES.get(build_kind,build_kind),"move":"移动选中设备","link":"选择起点与终点端口"}.get(mode,mode)
-	mode_label.tooltip_text="左键/中键平移 · 右键旋转 · 滚轮缩放 · F1–F3视角 · Esc 取消或返回"
+	mode_label.text=workflow_caption()
+	mode_label.custom_minimum_size.x=110
+	mode_label.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	mode_label.size_flags_stretch_ratio=1.0
+	mode_label.tooltip_text=workflow_caption()+"\n左键/中键平移 · 普通模式右键拖动转视角 · 滚轮缩放 · F1–F3视角\n当前设备朝向由规格固定；转视角不改变光伏朝向或风机性能。"
 
 func pointer_over_ui(pos:Vector2,padding:Vector2=Vector2.ZERO)->bool:
 	for control in ui_regions:
@@ -1494,10 +1569,11 @@ func handle_escape()->bool:
 	if is_instance_valid(scene_close_guard) and scene_close_guard.handle_escape():return true
 	cancel_camera_drag()
 	# Each press consumes exactly one layer. Editors never commit on Escape.
-	for dialog in [confirmation,station_port_dialog,param_dialog,data_dialog,line_dialog,bulk_parameter_editor]:
+	for dialog in [base_workflow_panel,confirmation,station_port_dialog,param_dialog,data_dialog,line_dialog,bulk_parameter_editor]:
 		if is_instance_valid(dialog) and dialog.is_inside_tree() and dialog.visible:
 			if not _close_nested_popup(dialog):
-				if dialog==bulk_parameter_editor and dialog.has_method("handle_escape"):dialog.handle_escape()
+				if dialog==base_workflow_panel:dialog._close()
+				elif dialog==bulk_parameter_editor and dialog.has_method("handle_escape"):dialog.handle_escape()
 				else:dialog.hide()
 			if dialog==confirmation:confirm_action=Callable()
 			return true
@@ -1533,6 +1609,13 @@ func _input(event):
 	if event is InputEventMouseMotion and left_pan_pending and not (event.button_mask & MOUSE_BUTTON_MASK_LEFT):
 		cancel_camera_drag()
 	if event is InputEventMouseButton:
+		# A placement right-click cancels the pending tool, never the built device.
+		# Keep this press blocked through release so it cannot also orbit the camera.
+		if event.button_index==MOUSE_BUTTON_RIGHT and event.pressed and mode in ["build","link","move"] and not modal_visible():
+			build_kind=""
+			cancel_interaction()
+			camera_drag_blocked=true
+			get_viewport().set_input_as_handled();return
 		if event.button_index==MOUSE_BUTTON_LEFT and event.pressed:cancel_camera_drag()
 		if event.button_index in [MOUSE_BUTTON_RIGHT,MOUSE_BUTTON_MIDDLE]:
 			if event.pressed:
@@ -1603,7 +1686,7 @@ func _unhandled_input(event):
 	if event is InputEventMouseButton and event.pressed and event.button_index==MOUSE_BUTTON_LEFT:
 		var p:=pick_ground(event.position)
 		if mode=="build" and is_finite(p.x):
-			if add_equipment(build_kind,p):start_build(build_kind);tell("需求接入点已添加；可继续设置，Esc退出。" if build_kind in ["load","heat_demand"] else "设备已建；可继续放置，Esc 退出。")
+			commit_build_at(p)
 		elif mode=="move" and is_finite(p.x):
 			if nearest(event.position)==selected_id and selected_id>=0:drag_candidate=selected_id;drag_origin=event.position
 			else:move_selected(p)
@@ -1686,9 +1769,9 @@ func endpoint_name(id:int)->String:
 	return "%s #%d"%[DEVICE_NAMES.get(d.get("kind",""),"设备"),id] if not d.is_empty() else "未选端口"
 
 func connection_caption(target_id:int)->String:
-	if pending_link==-2:return "连接：请选择起点，再选择高亮的兼容终点。"
+	if pending_link==-2:return "连线 1/2：点击设备起点；右键 / Esc 退出。"
 	var first:="起点："+endpoint_name(pending_link)
-	if target_id==-2:return first+"\n下一步：选择高亮终点；Esc 取消。"
+	if target_id==-2:return first+"\n连线 2/2：选择高亮终点；右键 / Esc 退出。"
 	if target_id==pending_link:return first+"\n请选择另一个端口，不能连接自身。"
 	if not station(target_id).is_empty():
 		return first+" → "+endpoint_name(target_id)+"\n"+("点击选择站内映射端口" if compatible_target(target_id) else "没有兼容或尚未连接的映射端口")
@@ -1748,6 +1831,7 @@ func update_interaction_visuals():
 	var caption:=endpoint_description(hovered_id if hovered_id!=-2 else selected_id)
 	if caption=="":caption="单击选中 · 左键拖动视角 · 移动工具改位置 · F 聚焦"
 	if mode=="link":caption=connection_caption(hovered_id)
+	elif mode in ["build","move"]:caption=workflow_caption()
 	if is_instance_valid(interaction_caption):
 		interaction_caption.text=caption
 		interaction_caption.tooltip_text=caption+"\n"+endpoint_description(hovered_id if hovered_id!=-2 else selected_id)
@@ -1771,7 +1855,7 @@ func _process(delta):
 		cancel_camera_drag()
 		# Interior is navigation, not a second simulator; keep the single world clock.
 		if not (is_instance_valid(scene_close_guard) and scene_close_guard.visible) and ((is_instance_valid(device_inspector) and device_inspector.visible) or (is_instance_valid(station_interior) and station_interior.visible)) and not (is_instance_valid(station_interior.remove_confirmation) and station_interior.remove_confirmation.visible) and not param_dialog.visible and not confirmation.visible and not line_dialog.visible and not (is_instance_valid(optimization_controller) and is_instance_valid(optimization_controller.panel) and optimization_controller.panel.visible):
-			if not paused:advance(delta*speed)
+			if not paused:advance_frame(delta)
 			update_status()
 		return
 	super._process(delta)
@@ -1795,14 +1879,14 @@ func _process(delta):
 			var site_profile:String=str(d.get("site_geometry_profile","")) if not d.is_empty() else "reference_size_v1"
 			var spatial:=Spatial.profile(kind,params,false,geometry_profile,site_profile)
 			update_placement_outline(p,footprint(kind,params,geometry_profile,site_profile),reason=="",spatial.land_dimensions_m*0.1 if dimension_profile=="metric_v1" else Vector3.ZERO)
-			var message:=("可放置 · 松开确认 · Esc 取消" if drag_active else "可放置 · 左键确认 · Esc 取消") if reason=="" else "无法放置 · "+reason
+			var message:=("可放置 · 松开确认 · Esc 取消" if drag_active else ("可放置 · 左键确认 · 右键 / Esc 取消" if mode=="build" else "可放置 · 左键确认 · Esc 取消")) if reason=="" else "无法放置 · "+reason
 			if dimension_profile=="metric_v1":
 				var dimensions:Vector3=spatial.land_dimensions_m
 				message+=" · 安装区 %.1f × %.1f m（圆线为保守避让）"%[dimensions.x,dimensions.z]
 				if kind=="battery_flow" and geometry_profile==SaveValidator.FLOW_ICON_GEOMETRY:message+=" · 旧版图标化尺度，非实际工艺占地"
 			if message!=feedback_key:tell(message);feedback_key=message
 	if not paused:
-		advance(delta*speed);update_status()
+		advance_frame(delta);update_status()
 	for key in nodes:
 		var d:=device(int(key))
 		if d.kind=="wind":
@@ -1842,7 +1926,7 @@ func update_placement_outline(p:Vector2,radius:float,valid:bool,land_dimensions:
 	mesh.surface_end();placement_outline.mesh=mesh
 
 func modal_visible()->bool:
-	return (is_instance_valid(scene_close_guard) and scene_close_guard.visible) or (is_instance_valid(bulk_parameter_editor) and bulk_parameter_editor.visible) or (is_instance_valid(device_inspector) and device_inspector.visible) or (is_instance_valid(station_interior) and station_interior.visible) or (is_instance_valid(station_port_dialog) and station_port_dialog.visible) or (is_instance_valid(optimization_controller) and is_instance_valid(optimization_controller.panel) and optimization_controller.panel.visible) or confirmation.visible or param_dialog.visible or data_dialog.visible or line_dialog.visible or (is_instance_valid(import_dialog) and import_dialog.visible)
+	return (is_instance_valid(base_workflow_panel) and base_workflow_panel.visible) or (is_instance_valid(scene_close_guard) and scene_close_guard.visible) or (is_instance_valid(bulk_parameter_editor) and bulk_parameter_editor.visible) or (is_instance_valid(device_inspector) and device_inspector.visible) or (is_instance_valid(station_interior) and station_interior.visible) or (is_instance_valid(station_port_dialog) and station_port_dialog.visible) or (is_instance_valid(optimization_controller) and is_instance_valid(optimization_controller.panel) and optimization_controller.panel.visible) or confirmation.visible or param_dialog.visible or data_dialog.visible or line_dialog.visible or (is_instance_valid(import_dialog) and import_dialog.visible)
 
 func window_background(w:Window):
 	w.hide();w.transient=true;w.exclusive=true
@@ -2853,6 +2937,7 @@ func update_environment_sidebar(origin:String):
 		if valid:sidebar_value(spec[0],weather_snapshot.get(spec[1],0))
 		else:sidebar_readouts[spec[0]].value.text="—"
 	var origin_tag:="CSV / 教学混合" if weather_snapshot.get("field_sources",{}).values().has("CSV气象") else "教学气象"
+	if weather_snapshot.get("weather_state","")=="reanalysis_hourly":origin_tag="ERA5小时再分析 / 派生GTI"
 	weather_state.text=("白昼" if weather_snapshot.get("is_day",false) else "夜间")+" · "+origin_tag if valid else "当前气象不可用"
 	weather_origin.text=origin if valid else "当前气象不可用："+str(weather_snapshot.get("error","数据区间无效，未外推"))
 	for key in ["wind_speed_mps","air_temp_c","irradiance_wm2","dni_wm2","cloud_cover","precipitation_mm_h"]:
@@ -2930,3 +3015,79 @@ func chemical_example()->void:
 		if not link.is_empty() and Catalog.validate_link(devices,links,link).is_empty():links.append(link)
 	set_mode("select");rebuild_equipment();refresh()
 	tell("已建立有限原料制氢与醇氨链；点击运行积累真实产品。储氢同一步不充放，产品满仓或原料耗尽即停，无销售/清空。可撤销恢复原场景。")
+
+
+func open_base_workflow()->void:
+	if not is_instance_valid(base_workflow_panel):
+		base_workflow_panel=load("res://scripts/base_workflow_panel.gd").new()
+		add_child(base_workflow_panel)
+		base_workflow_panel.setup(self)
+		register_escape_window(base_workflow_panel)
+	base_workflow_panel.open()
+
+func beginner_base_example(start_s:float=-1.0)->bool:
+	# Preflight on temporary arrays; only a fully valid scene is committed.
+	# No user:// writes, and a single undo restores the old scene.
+	var workflow=load("res://scripts/example_base_workflow.gd")
+	var spec:Dictionary=workflow.specification()
+	var original_devices:Array=devices
+	var original_stations:Array=stations
+	var original_profile:=dimension_profile
+	devices=[];stations=[];dimension_profile="metric_v1"
+	var staged:Array=[]
+	var failure:=""
+	for entry in spec.specs:
+		var kind:String=entry.kind
+		var params:Dictionary=entry.params.duplicate(true)
+		var location:Vector2=entry.position
+		if not can_place(kind,location,-2,params).is_empty():
+			location=Vector2(INF,INF)
+			for z in range(-150,151,25):
+				for x in range(-150,151,25):
+					if can_place(kind,Vector2(x,z),-2,params).is_empty():location=Vector2(x,z);break
+				if is_finite(location.x):break
+		if not is_finite(location.x):failure="没有满足尺寸与地形的合法示例地块："+kind;break
+		var item:Dictionary={"id":int(entry.id),"kind":kind,"x":location.x,"z":location.y,"params":params,"state":Catalog.initial_state(kind,params),"site_geometry_profile":"reference_size_v1"}
+		if Catalog.is_material(kind):
+			item.model_profile=Catalog.model_profile(kind)
+			item.model_profile_version=Catalog.model_profile_version(kind)
+		staged.append(item);devices=staged
+	devices=original_devices;stations=original_stations;dimension_profile=original_profile
+	if not failure.is_empty():tell("示例未替换："+failure);return false
+	var candidate:=state()
+	candidate.scene_name=spec.name;candidate.dimension_profile="metric_v1"
+	candidate.devices=staged;candidate.stations=[];candidate.links=spec.links.duplicate(true)
+	candidate.next_id=staged.size();candidate.next_station_id=1000000
+	var real_source=load("res://scripts/real_weather_source.gd")
+	candidate.elapsed_s=real_source.demo_start_s() if start_s==-1.0 else start_s
+	if not is_finite(candidate.elapsed_s) or candidate.elapsed_s<0.0 or candidate.elapsed_s>=real_source.duration_s():tell("示例起点超出真实气象区间，未替换场景。");return false
+	candidate.imports=real_source.imports()
+	if candidate.imports.is_empty():tell("真实气象资料无效，未替换场景。");return false
+	candidate.energy=ENERGY_ZERO.duplicate(true);candidate.thermal_energy=THERMAL_ENERGY_ZERO.duplicate(true)
+	candidate.fuel_supply=FuelSupply.defaults();candidate.fuel_energy=FuelSupply.initial_energy()
+	candidate.solar_energy=SOLAR_ENERGY_ZERO.duplicate(true);candidate.high_temp_energy=HighTemp.initial_energy()
+	candidate.rankine_energy=Rankine.initial_energy();candidate.tower_energy=Tower.initial_energy()
+	candidate.material_energy=Materials.initial_energy(staged)
+	candidate.climate_config=real_source.climate_config()
+	for entry in spec.specs:candidate.templates[entry.kind]=entry.params.duplicate(true)
+	failure=validate_state(candidate)
+	if not failure.is_empty():tell("示例未替换："+failure);return false
+	checkpoint();restore(candidate);paused=true;selected_id=-2;set_mode("select");reset_camera()
+	tell("入门基地已建立：当地"+str(Climate.sample(climate_config,elapsed_s).get("local_datetime",""))+"（UTC+8）全新空电池/空氢、有限水量起算；ERA5小时再分析与派生GTI，不是实测出力。可开启逐小时加速回放。")
+	return true
+
+func capacity_comparison_layout_error()->String:
+	# Stage all proposed footprints together; never change live state or visuals.
+	var original:Array=devices
+	var failure:=""
+	for multiplier in [0.5,1.0,2.0]:
+		devices=original.duplicate(true)
+		for d in devices:
+			if d.get("kind","")=="battery":d.params.capacity_mwh*=multiplier
+		for d in devices:
+			if d.get("kind","")!="battery":continue
+			var reason:=can_place("battery",Vector2(d.x,d.z),int(d.id),d.params)
+			if not reason.is_empty():failure="×%.1f 电池 #%d：%s；请先调整容量或地块。"%[multiplier,int(d.id),reason];break
+		if not failure.is_empty():break
+	devices=original
+	return failure

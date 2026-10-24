@@ -1,0 +1,58 @@
+{
+  "dataset_id": "dunhuang_era5_20250601_7days",
+  "title": "敦煌附近 ERA5 小时再分析气象，2025-06-01 至 2025-06-08 00:00 北京时间（七天＋端点）",
+  "nature": "historical weather reanalysis and provider-derived tilted/instantaneous radiation; NOT station observations or measured wind/PV power",
+  "provider": "Open-Meteo Historical Weather API; source ECMWF/Copernicus ERA5",
+  "model_requested": "era5",
+  "request_latitude": 40.14,
+  "request_longitude": 94.66,
+  "returned_grid_latitude": 40.25,
+  "returned_grid_longitude": 94.75,
+  "returned_elevation_m": 1143.0,
+  "spatial_resolution": "ERA5 0.25 degrees, approximately25km; point API may apply provider terrain/downscaling processing",
+  "timezone": "Asia/Shanghai",
+  "utc_offset_seconds": 28800,
+  "start_local": "2025-06-01T00:00:00+08:00",
+  "end_local": "2025-06-08T00:00:00+08:00",
+  "duration_seconds": 604800,
+  "sample_interval_seconds": 3600,
+  "normalized_rows": 169,
+  "source_api_url": "https://archive-api.open-meteo.com/v1/archive?latitude=40.14&longitude=94.66&start_date=2025-06-01&end_date=2025-06-08&hourly=wind_speed_10m%2Cwind_speed_100m%2Ctemperature_2m%2Csurface_pressure%2Cshortwave_radiation%2Cshortwave_radiation_instant%2Cglobal_tilted_irradiance%2Cglobal_tilted_irradiance_instant&models=era5&wind_speed_unit=ms&timezone=Asia%2FShanghai&tilt=30&azimuth=0",
+  "source_docs_url": "https://open-meteo.com/en/docs/historical-weather-api",
+  "source_license_url": "https://open-meteo.com/en/licence",
+  "data_license": "CC BY 4.0; attribution required",
+  "license_url": "https://creativecommons.org/licenses/by/4.0/",
+  "attribution": "Weather data by Open-Meteo.com, based on Copernicus Climate Change Service / ECMWF ERA5. Normalized timestamps/selected seven-day subset by this project. No endorsement implied.",
+  "retrieved_at_utc": "2026-10-24T21:13:40.201337+00:00",
+  "preferred_integration": {
+    "wind": "wind_100m_ms; set example turbine wind_reference_height_m and hub_height_m both100m if model supports, rather than silently using90m",
+    "solar": "gti30_south_instant_wm2; provider-derived plane-of-array irradiance at30degree tilt and south azimuth0degree; configure example PV accordingly",
+    "temperature": "temperature_2m_c; instantaneous source time",
+    "pressure": "surface_pressure_hpa; optional density use must be explicit; not sea-level pressure",
+    "time": "time_s starts at Beijing midnight 2025-06-01; source instants. Use hourly zero-order hold [t_i,t_i+3600); this integration hold is a modeling assumption, not high-frequency measured weather. Endpoint at604800 closes seven days. Do not cycle silently or extrapolate after endpoint."
+  },
+  "field_semantics": {
+    "wind_10m_ms": "Wind speed10m above ground, instantaneous at indicated hour, m/s",
+    "wind_100m_ms": "Wind speed100m above ground, instantaneous at indicated hour, m/s",
+    "temperature_2m_c": "Air temperature2m, instantaneous,degC",
+    "surface_pressure_hpa": "Surface pressure instantaneous,hPa",
+    "ghi_prev_hour_wm2": "Global horizontal radiation, mean over preceding hour,W/m2; do NOT treat as start-of-hour instant",
+    "ghi_instant_wm2": "Open-Meteo derived instantaneous GHI at source timestamp,W/m2",
+    "gti30_south_prev_hour_wm2": "Open-Meteo derived tilted-plane radiation, mean over preceding hour,W/m2",
+    "gti30_south_instant_wm2": "Open-Meteo derived instantaneous tilted radiation at source timestamp,W/m2; tilt30degrees,azimuth0south,isotropic sky,albedo0.20"
+  },
+  "limits": [
+    "Hourly reanalysis cannot supply second/minute turbulence or rapid cloud ramps. Do not randomly jitter values to appear real.",
+    "Wind/PV electric output remains calculated by game device model, not a measured power time series.",
+    "GTI is radiation transposition by provider, not observed POA.",
+    "Use a visible accelerated replay to show hourly variation, without pretending one wall-clock second is one real weather second.",
+    "Do not mix prior-hour mean radiation with instant wind without explaining averaging conventions. Prefer paired instant fields for the existing instantaneous model."
+  ],
+  "files": {
+    "raw_open_meteo_era5.json": "64c862788407926e85d6b4a8f3f30220998597cc2b7486de655fcffd343d014a",
+    "validation.json": "8dbbdcd05f1d59ad208bad89b627a46a56ee6f9b425dd21a0d83415baf56f22d",
+    "raw_open_meteo_era5_with_endpoint.json": "b35da3c10397cd897b736de2361f1dcce23ac6163567f418bd8e0a421fe4750f",
+    "dunhuang_era5_20250601_7days.json": "8eeab2165cb9e7348f5c46aeff09e5f3a1f956cd91a401ba2c6efa4acdf1fe7e",
+    "dunhuang_era5_20250601_7days.csv": "55347287275b9a275886ab1d4bcfd20c66b725ed1f97690bbcb63578fde1c635"
+  }
+}

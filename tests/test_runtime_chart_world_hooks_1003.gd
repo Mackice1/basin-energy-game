@@ -25,14 +25,17 @@ func settle():
 func run():
 	root.content_scale_size=Vector2i.ZERO;root.content_scale_mode=Window.CONTENT_SCALE_MODE_DISABLED
 	var game=HookController.new();root.add_child(game);await settle()
-	for resolution in [Vector2i(1180,812),Vector2i(640,480)]:
+	for resolution in [Vector2i(1180,812),Vector2i(958,660)]:
 		root.size=resolution;await settle();game._layout_workspace();await settle()
 		print("CHART_LAYOUT ",resolution," root=",game.hud_root.size," views=",game.hud_views.get_global_rect()," context=",game.hud_context.get_global_rect()," chart=",game.runtime_chart.get_global_rect()," available=",game.runtime_chart_layout_available)
 		check(game.runtime_chart_layout_available,"supported chart size available")
 		var rect:Rect2=game.runtime_chart.get_global_rect()
 		check(Rect2(Vector2.ZERO,Vector2(resolution)).encloses(rect),"chart inside viewport")
 		for panel in [game.hud_header,game.hud_views,game.hud_context,game.hud_build,game.hud_footer,game.hud_dock.get_node("DockRail")]:check(not rect.intersects(panel.get_global_rect()),"chart clear of "+panel.name)
-	root.size=Vector2i(480,320);await settle();game._layout_workspace();check(not game.runtime_chart_layout_available,"unsupported small chart area flagged hidden")
+	# Four scale controls + distinct source/SOC labels require 230 vertical px.
+	# Do not overlay the build toolbar when this room is unavailable.
+	for resolution in [Vector2i(640,480),Vector2i(480,320)]:
+		root.size=resolution;await settle();game._layout_workspace();check(not game.runtime_chart_layout_available,"insufficient four-scale chart area flagged hidden")
 	game.ui_regions.erase(game.runtime_chart);game.runtime_chart.free()
 	var probe:=ChartProbe.new();probe.host=game;game.hud_root.add_child(probe);game.runtime_chart=probe
 	game.devices=[{"id":10,"kind":"battery","x":0.0,"z":0.0,"params":game.model.defaults("battery"),"state":{"energy_mwh":0.0}}]
